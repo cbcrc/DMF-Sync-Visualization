@@ -1,0 +1,236 @@
+/* Media Function node — dark, manim-inspired canvas block per AI_RULES.md branding. */
+
+.mf-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 8px;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  text-align: center;
+}
+
+.mf-node--selected {
+  border-color: #ee0000;
+  box-shadow: 0 0 0 1px #ee0000;
+}
+
+/* Live Ring Buffer zone highlighting (Task 4) — mirrors RingBufferGauge's colors. */
+.mf-node--zone-green {
+  border-color: #4caf50;
+}
+
+.mf-node--zone-yellow {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.5);
+}
+
+.mf-node--zone-red {
+  border-color: #ee0000;
+  /* Static, not animated: motion on every node made the canvas hard to read. */
+  box-shadow: 0 0 10px 2px rgba(238, 0, 0, 0.55);
+}
+
+/* Held-grain state: a subtle static tint, so it can't fight the zone border colour. */
+.mf-node--processing {
+  background: #26282c;
+}
+
+.mf-node__glyph {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.mf-node__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.mf-node__kind {
+  font-size: 0.65rem;
+  color: #757575;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mf-node__latency {
+  font-size: 0.65rem;
+  color: #ee0000;
+  font-weight: 600;
+}
+
+/* Internal processing path — a grain crossing the function, at a speed set by
+   its latency. This is the one animation kept on the node: it *is* the
+   information (slow function = visibly slow traversal). */
+.mf-node__path {
+  position: relative;
+  width: 70%;
+  height: 10px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.mf-node__path-track {
+  position: absolute;
+  inset: 0 0 auto 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.35) 0,
+    rgba(255, 255, 255, 0.35) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+}
+
+.mf-node__path-grain {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+  /* One pass per held grain, ending at the output side. */
+  animation-name: mf-node-path-travel;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.mf-node__path-grain--video {
+  background: #4fc3f7;
+  box-shadow: 0 0 6px rgba(79, 195, 247, 0.8);
+}
+
+.mf-node__path-grain--audio {
+  background: #ffb74d;
+  box-shadow: 0 0 6px rgba(255, 183, 77, 0.8);
+}
+
+/* Arrived on an input whose reader is ahead of the writer — takes priority
+   over the stream color since it's the state being taught. */
+.mf-node__path-grain--waiting {
+  background: rgba(255, 193, 7, 0.75);
+  box-shadow: 0 0 6px rgba(255, 193, 7, 0.7);
+}
+
+@keyframes mf-node-path-travel {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 8px);
+  }
+}
+
+/* Path grain adopts the node's live ring-buffer zone colour. */
+.mf-node--zone-red .mf-node__path-grain {
+  background: #ee0000;
+  box-shadow: 0 0 6px rgba(238, 0, 0, 0.9);
+}
+
+/* Latency ("efficiency") control — the player retunes a Media Function and
+   watches the downstream ring buffer react live. */
+.mf-node__tune {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 78%;
+  margin-top: 4px;
+}
+
+.mf-node__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  outline: none;
+  cursor: ew-resize;
+}
+
+.mf-node__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #1a1b1e;
+  cursor: ew-resize;
+}
+
+.mf-node__slider::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #1a1b1e;
+  cursor: ew-resize;
+}
+
+.mf-node--zone-yellow .mf-node__slider::-webkit-slider-thumb {
+  background: #ffc107;
+}
+
+.mf-node--zone-red .mf-node__slider::-webkit-slider-thumb {
+  background: #ee0000;
+}
+
+.mf-node--zone-yellow .mf-node__slider::-moz-range-thumb {
+  background: #ffc107;
+}
+
+.mf-node--zone-red .mf-node__slider::-moz-range-thumb {
+  background: #ee0000;
+}
+
+/* Stalled state: node is waiting on a synchronized sibling flow that was lost. */
+.mf-node--stalled {
+  border-color: #ee0000 !important;
+  box-shadow: 0 0 12px 2px rgba(238, 0, 0, 0.7) !important;
+}
+
+.mf-node__stalled-badge {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ee0000;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  letter-spacing: 0.02em;
+  animation: mf-node-stalled-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes mf-node-stalled-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateX(-50%) scale(1.04);
+  }
+}
+

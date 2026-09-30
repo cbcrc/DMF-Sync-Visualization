@@ -1,0 +1,143 @@
+/* Grain slot strip: literal timeline of grain slots, oldest left, writer head
+   right. See GrainSlotStrip.tsx for the teaching rationale. */
+
+.gs-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gs-strip__cells {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.gs-cell {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 16px;
+  height: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.gs-strip--compact .gs-cell {
+  height: 18px;
+  min-width: 12px;
+}
+
+/* Slot number: the same slot recurs as grain indices wrap the ring. */
+.gs-cell__slot {
+  font-size: 0.5rem;
+  line-height: 1;
+  color: #757575;
+}
+
+.gs-cell__marks {
+  display: flex;
+  gap: 2px;
+  line-height: 1;
+}
+
+.gs-cell__mark {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gs-strip--compact .gs-cell__mark {
+  font-size: 0.5rem;
+}
+
+/* W — the writer's published head. */
+.gs-cell--head {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.gs-cell__mark--head {
+  color: #ffffff;
+}
+
+/* R — the grain this reader is asking for. */
+.gs-cell--read {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.22);
+}
+
+.gs-cell__mark--read {
+  color: #4caf50;
+}
+
+.gs-strip--yellow .gs-cell--read {
+  border-color: #ffc107;
+  background: rgba(255, 193, 7, 0.22);
+}
+
+.gs-strip--yellow .gs-cell__mark--read {
+  color: #ffc107;
+}
+
+.gs-strip--red .gs-cell--read {
+  border-color: #ee0000;
+  background: rgba(238, 0, 0, 0.25);
+}
+
+.gs-strip--red .gs-cell__mark--read {
+  color: #ee0000;
+}
+
+/* A grain whose slot has already been recycled by a newer grain. */
+.gs-cell--lost {
+  border-style: dashed;
+  border-color: #ee0000;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(238, 0, 0, 0.28) 0,
+    rgba(238, 0, 0, 0.28) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+}
+
+.gs-cell--lost .gs-cell__slot {
+  color: #ee0000;
+  text-decoration: line-through;
+}
+
+/* Visual break between destroyed grains and the retained window. */
+.gs-strip__break {
+  flex: 0 0 8px;
+  border-left: 1px dashed rgba(255, 255, 255, 0.35);
+  margin: 0 2px;
+}
+
+.gs-strip__legend {
+  font-size: 0.55rem;
+  line-height: 1.2;
+  color: #b8b8b8;
+}
+
+.gs-strip--compact .gs-strip__legend {
+  font-size: 0.5rem;
+}
+
+.gs-strip__warn {
+  color: #ee0000;
+  font-weight: 600;
+}
+
+.gs-strip__wait {
+  color: #ffc107;
+}
+
+.gs-strip__ok {
+  color: #4caf50;
+}

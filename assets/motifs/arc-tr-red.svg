@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <!-- Top-right: red line-hatched quarter-DONUT centred on the corner (240,0).
+       Built from a mask of two concentric circles so the empty centre (hole) sits
+       AT the corner and the hatched ring goes outward into the slide.
+       Inner radius 70, outer radius 225 (slide pixels). -->
+  <defs>
+    <pattern id="hRedTR" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="9" stroke="#E2231A" stroke-width="2.3"/>
+    </pattern>
+    <mask id="mRingTR">
+      <circle cx="240" cy="0" r="225" fill="#fff"/>
+      <circle cx="240" cy="0" r="70"  fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="0" y="0" width="240" height="240" fill="url(#hRedTR)" mask="url(#mRingTR)"/>
+</svg>

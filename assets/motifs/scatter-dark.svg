@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="none">
+  <!-- Subtle scattered accent triangles for the dark navy slide background. -->
+  <g fill="#5E89A8" opacity="0.55">
+    <polygon points="96,300 96,338 128,319"/>
+    <polygon points="120,540 120,578 152,559"/>
+    <polygon points="470,300 470,334 498,317"/>
+    <polygon points="930,300 930,330 956,315"/>
+    <polygon points="690,250 690,284 718,267"/>
+    <polygon points="430,1000 430,1034 458,1017"/>
+    <polygon points="700,1010 700,1040 726,1025"/>
+    <polygon points="1300,250 1300,282 1326,266"/>
+  </g>
+</svg>

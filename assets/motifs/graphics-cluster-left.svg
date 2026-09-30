@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 800" width="440" height="800">
+  <!-- Left-edge graphics composition (center-text-left-grahics, quote):
+       a single large light-gray hatched VERTICAL OVAL (taller than wide, bleeding
+       off the left edge), a large navy solid triangle (with faint dots) pointing
+       right in the upper area, a small red triangle below it, and a white triangle
+       cut into the lower part of the hatched oval. -->
+  <defs>
+    <pattern id="hGrayL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#C9C9C9" stroke-width="2.1"/>
+    </pattern>
+    <clipPath id="ovalL">
+      <ellipse cx="30" cy="420" rx="250" ry="385"/>
+    </clipPath>
+  </defs>
+
+  <!-- single large hatched vertical oval -->
+  <g clip-path="url(#ovalL)"><rect x="-230" y="20" width="520" height="800" fill="url(#hGrayL)"/></g>
+
+  <!-- white triangle cut into the lower part of the hatched oval -->
+  <polygon points="35,470 35,612 168,541" fill="#FFFFFF"/>
+
+  <!-- large navy solid triangle, pointing right (upper) -->
+  <polygon points="85,95 85,330 300,212" fill="#2F6289"/>
+  <!-- faint dots scattered on the navy triangle -->
+  <g fill="#FFFFFF" opacity="0.55">
+    <circle cx="125" cy="150" r="2.6"/>
+    <circle cx="120" cy="225" r="2.6"/>
+    <circle cx="175" cy="195" r="2.6"/>
+    <circle cx="160" cy="265" r="2.6"/>
+    <circle cx="210" cy="218" r="2.6"/>
+    <circle cx="140" cy="300" r="2.6"/>
+  </g>
+
+  <!-- small red solid triangle, pointing right (middle, below the navy) -->
+  <polygon points="150,360 150,455 236,408" fill="#E2231A"/>
+</svg>

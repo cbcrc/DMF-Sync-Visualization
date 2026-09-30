@@ -1,0 +1,165 @@
+.game-hud {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+  width: 300px;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #ffffff;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+.game-hud__levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.game-hud__level-btn {
+  font-family: inherit;
+  font-size: 0.65rem;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.game-hud__level-btn--active {
+  border-color: #ee0000;
+  color: #ee0000;
+}
+
+.game-hud__desc {
+  font-size: 0.7rem;
+  color: #cfcfcf;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.game-hud__guidance,
+.game-hud__late {
+  font-size: 0.65rem;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.game-hud__guidance {
+  color: #ffc107;
+}
+
+.game-hud__late {
+  color: #ee0000;
+  border-left: 2px solid #ee0000;
+  padding-left: 6px;
+}
+
+.game-hud__late-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.game-hud__late-row {
+  color: #ffb3b3;
+  margin-bottom: 3px;
+}
+
+.game-hud__late-row strong {
+  color: #ffffff;
+}
+
+.game-hud__late-hint {
+  color: #ffc107;
+}
+
+.game-hud__slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+}
+
+.game-hud__slider input[type='range'] {
+  width: 100%;
+}
+
+.game-hud__stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.game-hud__restart-btn {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.game-hud__restart-btn:hover {
+  background: #2a2b30;
+  border-color: #ee0000;
+  color: #ee0000;
+}
+
+.game-hud__stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-hud__stat-label {
+  font-size: 0.6rem;
+  color: #757575;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.game-hud__stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.game-hud__stat-value--bad {
+  color: #ee0000;
+}
+
+.game-hud__fail {
+  margin-top: 8px;
+  background: #3a0000;
+  border: 1px solid #ee0000;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.game-hud__fail button {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: #ffffff;
+  background: #ee0000;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}

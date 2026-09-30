@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 465" width="200" height="465">
+  <!-- Left-edge cluster: gray hatched half-disc bulging right off the left edge,
+       navy solid triangle, gray ring, red half-disc. The flat (diameter) edges
+       of both discs sit on x=0 so they appear to stick out of the slide's left side. -->
+  <defs>
+    <pattern id="hGrayBL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#C9C9C9" stroke-width="2.1"/>
+    </pattern>
+    <clipPath id="cHalfBL"><path d="M0,0 A170,170 0 0 1 0,340 Z"/></clipPath>
+  </defs>
+  <!-- gray hatched half-disc -->
+  <g clip-path="url(#cHalfBL)"><rect x="0" y="0" width="180" height="340" fill="url(#hGrayBL)"/></g>
+  <!-- navy solid triangle, pointing right -->
+  <polygon points="14,30 14,160 148,95" fill="#2F6289"/>
+  <!-- gray ring -->
+  <circle cx="165" cy="175" r="24" fill="none" stroke="#C9C9C9" stroke-width="5"/>
+  <!-- red half-disc lower on the left edge -->
+  <path d="M0,365 A48,48 0 0 1 0,461 Z" fill="#E2231A"/>
+</svg>

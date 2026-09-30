@@ -1,0 +1,162 @@
+/* Ring Buffer Ring — MXL-accurate circular grain-slot diagram.
+   Discrete slots correspond to `RingBufferIndex = GrainIndex mod RingBufferLength`
+   per https://github.com/dmf-mxl/mxl/blob/main/docs/Timing.md. Dark chrome to
+   match the rest of the canvas UI (see RingBufferGauge.css). */
+
+.rb-ring {
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #ffffff;
+  width: 220px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rb-ring--red {
+  border-color: #ee0000;
+  animation: rb-ring-pulse 1s ease-in-out infinite;
+}
+
+.rb-ring__header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.rb-ring__label {
+  font-weight: 600;
+}
+
+.rb-ring__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rb-ring--green .rb-ring__badge {
+  color: #4caf50;
+}
+
+.rb-ring--yellow .rb-ring__badge {
+  color: #ffc107;
+}
+
+.rb-ring--red .rb-ring__badge {
+  color: #ee0000;
+}
+
+.rb-ring__dial {
+  position: relative;
+  margin: 6px 0;
+}
+
+/* A "spoke" is a 0-size element pinned to the dial center; rotating it about
+   its own top edge sweeps its child tick mark around the circle (clock-hand
+   technique) without needing separate trig math per slot. */
+.rb-ring__spoke {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+.rb-ring__slot-mark {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transform: translate(-50%, -50%);
+}
+
+.rb-ring__slot-mark--head {
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.rb-ring__slot-mark--read {
+  background: #4caf50;
+}
+
+.rb-ring__spoke--reader {
+  z-index: 2;
+}
+
+.rb-ring__reader-glyph {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rb-ring__reader-glyph--green {
+  color: #4caf50;
+}
+
+.rb-ring__reader-glyph--yellow {
+  color: #ffc107;
+  animation: rb-ring-blink 1s ease-in-out infinite;
+}
+
+.rb-ring__reader-glyph--red {
+  color: #ee0000;
+}
+
+.rb-ring__meta {
+  width: 100%;
+  font-size: 0.62rem;
+  color: #cfcfcf;
+  line-height: 1.4;
+}
+
+.rb-ring__warn {
+  margin-top: 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.rb-ring--yellow .rb-ring__warn {
+  color: #ffc107;
+}
+
+.rb-ring--red .rb-ring__warn {
+  color: #ee0000;
+}
+
+@keyframes rb-ring-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(238, 0, 0, 0.6);
+  }
+}
+
+@keyframes rb-ring-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}

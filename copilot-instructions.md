@@ -1,0 +1,1 @@
+When working in this repository, always read and apply the rules defined in AI_RULES.md before generating code or answering questions.

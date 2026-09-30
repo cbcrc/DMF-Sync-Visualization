@@ -1,0 +1,125 @@
+/* Ring Buffer Gauge — linear track (Initial_prompt.md §3). Dark chrome to match canvas. */
+
+.rb-gauge {
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #ffffff;
+  width: 220px;
+  box-sizing: border-box;
+}
+
+.rb-gauge--red {
+  border-color: #ee0000;
+  animation: rb-gauge-pulse 1s ease-in-out infinite;
+}
+
+.rb-gauge__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.rb-gauge__label {
+  font-weight: 600;
+}
+
+.rb-gauge__delta {
+  color: #757575;
+}
+
+.rb-gauge__track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  overflow: visible;
+  display: flex;
+}
+
+.rb-gauge__zone {
+  height: 100%;
+}
+
+.rb-gauge__zone--green {
+  background: #2e7d32;
+  border-radius: 0 5px 5px 0;
+}
+
+.rb-gauge__zone--yellow {
+  background: #b8860b;
+  border-radius: 5px 0 0 5px;
+}
+
+.rb-gauge__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.55rem;
+  color: #757575;
+}
+
+.rb-gauge__marker {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.rb-gauge__marker--write {
+  left: 100%;
+  background: #ffffff;
+}
+
+.rb-gauge__marker--read {
+  transition: left 0.1s linear;
+}
+
+.rb-gauge__marker--green {
+  background: #4caf50;
+}
+
+.rb-gauge__marker--yellow {
+  background: #ffc107;
+}
+
+.rb-gauge__marker--red {
+  background: #ee0000;
+}
+
+.rb-gauge__badge {
+  margin-top: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.rb-gauge__badge--yellow {
+  background: #b8860b;
+  color: #111214;
+}
+
+.rb-gauge__badge--red {
+  background: #ee0000;
+  color: #ffffff;
+}
+
+@keyframes rb-gauge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(238, 0, 0, 0.6);
+  }
+}

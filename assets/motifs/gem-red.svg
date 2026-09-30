@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 130" width="180" height="130">
+  <!-- Top-right corner accent matching the reference: a gray "play" triangle and the
+       LEFT HALF of the CBC gem in faint red outline. The gem is its real geometry
+       (centre circle + 4 cardinal half-disk petals + 4 corner quarter-disks + 4 outer
+       caps), drawn full at 200x200 and placed with its centre on the right edge so only
+       the left half is visible, the rest bleeding off toward the panel. -->
+  <polygon points="8,30 8,72 44,51" fill="#8C8C8C"/>
+
+  <g transform="translate(180,65) scale(0.7) translate(-100,-100)"
+     fill="none" stroke="#E2231A" stroke-opacity="0.55" stroke-width="4"
+     stroke-linejoin="round">
+      <circle cx="100" cy="100" r="35"/>
+      <path d="M65,60 A35,35 0 0 1 135,60 Z"/>
+      <path d="M65,140 A35,35 0 0 0 135,140 Z"/>
+      <path d="M60,65 A35,35 0 0 0 60,135 Z"/>
+      <path d="M140,65 A35,35 0 0 1 140,135 Z"/>
+      <path d="M25,60 A35,35 0 0 1 60,25 L60,60 Z"/>
+      <path d="M140,25 A35,35 0 0 1 175,60 L140,60 Z"/>
+      <path d="M60,175 A35,35 0 0 1 25,140 L60,140 Z"/>
+      <path d="M175,140 A35,35 0 0 1 140,175 L140,140 Z"/>
+      <path d="M70,20 A32.5,32.5 0 0 1 130,20 Z"/>
+      <path d="M70,180 A32.5,32.5 0 0 0 130,180 Z"/>
+      <path d="M20,70 A32.5,32.5 0 0 0 20,130 Z"/>
+      <path d="M180,70 A32.5,32.5 0 0 1 180,130 Z"/>
+  </g>
+</svg>

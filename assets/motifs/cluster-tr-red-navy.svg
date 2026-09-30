@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 170" width="300" height="170">
+  <!-- Top-right: red line-hatched triangle + navy outline triangle + navy solid triangle. -->
+  <defs>
+    <pattern id="hRedTRN" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#E2231A" stroke-width="2.3"/>
+    </pattern>
+    <clipPath id="cRedTRN"><polygon points="40,8 40,132 158,70"/></clipPath>
+  </defs>
+  <g clip-path="url(#cRedTRN)"><rect x="20" y="-10" width="150" height="160" fill="url(#hRedTRN)"/></g>
+  <polygon points="120,18 120,150 244,84" fill="none" stroke="#2F6289" stroke-width="4"/>
+  <polygon points="256,44 256,104 298,74" fill="#2F6289"/>
+</svg>

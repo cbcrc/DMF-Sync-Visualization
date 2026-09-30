@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 320" width="360" height="320">
+  <!-- Top-right corner cluster for the pale-teal slide (cards-icons-2):
+       white solid triangle + navy line-hatched triangle. -->
+  <defs>
+    <pattern id="hatchNavyT" width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="13" stroke="#2F6289" stroke-width="2.4"/>
+    </pattern>
+    <clipPath id="triHatchT">
+      <polygon points="170,4 170,250 360,127"/>
+    </clipPath>
+  </defs>
+  <polygon points="44,78 44,252 214,165" fill="#FFFFFF"/>
+  <g clip-path="url(#triHatchT)">
+    <rect x="120" y="-40" width="320" height="360" fill="url(#hatchNavyT)"/>
+  </g>
+</svg>

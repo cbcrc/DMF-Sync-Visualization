@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <!-- Pale-blue line-hatched circle with a navy "play" triangle.
+       Used on the left edge of the timeline slides. -->
+  <defs>
+    <pattern id="hBlueCirc" width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="13" stroke="#B7DADE" stroke-width="2.6"/>
+    </pattern>
+    <clipPath id="cCirc"><circle cx="150" cy="150" r="142"/></clipPath>
+  </defs>
+  <g clip-path="url(#cCirc)"><rect x="0" y="0" width="300" height="300" fill="url(#hBlueCirc)"/></g>
+  <polygon points="122,96 122,204 210,150" fill="#2A4B66"/>
+</svg>
