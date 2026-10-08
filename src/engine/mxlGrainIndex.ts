@@ -19,6 +19,26 @@ import type { GrainRate } from '../types';
 /** Default flow grain rate used for visualization — the exact worked example from MXL's Timing.md (50 grains/sec). */
 export const DEFAULT_GRAIN_RATE: GrainRate = { numerator: 50, denominator: 1 };
 
+/**
+ * Audio track rate used for visualization: real MXL audio flows are
+ * "Continuous" ring buffers of individual samples (`docs/Architecture.md`
+ * §"Continuous Ringbuffer I/O"), not discrete video-sized grains — a 48kHz
+ * stream has a new sample every ~0.02ms, far too fine-grained to render as
+ * individual slots here. As a teaching approximation we keep audio on the
+ * same discrete grain-index math as video but at AES67's default 1ms
+ * packet time (1000 "grains"/sec) — 20x finer than the 20ms default video
+ * grain, which is the point: audio must never be shown as the same size as
+ * a video grain. This does not model the Continuous buffer's distinct
+ * writer/reader half-buffer split (`docs/Architecture.md`); see
+ * `AI_RULES.md`'s Known Simplifications.
+ */
+export const AUDIO_GRAIN_RATE: GrainRate = { numerator: 1000, denominator: 1 };
+
+/** Which track-appropriate grain rate to use for a flow, by MXL data format. */
+export function grainRateForTrack(track: 'video' | 'audio' | 'data'): GrainRate {
+  return track === 'audio' ? AUDIO_GRAIN_RATE : DEFAULT_GRAIN_RATE;
+}
+
 /** `GrainDurationNs = GrainRateDenominator * 1e9 / GrainRateNumerator`, expressed here in ms. */
 export function grainDurationMs(rate: GrainRate = DEFAULT_GRAIN_RATE): number {
   return (1000 * rate.denominator) / rate.numerator;

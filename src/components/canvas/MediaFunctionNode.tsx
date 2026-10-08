@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import type { MediaFunctionKind } from '../../types';
 import { nodeSizeForLatency } from './nodeSizing';
 import { LATENCY_RANGE } from './nodeDefaults';
+import { grainRateForTrack, timestampToGrainIndex } from '../../engine/mxlGrainIndex';
 import './MediaFunctionNode.css';
 
 /** Data payload for a Media Function node on the canvas (subset of `MediaFunction`). */
@@ -26,6 +27,15 @@ export interface MediaFunctionNodeData {
   processingWaiting?: boolean;
   /** Which producer output branch the held grain descends from (0/1 = video/audio by convention), for color-coding. */
   processingStreamIndex?: number;
+  /**
+   * Origin capture timestamp (`Date.now()`-based) of the grain currently held
+   * here, unchanged from when its producer first wrote it — shown (when
+   * `showOriginTimestamps`) to demonstrate that processing never re-stamps a
+   * grain with a new reference time (item #10.iii).
+   */
+  processingOriginTs?: number;
+  /** Mirrors the HUD's "Show origin timestamps" toggle (`App.tsx`). */
+  showOriginTimestamps?: boolean;
   /** Set when this node is waiting on a synchronized sibling flow that suffered an overrun drop. */
   syncStalled?: boolean;
   /**
@@ -108,6 +118,17 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
               }${data.processingWaiting ? ' mf-node__path-grain--waiting' : ''}`}
               style={{ animationDuration: `${data.processingDurationMs}ms` }}
             />
+          )}
+          {data.processing && data.showOriginTimestamps && data.processingOriginTs !== undefined && (
+            <div
+              className="mf-node__ref-badge"
+              title="Grain time reference carried through processing unchanged — this node does not re-stamp it"
+            >
+              ref #{timestampToGrainIndex(
+                data.processingOriginTs,
+                grainRateForTrack(data.processingStreamIndex === 1 ? 'audio' : 'video'),
+              )} kept
+            </div>
           )}
         </div>
       )}

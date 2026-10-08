@@ -17,6 +17,8 @@ interface Cell {
   slot: number;
   /** This grain is gone — its slot was recycled by a newer grain. */
   lost: boolean;
+  /** This grain is still retained, but too far behind the head to fit in the window. */
+  offscreen?: boolean;
   isHead: boolean;
   isRead: boolean;
 }
@@ -71,6 +73,24 @@ export function GrainSlotStrip({ buffer, evaluation, compact = false }: GrainSlo
     });
   }
 
+  // Still retained, but further behind the head than the fixed-width window
+  // shows (common for fine-grained audio tracks, whose grains are 20x
+  // smaller than video's — the same millisecond differential spans far more
+  // grain slots). Without this, R silently scrolls off the left edge and the
+  // reader looks like it has no read position at all. Show it compressed,
+  // off to the side, distinct from the lost/recycled styling.
+  const readIsOffscreen = !readIsLost && requestedGrainIndex < firstShown;
+  if (readIsOffscreen) {
+    cells.unshift({
+      grainIndex: requestedGrainIndex,
+      slot: grainIndexToRingBufferIndex(requestedGrainIndex, grainCount),
+      lost: false,
+      offscreen: true,
+      isHead: false,
+      isRead: true,
+    });
+  }
+
   // How many more grains the writer can publish before it laps this reader.
   const grainsUntilOverwrite = retainedGrains - evaluation.deltaGrains;
   const readIsFuture = evaluation.status === 'TOO_EARLY';
@@ -78,13 +98,19 @@ export function GrainSlotStrip({ buffer, evaluation, compact = false }: GrainSlo
   return (
     <div className={`gs-strip gs-strip--${zone}${compact ? ' gs-strip--compact' : ''}`}>
       <div className="gs-strip__cells">
-        {readIsLost && <div className="gs-strip__break" title="grains already recycled" />}
+        {(readIsLost || readIsOffscreen) && (
+          <div
+            className="gs-strip__break"
+            title={readIsLost ? 'grains already recycled' : 'retained grains not shown — reader is further behind than this window'}
+          />
+        )}
         {cells.map((cell) => (
           <div
             key={cell.grainIndex}
             className={[
               'gs-cell',
               cell.lost ? 'gs-cell--lost' : '',
+              cell.offscreen ? 'gs-cell--offscreen' : '',
               cell.isHead ? 'gs-cell--head' : '',
               cell.isRead ? 'gs-cell--read' : '',
             ]
@@ -109,6 +135,11 @@ export function GrainSlotStrip({ buffer, evaluation, compact = false }: GrainSlo
           </span>
         ) : readIsFuture ? (
           <span className="gs-strip__wait">R waiting for W to publish #{requestedGrainIndex}</span>
+        ) : readIsOffscreen ? (
+          <span className="gs-strip__ok">
+            R holds #{requestedGrainIndex}, {grainsUntilOverwrite} grain
+            {grainsUntilOverwrite === 1 ? '' : 's'} before W overwrites it (window too narrow to show the gap)
+          </span>
         ) : (
           <span className="gs-strip__ok">
             {grainsUntilOverwrite} grain{grainsUntilOverwrite === 1 ? '' : 's'} before W overwrites R

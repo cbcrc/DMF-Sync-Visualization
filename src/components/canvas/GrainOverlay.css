@@ -163,3 +163,61 @@
   }
 }
 
+/* Origin-timestamp tag: the MXL grain index + how far behind real time
+   (Date.now() - originTs) this specific grain's content has fallen so far,
+   following the dot so the user can watch the offset grow along the path. */
+.grain-origin-tag {
+  position: absolute;
+  transform: translate(-50%, -22px);
+  white-space: nowrap;
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  padding: 1px 4px;
+  pointer-events: none;
+}
+
+/* "Writing" flash: a brief pulse at the exact point a grain departs a node,
+   marking the instant that node published it into its own output ring
+   buffer at the grain index shown. */
+.grain-write-flash {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.grain-write-flash::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2px solid #ee0000;
+  animation: grain-write-flash-ring 0.25s ease-out forwards;
+}
+
+.grain-write-flash__label {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: #ee0000;
+  font-weight: 700;
+}
+
+@keyframes grain-write-flash-ring {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+

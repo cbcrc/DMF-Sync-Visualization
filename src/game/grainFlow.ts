@@ -60,6 +60,19 @@ export interface Grain {
    * re-tuned.
    */
   stalled?: boolean;
+  /**
+   * Absolute MXL timestamp (ms, `Date.now()`-based — same clock
+   * `ringBufferEngine`/`mxlGrainIndex` use for real grain-index math) this
+   * grain's content originated at. Set once when a producer spawns a brand
+   * new grain and then carried unchanged through every travel/hold/fan-out
+   * derived from it — this is what lets the UI show "this grain was
+   * captured at index N" no matter how far downstream it has traveled, and
+   * how many grains behind real time (`Date.now() - originTs`) it has
+   * fallen along the way. Mirrors MXL's Origin Timestamp (OTS) concept
+   * (docs/Timing.md): a media function that processes a grain does not
+   * re-stamp it with a new capture time.
+   */
+  originTs?: number;
 }
 
 export interface NodeGeom {
@@ -283,6 +296,7 @@ export function stepGrains(
           startTime: now,
           durationMs: DROPPED_MS,
           streamIndex: g.streamIndex,
+          originTs: g.originTs,
         });
         // Record this handle as dropped for the active wave
         if (!droppedHandles.has(g.toId)) droppedHandles.set(g.toId, new Set());
@@ -303,6 +317,7 @@ export function stepGrains(
         parked: true,
         waiting: status === 'TOO_EARLY',
         streamIndex: g.streamIndex,
+        originTs: g.originTs,
       });
       continue;
     }
@@ -338,6 +353,7 @@ export function stepGrains(
           outputAnchor(fromGeom, srcIdx),
           inputAnchor(geometry.get(e.target)!, tgtIdx),
         ),
+        originTs: g.originTs,
       });
     }
     // Grains with no outgoing edges (Recording/Output nodes) are simply consumed here.
@@ -416,6 +432,11 @@ export function stepGrains(
   if (readyToSpawn) {
     lastSpawnByNode.delete(DRAIN_KEY);
     droppedHandles.clear(); // Fresh wave: clear previous dropped history
+    // Real (`Date.now()`-based) capture timestamp for this wave's brand new
+    // grains — the one fixed reference point every downstream copy of this
+    // grain will carry forward unchanged. `now` above is `performance.now()`,
+    // used only for animation pacing.
+    const wallNow = Date.now();
     for (const n of nodes) {
       if (n.data.inputCount > 0) continue; // only producers (Input/Synthetic) spawn new grains
       const outs = outgoingByNode.get(n.id);
@@ -437,6 +458,7 @@ export function stepGrains(
           streamIndex: srcIdx,
           startTime: now,
           durationMs: travelDuration(outputAnchor(fromGeom, srcIdx), inputAnchor(geometry.get(e.target)!, tgtIdx)),
+          originTs: wallNow,
         });
       }
     }
@@ -464,6 +486,28 @@ export function getGrainPosition(
   if (grain.phase === 'holding' || grain.phase === 'dropped') {
     const geom = geometry.get(grain.fromId);
     if (!geom) return null;
+    // Parked grains (waiting at a multi-input sync node for every sibling to
+    // arrive) used to all collapse onto the node's dead center — with two+
+    // siblings parked at once (e.g. video + audio at Egress) they rendered
+    // exactly on top of one another. Spread them out along the node's real
+    // input-handle positions instead (same spacing `inputAnchor` draws the
+    // handles at), blended partway toward the center so they still read as
+    // "inside" the node rather than sitting on its border.
+    if (grain.phase === 'holding' && grain.parked) {
+      const anchor = inputAnchor(geom, grain.targetHandleIndex ?? 0);
+      const centerX = geom.x + geom.size / 2;
+      const centerY = geom.y + geom.size / 2;
+      // Kept close to the handle (rather than blended toward center) so a
+      // parked grain visibly sits right where its edge connects to the box
+      // — reading as "held at the door, waiting on a sibling" rather than
+      // "already inside being processed". This makes it obvious at a glance
+      // which input (e.g. audio) is the one being made to wait.
+      const PARK_BLEND = 0.15; // 0 = at the handle, 1 = dead center
+      return {
+        x: anchor.x + (centerX - anchor.x) * PARK_BLEND,
+        y: anchor.y + (centerY - anchor.y) * PARK_BLEND,
+      };
+    }
     return { x: geom.x + geom.size / 2, y: geom.y + geom.size / 2 };
   }
   const fromGeom = geometry.get(grain.fromId);

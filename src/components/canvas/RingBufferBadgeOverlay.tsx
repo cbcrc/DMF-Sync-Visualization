@@ -4,6 +4,7 @@ import type { MediaFunctionNodeData } from './MediaFunctionNode';
 import { buildNodeGeometry } from '../../game/grainFlow';
 import type { InputReading } from '../../game/graphLatency';
 import { GrainSlotStrip } from '../ui/GrainSlotStrip';
+import { ContinuousBufferTrack } from '../ui/ContinuousBufferTrack';
 import './RingBufferBadgeOverlay.css';
 
 export interface RingBufferBadgeOverlayProps {
@@ -55,7 +56,17 @@ export function RingBufferBadgeOverlay({ nodes, inputsByNodeId }: RingBufferBadg
                   <div className="rb-badge__text">
                     ← {labelByNodeId.get(reading.sourceNodeId) ?? reading.sourceNodeId} · {statusLabel}
                   </div>
-                  <GrainSlotStrip buffer={buffer} evaluation={evaluation} compact />
+                  {reading.track === 'audio' ? (
+                    <ContinuousBufferTrack
+                      label={labelByNodeId.get(reading.sourceNodeId) ?? reading.sourceNodeId}
+                      buffer={buffer}
+                      evaluation={evaluation}
+                      alignmentSpanMs={reading.alignmentSpanMs}
+                      compact
+                    />
+                  ) : (
+                    <GrainSlotStrip buffer={buffer} evaluation={evaluation} compact />
+                  )}
                 </div>
               );
             })}

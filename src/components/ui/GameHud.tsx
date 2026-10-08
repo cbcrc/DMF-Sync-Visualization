@@ -17,6 +17,9 @@ export interface GameHudProps {
   /** Every reader input currently reading a grain that has been overwritten. */
   lateInputs: InputReading[];
   nodeLabelById: Map<string, string>;
+  /** Show each grain's MXL origin-timestamp index/offset-from-now + node write flashes. */
+  showOriginTimestamps: boolean;
+  onToggleOriginTimestamps: (show: boolean) => void;
 }
 
 /**
@@ -36,6 +39,8 @@ export function GameHud({
   onRestartWave,
   lateInputs,
   nodeLabelById,
+  showOriginTimestamps,
+  onToggleOriginTimestamps,
 }: GameHudProps) {
   const marginClass = stabilityMarginMs < 0 ? 'game-hud__stat-value--bad' : '';
 
@@ -66,6 +71,15 @@ export function GameHud({
           value={domainSizeMs}
           onChange={(e) => onDomainSizeChange(Number(e.target.value))}
         />
+      </label>
+
+      <label className="game-hud__checkbox">
+        <input
+          type="checkbox"
+          checked={showOriginTimestamps}
+          onChange={(e) => onToggleOriginTimestamps(e.target.checked)}
+        />
+        Show origin timestamps
       </label>
 
       <div className="game-hud__stats">

@@ -18,7 +18,7 @@ export const LEVELS: Level[] = [
       'The minimal MXL workload: an Ingress Function writes flows V1 (video) and A1 (audio) from one paced stream, and an Egress Function re-pairs them for output. Everything is green — explore the grain indices on each input, then start adding Media Functions to the video path.',
     domainSizeMs: 100,
     guidance:
-      'Watch the Egress inputs: both request the SAME grain index, because grain indices are preserved through processing. The video branch lags 30ms and audio 2ms, so audio is asked for a grain 28ms old. Add Media Functions to the video path to grow that differential until audio goes red.',
+      'Watch the Egress inputs: both request the SAME point in time, because grain indices are preserved through processing — video and audio just express that instant in their own grain rate (video ~20ms grains, audio ~1ms grains), so the index numbers differ even though the timestamp matches. The video branch lags 30ms and audio 2ms, so audio is asked for a grain 28ms old. Add Media Functions to the video path to grow that differential until audio goes red.',
   },
   {
     id: 'align-4k-audio',
@@ -38,7 +38,7 @@ export const LEVELS: Level[] = [
     id: 'av-sync-overrun',
     title: '4. A/V Sync Overrun',
     description:
-      'One Ingress Function writes flows V1 (video) and A1 (audio) from the same paced stream. Video is processed twice (V1→V1a→V1b, 82ms), audio once (A1→A1a, 2ms). Grain indices are preserved, so the Egress Function must read the SAME index from both — it waits on the slow video branch, by which time the audio grain it needs sits 80ms (4 grains) behind the audio head and its slot has been recycled.',
+      'One Ingress Function writes flows V1 (video) and A1 (audio) from the same paced stream. Video is processed twice (V1→V1a→V1b, 82ms), audio once (A1→A1a, 2ms). Grain indices are preserved per-track, so the Egress Function must read the SAME point in time from both — it waits on the slow video branch, by which time the audio grain it needs sits 80ms behind the audio head and its slot has been recycled.',
     domainSizeMs: 100,
     guidance:
       'The audio flow only retains 3 grains (60ms) of history but is asked for a grain 4 grains old. Three fixes: (1) grow the MXL Domain to 110ms so the audio flow retains 4 grains, (2) delete the Slow Video MF and reconnect V1a straight to the Egress to shrink the differential, or (3) drop a Grain Repeater into the audio branch so A1a is re-buffered into a second sub-ring buffer.',

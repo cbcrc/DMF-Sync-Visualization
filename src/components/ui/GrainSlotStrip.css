@@ -112,6 +112,14 @@
   text-decoration: line-through;
 }
 
+/* A still-retained grain too far behind the head to fit this window's
+   fixed cell count (common for fine-grained audio tracks). Distinct from
+   --lost: the data is safe, just not drawn to scale. */
+.gs-cell--offscreen {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
 /* Visual break between destroyed grains and the retained window. */
 .gs-strip__break {
   flex: 0 0 8px;

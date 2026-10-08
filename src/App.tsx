@@ -17,6 +17,11 @@ function App() {
   const [levelId, setLevelId] = useState(DEFAULT_LEVEL_ID);
   const level = useMemo(() => LEVELS.find((l) => l.id === levelId) ?? LEVELS[0], [levelId]);
   const [domainSizeMs, setDomainSizeMs] = useState(level.domainSizeMs);
+  const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
+  // Keyed `${nodeId}:${inputIndex}`, same keying as `statusByInputKey` — which reader
+  // inputs currently have a grain parked on canvas waiting for a sync sibling, so the
+  // Ring Buffer Telemetry panel can highlight the matching row (the two views of one event).
+  const [parkedInputKeys, setParkedInputKeys] = useState<Set<string>>(new Set());
 
   const onGraphChange = useCallback((nodes: Node<MediaFunctionNodeData>[], edges: Edge[]) => {
     setGraphNodes(nodes);
@@ -87,8 +92,10 @@ function App() {
         inputsByNodeId={graph.inputsByNodeId}
         levelId={level.id}
         waveResetKey={waveResetKey}
+        showOriginTimestamps={showOriginTimestamps}
+        onParkedInputsChange={setParkedInputKeys}
       />
-      <RingBufferPanel nodes={graphNodes} graph={graph} />
+      <RingBufferPanel nodes={graphNodes} graph={graph} parkedInputKeys={parkedInputKeys} />
       <GameHud
         level={level}
         onSelectLevel={handleSelectLevel}
@@ -101,6 +108,8 @@ function App() {
         onRestartWave={handleRestartWave}
         lateInputs={lateInputs}
         nodeLabelById={nodeLabelById}
+        showOriginTimestamps={showOriginTimestamps}
+        onToggleOriginTimestamps={setShowOriginTimestamps}
       />
       <InfoPanel />
     </div>

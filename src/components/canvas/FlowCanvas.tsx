@@ -172,9 +172,27 @@ export interface FlowCanvasProps {
   levelId: string;
   /** Key incremented to force a wave restart (e.g. from HUD restart button or level change). */
   waveResetKey?: number;
+  /** Show each grain's MXL origin-timestamp index/offset and node write flashes (item #10.ii). */
+  showOriginTimestamps?: boolean;
+  /**
+   * Reports which reader inputs (keyed `${nodeId}:${inputIndex}`, same keying as
+   * `statusByInputKey`) currently have a grain parked on canvas waiting for a sync
+   * sibling, so the Ring Buffer Telemetry panel below can highlight the matching
+   * reader row — the same "waiting" event shown as two correlated views.
+   */
+  onParkedInputsChange?: (keys: Set<string>) => void;
 }
 
-function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputsByNodeId, levelId, waveResetKey }: FlowCanvasProps) {
+function FlowCanvasInner({
+  onGraphChange,
+  zoneByNodeId,
+  statusByInputKey,
+  inputsByNodeId,
+  levelId,
+  waveResetKey,
+  showOriginTimestamps,
+  onParkedInputsChange,
+}: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const addedCount = useRef(0);
@@ -257,6 +275,26 @@ function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputs
 
   const grains = useGrainFlow(nodes, edges, statusByInputKey, waveResetKey);
 
+  // Same keying (`${nodeId}:${inputIndex}`) as `statusByInputKey` — lets App correlate a
+  // grain parked on canvas with its matching reader row in the Ring Buffer Telemetry panel.
+  const parkedInputKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of grains) {
+      if (g.phase === 'holding' && g.parked) {
+        set.add(`${g.fromId}:${g.targetHandleIndex ?? 0}`);
+      }
+    }
+    return set;
+  }, [grains]);
+  const parkedSignature = useMemo(() => Array.from(parkedInputKeys).sort().join('|'), [parkedInputKeys]);
+  const prevParkedSignature = useRef('');
+  useEffect(() => {
+    if (parkedSignature !== prevParkedSignature.current) {
+      prevParkedSignature.current = parkedSignature;
+      onParkedInputsChange?.(parkedInputKeys);
+    }
+  }, [parkedSignature, parkedInputKeys, onParkedInputsChange]);
+
   const stalledNodeIds = useMemo(() => {
     const set = new Set<string>();
     for (const g of grains) {
@@ -270,7 +308,10 @@ function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputs
   // long as it is held. Keyed by node; if several grains land at once, the
   // most recent arrival drives the path.
   const holdByNodeId = useMemo(() => {
-    const map = new Map<string, { startTime: number; durationMs: number; waiting: boolean; streamIndex?: number }>();
+    const map = new Map<
+      string,
+      { startTime: number; durationMs: number; waiting: boolean; streamIndex?: number; originTs?: number }
+    >();
     for (const g of grains) {
       if (g.phase !== 'holding') continue;
       const existing = map.get(g.fromId);
@@ -280,6 +321,7 @@ function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputs
           durationMs: g.durationMs,
           waiting: !!g.waiting,
           streamIndex: g.streamIndex,
+          originTs: g.originTs,
         });
       }
     }
@@ -301,12 +343,14 @@ function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputs
             processingDurationMs: hold?.durationMs,
             processingWaiting: hold?.waiting,
             processingStreamIndex: hold?.streamIndex,
+            processingOriginTs: hold?.originTs,
+            showOriginTimestamps,
             syncStalled: stalledNodeIds.has(n.id),
             onLatencyChange: handleLatencyChange,
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps],
   );
 
   return (
@@ -323,7 +367,7 @@ function FlowCanvasInner({ onGraphChange, zoneByNodeId, statusByInputKey, inputs
       <Background color="#333" gap={24} />
       <Controls />
       <MiniMap pannable zoomable style={{ background: '#111214' }} />
-      <GrainOverlay nodes={nodes} grains={grains} />
+      <GrainOverlay nodes={nodes} grains={grains} showOriginTimestamps={showOriginTimestamps} />
       <RingBufferBadgeOverlay nodes={nodes} inputsByNodeId={inputsByNodeId} />
       <Panel position="top-left" className="fc-palette">
         <div className="fc-palette__title">Add node</div>

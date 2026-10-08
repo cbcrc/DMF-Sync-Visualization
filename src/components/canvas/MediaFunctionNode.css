@@ -78,6 +78,26 @@
   align-items: center;
 }
 
+/* Proof that this node preserves the grain's time reference: the same index
+   shown here while processing is the index `GrainOverlay`'s "writing" flash
+   shows the instant this grain departs on an outgoing edge (item #10.iii). */
+.mf-node__ref-badge {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  white-space: nowrap;
+  font-size: 0.55rem;
+  font-family: monospace;
+  color: #80cbc4;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(128, 203, 196, 0.5);
+  border-radius: 3px;
+  padding: 1px 4px;
+  pointer-events: none;
+}
+
 .mf-node__path-track {
   position: absolute;
   inset: 0 0 auto 0;

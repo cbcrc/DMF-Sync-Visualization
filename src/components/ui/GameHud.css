@@ -92,6 +92,15 @@
   width: 100%;
 }
 
+.game-hud__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
 .game-hud__stats {
   display: flex;
   align-items: center;

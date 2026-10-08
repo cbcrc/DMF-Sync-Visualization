@@ -33,6 +33,10 @@
   width: 220px;
 }
 
+.rb-panel__clock-note {
+  opacity: 0.75;
+}
+
 .rb-panel__group {
   display: flex;
   flex-direction: column;
@@ -53,4 +57,25 @@
   flex-direction: column;
   gap: 6px;
   pointer-events: auto;
+  border-radius: 6px;
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+/* Mirrors the canvas's `.grain-dot--parked` dashed ring/pulse — highlights the
+   exact reader row whose grain is currently parked on canvas waiting for a
+   sync sibling, so the two views read as one correlated "waiting" event. */
+.rb-panel__entry--parked {
+  background: rgba(255, 224, 130, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 224, 130, 0.55), 0 0 10px 1px rgba(255, 193, 7, 0.35);
+  animation: rb-panel-parked-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes rb-panel-parked-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 224, 130, 0.35), 0 0 8px 1px rgba(255, 193, 7, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 224, 130, 0.75), 0 0 12px 2px rgba(255, 193, 7, 0.5);
+  }
 }
