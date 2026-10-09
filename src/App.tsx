@@ -8,6 +8,7 @@ import { RingBufferPanel } from './components/ui/RingBufferPanel';
 import { GameHud } from './components/ui/GameHud';
 import { InfoPanel } from './components/ui/InfoPanel';
 import { useGameLoop } from './game/useGameLoop';
+import { useSimClock } from './game/useSimClock';
 import { LEVELS, DEFAULT_LEVEL_ID } from './game/levels';
 import './App.css';
 
@@ -18,17 +19,23 @@ function App() {
   const level = useMemo(() => LEVELS.find((l) => l.id === levelId) ?? LEVELS[0], [levelId]);
   const [domainSizeMs, setDomainSizeMs] = useState(level.domainSizeMs);
   const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
+  // Item #11: raw MXL grain index (epoch-scaled, huge) vs. the small ring-relative
+  // index shown by default for readability — see `mxlGrainIndex.ts`'s `grainIndexForDisplay`.
+  const [showRealGrainIndex, setShowRealGrainIndex] = useState(false);
   // Keyed `${nodeId}:${inputIndex}`, same keying as `statusByInputKey` — which reader
   // inputs currently have a grain parked on canvas waiting for a sync sibling, so the
   // Ring Buffer Telemetry panel can highlight the matching row (the two views of one event).
   const [parkedInputKeys, setParkedInputKeys] = useState<Set<string>>(new Set());
+  // Item #9: single shared simulated clock driving grain-flow animation, ring
+  // buffer evaluation, and the stability fail-timer in lockstep.
+  const clock = useSimClock();
 
   const onGraphChange = useCallback((nodes: Node<MediaFunctionNodeData>[], edges: Edge[]) => {
     setGraphNodes(nodes);
     setGraphEdges(edges);
   }, []);
 
-  const { graph, stability, resetStability } = useGameLoop(graphNodes, graphEdges, domainSizeMs);
+  const { graph, stability, resetStability } = useGameLoop(graphNodes, graphEdges, domainSizeMs, clock.getNow);
 
   const zoneByNodeId = useMemo(() => {
     const map = new Map<string, 'green' | 'yellow' | 'red'>();
@@ -93,6 +100,9 @@ function App() {
         levelId={level.id}
         waveResetKey={waveResetKey}
         showOriginTimestamps={showOriginTimestamps}
+        showRealGrainIndex={showRealGrainIndex}
+        domainSizeMs={domainSizeMs}
+        getNow={clock.getNow}
         onParkedInputsChange={setParkedInputKeys}
       />
       <RingBufferPanel nodes={graphNodes} graph={graph} parkedInputKeys={parkedInputKeys} />
@@ -110,6 +120,11 @@ function App() {
         nodeLabelById={nodeLabelById}
         showOriginTimestamps={showOriginTimestamps}
         onToggleOriginTimestamps={setShowOriginTimestamps}
+        showRealGrainIndex={showRealGrainIndex}
+        onToggleRealGrainIndex={setShowRealGrainIndex}
+        playbackMode={clock.mode}
+        onSetPlaybackMode={clock.setMode}
+        onStep={() => clock.step()}
       />
       <InfoPanel />
     </div>

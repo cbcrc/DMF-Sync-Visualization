@@ -61,13 +61,13 @@ export interface Grain {
    */
   stalled?: boolean;
   /**
-   * Absolute MXL timestamp (ms, `Date.now()`-based — same clock
-   * `ringBufferEngine`/`mxlGrainIndex` use for real grain-index math) this
-   * grain's content originated at. Set once when a producer spawns a brand
-   * new grain and then carried unchanged through every travel/hold/fan-out
+   * Simulated-clock timestamp (ms, same `useSimClock` clock
+   * `ringBufferEngine`/`mxlGrainIndex` display logic uses) this grain's
+   * content originated at. Set once when a producer spawns a brand new
+   * grain and then carried unchanged through every travel/hold/fan-out
    * derived from it — this is what lets the UI show "this grain was
    * captured at index N" no matter how far downstream it has traveled, and
-   * how many grains behind real time (`Date.now() - originTs`) it has
+   * how many grains behind the simulated clock (`simNow - originTs`) it has
    * fallen along the way. Mirrors MXL's Origin Timestamp (OTS) concept
    * (docs/Timing.md): a media function that processes a grain does not
    * re-stamp it with a new capture time.
@@ -85,10 +85,13 @@ export interface NodeGeom {
   outputCount: number;
 }
 
-/** Minimum time (ms) a grain takes to travel an edge, however short/zoomed-out. */
-const MIN_TRAVEL_MS = 350;
-/** Constant visual travel speed so longer edges take proportionally longer. */
-const TRAVEL_PX_PER_MS = 0.5;
+/**
+ * Edge travel duration (ms) — see `travelDuration`'s doc comment: this is
+ * deliberately near-zero (not literal 0ms, which would divide-by-zero in
+ * the position interpolation) so a grain hops across an edge in effectively
+ * one frame, matching MXL's effectively-instant write→read handoff.
+ */
+const EDGE_TRAVEL_MS = 1;
 /** Base hold time (ms) even for 0ms-latency nodes, so pass-through is still visible. */
 const HOLD_BASE_MS = 150;
 /** How many extra ms a grain pauses per ms of the node's processing latency. */
@@ -217,21 +220,20 @@ function pointAlongCurve(a: Point, b: Point, fraction: number): Point {
   return b;
 }
 
-/** Approximate drawn length of the curved edge, used to pace travel time. */
-function curveLength(a: Point, b: Point): number {
-  const [c1, c2] = bezierControls(a, b);
-  let prev = a;
-  let total = 0;
-  for (let i = 1; i <= ARC_SAMPLES; i += 1) {
-    const p = cubicPoint(a, c1, c2, b, i / ARC_SAMPLES);
-    total += Math.hypot(p.x - prev.x, p.y - prev.y);
-    prev = p;
-  }
-  return total;
-}
-
-function travelDuration(a: Point, b: Point): number {
-  return Math.max(MIN_TRAVEL_MS, curveLength(a, b) / TRAVEL_PX_PER_MS);
+/**
+ * Item #9 follow-up: writing a grain into a node's output ring buffer and
+ * the next node reading it is effectively instantaneous in real MXL (shared
+ * memory, not a wire) — the only latency worth visualizing is a node's own
+ * processing hold (`holdDuration`). Edge travel used to scale with on-screen
+ * distance (up to >1s for a long edge), which misleadingly implied transit
+ * time that doesn't exist. Now every edge takes the same tiny, near-instant
+ * duration regardless of length — just enough for the dot's position to
+ * interpolate across a frame rather than teleport with a visible pop. Kept
+ * as a non-zero floor (not literal 0ms) only to avoid a divide-by-zero in
+ * `getGrainPosition`'s `(now - startTime) / durationMs`.
+ */
+function travelDuration(): number {
+  return EDGE_TRAVEL_MS;
 }
 
 /** Longer processing latency -> longer visible pause at the node (capped so it stays watchable). */
@@ -349,10 +351,7 @@ export function stepGrains(
         targetHandleIndex: tgtIdx,
         streamIndex: g.streamIndex,
         startTime: now,
-        durationMs: travelDuration(
-          outputAnchor(fromGeom, srcIdx),
-          inputAnchor(geometry.get(e.target)!, tgtIdx),
-        ),
+        durationMs: travelDuration(),
         originTs: g.originTs,
       });
     }
@@ -432,17 +431,17 @@ export function stepGrains(
   if (readyToSpawn) {
     lastSpawnByNode.delete(DRAIN_KEY);
     droppedHandles.clear(); // Fresh wave: clear previous dropped history
-    // Real (`Date.now()`-based) capture timestamp for this wave's brand new
-    // grains — the one fixed reference point every downstream copy of this
-    // grain will carry forward unchanged. `now` above is `performance.now()`,
-    // used only for animation pacing.
-    const wallNow = Date.now();
+    // Capture timestamp for this wave's brand new grains — the one fixed
+    // reference point every downstream copy of this grain will carry
+    // forward unchanged. Uses the same simulated clock as `now` (see
+    // `useSimClock`) so origin-timestamp age display (item #11) and travel/
+    // hold timing stay in lockstep under Stepping/Manual playback modes.
+    const wallNow = now;
     for (const n of nodes) {
       if (n.data.inputCount > 0) continue; // only producers (Input/Synthetic) spawn new grains
       const outs = outgoingByNode.get(n.id);
       if (!outs || outs.length === 0) continue;
 
-      const fromGeom = geometry.get(n.id)!;
       for (const e of outs) {
         if (!geometry.has(e.target)) continue;
         const srcIdx = parseHandleIndex(e.sourceHandle, 'out-');
@@ -457,7 +456,7 @@ export function stepGrains(
           targetHandleIndex: tgtIdx,
           streamIndex: srcIdx,
           startTime: now,
-          durationMs: travelDuration(outputAnchor(fromGeom, srcIdx), inputAnchor(geometry.get(e.target)!, tgtIdx)),
+          durationMs: travelDuration(),
           originTs: wallNow,
         });
       }

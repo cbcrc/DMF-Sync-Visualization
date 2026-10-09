@@ -16,6 +16,17 @@ Item #1 ("Visualize the Egress parking signal... distinctly visible") is
 also **complete** — parked siblings no longer stack on the node's dead
 center; see "Sync parking" below.
 
+Item #11 ("Clean up the origin timestamp mechanism") is also **complete** —
+the raw epoch-scaled grain index and the per-tick age repaint were replaced
+with a small ring-relative index (toggleable to the raw one), a 100ms-
+rounded age, and a lingering fade-out for tags; see "Grain-flow
+visualization" below.
+
+Item #9 ("Slow down the animation — three playback modes") is also
+**complete** — a shared simulated clock (`useSimClock.ts`) now drives every
+timing engine, with a HUD switch for Normal/Stepping/Manual plus a Manual
+"Step ▶" button; see "Playback modes (shared simulated clock)" below.
+
 No open threads/in-progress edits — safe to start a new deliverable from
 scratch next session (see README's "Future development" for remaining
 numbered items, and this file's "Known simplifications" for follow-on ideas
@@ -164,11 +175,95 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   "writing #index" ring at a node's output anchor the instant a grain
   embarks on an outgoing edge — the moment that node published it into its
   own output ring buffer.
+  - **Item #11 readability pass:** the raw MXL `GrainIndex` is epoch-scaled
+    (`Date.now()` / grain duration) and reads as an 11-13 digit number with
+    no pedagogical anchor, and the age counter used to repaint every ~40ms
+    simulation tick — both made the feature "move too fast to read." Fixed
+    by: (D1) showing the small `RingBufferIndex` (`grainIndex mod
+    ringBufferLength`, `mxlGrainIndex.ts`'s `grainIndexForDisplay`) by
+    default, with a nested HUD toggle ("Use real MXL index") to switch to
+    the raw epoch index once a player understands the small one; (D2)
+    rounding the displayed age to 100ms steps so it changes in readable
+    increments instead of every tick; (D3) tags now linger, fading out over
+    ~220ms at their last known position after their grain leaves the live
+    list (`GrainOverlay`'s `retainedTagsRef`), instead of vanishing the
+    instant a fast grain's travel/hold ends.
 - **Reference-time invariance demo:** while a Technical/Editorial/Repeater
   node holds a grain (same toggle), it shows a `ref #<idx> kept` tag with
   the same origin-derived grain index as the `writing #<idx>` flash that
   follows when it departs — proof the node doesn't re-stamp the grain with
   a new capture time as it "creates" its processed output (item #10.iii).
+  This tag also respects the "Use real MXL index" toggle.
+
+## Playback modes (shared simulated clock) — item #9
+
+A single `useSimClock()` instance, created once in `App.tsx`, is the only
+clock any timing-dependent engine reads from:
+
+- `grainFlow.ts` / `useGrainFlow.ts` — grain travel/hold progress and
+  `originTs` capture.
+- `useGameLoop.ts` — ring buffer evaluation (`computeGraphLatency`) and the
+  stability monitor's Red-zone fail-timer (`tickStability`).
+- `GrainOverlay.tsx` — grain positioning and the origin-timestamp tag's age
+  display (both `now` and `wallNow` collapse onto the one clock value, since
+  nothing in the existing logic diffed one against the other directly).
+
+Each consuming hook takes an optional `getNow: () => number` parameter
+(defaulting to `performance.now()`/`Date.now()` respectively) so they remain
+independently functional if ever used without the shared clock.
+
+Three modes, switched via a HUD button row:
+
+- **Normal** — advances 1:1 with real time (unchanged default behavior).
+- **Stepping** — auto-advances at 20% real speed (`STEPPING_SPEED` in
+  `useSimClock.ts`) so fast-traveling grains are easier to track by eye.
+- **Manual** — frozen; only the HUD's "Step ▶" button (shown only in this
+  mode) moves the clock, by exactly one video grain's duration
+  (`MANUAL_STEP_MS`) per click — ties the control directly to "advance one
+  grain index," reinforcing the grain-index concepts from items #10/#11.
+
+Implementation notes:
+
+- Driven by `requestAnimationFrame`, not `setInterval`, accumulating
+  `realDelta * speedForMode` into a ref read via `getNow()`.
+- `setMode` resets the real-time delta reference at the moment of the
+  switch, so changing modes never applies a large backlog of elapsed real
+  time in one jump (e.g. after a long spell in Manual).
+- The stability fail-timer was changed from a fixed `TICK_MS` constant to
+  the actual simulated elapsed time between polls (`useGameLoop.ts`) — this
+  was the one correctness-critical change: without it, a node frozen on
+  screen in Stepping/Manual mode would still silently accumulate toward the
+  3s fail condition in real time in the background.
+
+Known simplification (see below): this is a pedagogical clock. Real MXL
+grain indices are derived from true elapsed PTP/TAI time and are never
+slowed or single-stepped.
+
+### Edge-read pulse (follow-up fix)
+
+Slowing the animation down (above) exposed a pre-existing inaccuracy:
+`grainFlow.ts`'s edge "travel" phase used to take 350ms+ (scaling with the
+edge's on-screen pixel length, `TRAVEL_PX_PER_MS`), implying meaningful
+transit latency between nodes that doesn't exist in real MXL — writing into
+a node's output ring buffer and the next node reading it is effectively
+instantaneous (shared memory, not a wire). Fixed:
+
+- `travelDuration()` now returns a fixed, near-zero `EDGE_TRAVEL_MS` (1ms —
+  not literal 0 only to avoid a divide-by-zero in `getGrainPosition`'s
+  position interpolation) regardless of edge length.
+- The old traveling dot is no longer rendered in `GrainOverlay.tsx`
+  (`hiddenByPath` now also covers `phase === 'traveling'`). In its place,
+  `useGrainFlow.ts` tracks `edgeActivity: Map<edgeId, lastActiveSimTime>`,
+  updated whenever a grain is in `'traveling'` phase that tick.
+  `FlowCanvas.tsx`'s `displayEdges` derives a 300ms (`EDGE_PULSE_MS`)
+  highlight window from it and applies an `.edge-pulse-active` className
+  (green glow, `FlowCanvas.css`) to the edge's drawn path — visualizing "the
+  downstream Media Function just read from the upstream node's output ring
+  buffer" as a pulse on the path itself, rather than a dot implying transit
+  time.
+- A node's `hold` phase (scaled by `holdDuration(latencyMs)`) remains the
+  only thing that visually represents real added latency — exactly matching
+  where real MXL processing time actually accrues.
 
 ## Level 4 — A/V Sync Overrun
 
@@ -191,6 +286,11 @@ the Slow Video MF's latency slider down.
 ## Known simplifications
 
 - Clock is `Date.now()`, not a PTP/TAI implementation.
+- The shared simulated clock (`useSimClock.ts`, item #9) that drives all
+  timing-dependent engines can be slowed (Stepping) or frozen/single-stepped
+  (Manual) for teaching purposes — a deliberate departure from MXL's true
+  wall-clock-derived grain indexing, which is always derived from real
+  elapsed PTP/TAI time and never slowed or paused.
 - Reads are evaluated instantaneously, not via deadline-based blocking/retry.
 - Grain Repeater capacity is simplified to "one extra domain window per
   repeater on the branch."

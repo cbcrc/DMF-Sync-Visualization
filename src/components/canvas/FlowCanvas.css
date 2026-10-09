@@ -64,3 +64,17 @@
   stroke-width: 1px;
   rx: 4px;
 }
+
+/**
+ * Item #9 follow-up: a brief highlight on the edge path itself, fired each
+ * time a grain actually embarks on that edge (i.e. the instant the
+ * downstream Media Function reads from the upstream node's output ring
+ * buffer) — replaces the old traveling dot, which used to animate for
+ * 350ms+ and misleadingly implied meaningful transit latency that doesn't
+ * exist in real MXL (see `grainFlow.ts`'s `travelDuration`).
+ */
+.edge-pulse-active .react-flow__edge-path {
+  stroke: #4caf50;
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 4px rgba(76, 175, 80, 0.9));
+}

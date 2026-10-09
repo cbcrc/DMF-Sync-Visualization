@@ -2,6 +2,7 @@ import { LEVELS, type Level } from '../../game/levels';
 import type { InputReading } from '../../game/graphLatency';
 import type { StabilityState } from '../../game/stabilityMonitor';
 import { FAIL_RED_DURATION_MS } from '../../game/stabilityMonitor';
+import type { PlaybackMode } from '../../game/useSimClock';
 import './GameHud.css';
 
 export interface GameHudProps {
@@ -20,6 +21,14 @@ export interface GameHudProps {
   /** Show each grain's MXL origin-timestamp index/offset-from-now + node write flashes. */
   showOriginTimestamps: boolean;
   onToggleOriginTimestamps: (show: boolean) => void;
+  /** Show the raw epoch-scaled MXL grain index instead of the small ring-relative one (item #11). */
+  showRealGrainIndex: boolean;
+  onToggleRealGrainIndex: (show: boolean) => void;
+  /** Item #9: Normal (real-time) / Stepping (slow auto-advance) / Manual (frozen, step-by-step). */
+  playbackMode: PlaybackMode;
+  onSetPlaybackMode: (mode: PlaybackMode) => void;
+  /** Manual-mode only: advance the shared sim clock by one grain quantum. */
+  onStep: () => void;
 }
 
 /**
@@ -41,6 +50,11 @@ export function GameHud({
   nodeLabelById,
   showOriginTimestamps,
   onToggleOriginTimestamps,
+  showRealGrainIndex,
+  onToggleRealGrainIndex,
+  playbackMode,
+  onSetPlaybackMode,
+  onStep,
 }: GameHudProps) {
   const marginClass = stabilityMarginMs < 0 ? 'game-hud__stat-value--bad' : '';
 
@@ -81,6 +95,38 @@ export function GameHud({
         />
         Show origin timestamps
       </label>
+
+      {showOriginTimestamps && (
+        <label className="game-hud__checkbox game-hud__checkbox--nested">
+          <input
+            type="checkbox"
+            checked={showRealGrainIndex}
+            onChange={(e) => onToggleRealGrainIndex(e.target.checked)}
+          />
+          Use real MXL index (vs. small ring-relative index)
+        </label>
+      )}
+
+      <div className="game-hud__playback">
+        <span className="game-hud__playback-label">Playback:</span>
+        <div className="game-hud__playback-modes">
+          {(['normal', 'stepping', 'manual'] as PlaybackMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className={`game-hud__playback-btn${m === playbackMode ? ' game-hud__playback-btn--active' : ''}`}
+              onClick={() => onSetPlaybackMode(m)}
+            >
+              {m === 'normal' ? 'Normal' : m === 'stepping' ? 'Stepping' : 'Manual'}
+            </button>
+          ))}
+        </div>
+        {playbackMode === 'manual' && (
+          <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
+            Step ▶
+          </button>
+        )}
+      </div>
 
       <div className="game-hud__stats">
         <div className="game-hud__stat">

@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import type { MediaFunctionKind } from '../../types';
 import { nodeSizeForLatency } from './nodeSizing';
 import { LATENCY_RANGE } from './nodeDefaults';
-import { grainRateForTrack, timestampToGrainIndex } from '../../engine/mxlGrainIndex';
+import { grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
 import './MediaFunctionNode.css';
 
 /** Data payload for a Media Function node on the canvas (subset of `MediaFunction`). */
@@ -36,6 +36,10 @@ export interface MediaFunctionNodeData {
   processingOriginTs?: number;
   /** Mirrors the HUD's "Show origin timestamps" toggle (`App.tsx`). */
   showOriginTimestamps?: boolean;
+  /** Mirrors the HUD's "Use real MXL index" toggle (item #11, `App.tsx`). */
+  showRealGrainIndex?: boolean;
+  /** Current MXL Domain size, needed to compute the ring-relative grain index (item #11). */
+  domainSizeMs?: number;
   /** Set when this node is waiting on a synchronized sibling flow that suffered an overrun drop. */
   syncStalled?: boolean;
   /**
@@ -124,9 +128,11 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
               className="mf-node__ref-badge"
               title="Grain time reference carried through processing unchanged — this node does not re-stamp it"
             >
-              ref #{timestampToGrainIndex(
+              ref #{grainIndexForDisplay(
                 data.processingOriginTs,
                 grainRateForTrack(data.processingStreamIndex === 1 ? 'audio' : 'video'),
+                data.domainSizeMs ?? 100,
+                data.showRealGrainIndex ?? false,
               )} kept
             </div>
           )}

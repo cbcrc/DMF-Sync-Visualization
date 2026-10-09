@@ -178,6 +178,15 @@
   border-radius: 3px;
   padding: 1px 4px;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 220ms ease-out;
+}
+
+/* Item #11 (D3): lingers at its last known position for a short beat after
+   its grain leaves the live grain list, fading out rather than vanishing
+   instantly, so a fast-traveling grain's tag stays readable a moment longer. */
+.grain-origin-tag--fading {
+  opacity: 0;
 }
 
 /* "Writing" flash: a brief pulse at the exact point a grain departs a node,

@@ -60,6 +60,26 @@ export function grainIndexToRingBufferIndex(grainIndex: number, length: number):
 }
 
 /**
+ * Item #11: the raw `GrainIndex` (real MXL index) is a huge, ever-growing
+ * epoch-scaled number (`Date.now()` / grain duration — 11-13 digits), which
+ * reads as noise rather than teaching anything at a glance. By default we
+ * show the much smaller, more legible `RingBufferIndex` (grain index mod the
+ * ring's slot count) — small numbers that directly illustrate "GrainIndex
+ * mod RingBufferLength" (`docs`'s Timing.md). A HUD toggle
+ * ("Use real MXL index") lets a player switch to the raw index once they've
+ * built intuition on the small one, to see how MXL actually indexes grains.
+ */
+export function grainIndexForDisplay(
+  timestampMs: number,
+  rate: GrainRate,
+  domainSizeMs: number,
+  useRealIndex: boolean,
+): number {
+  const idx = timestampToGrainIndex(timestampMs, rate);
+  return useRealIndex ? idx : grainIndexToRingBufferIndex(idx, ringBufferLength(domainSizeMs, rate));
+}
+
+/**
  * Which absolute grain index a physical ring slot currently holds, given the
  * writer's published head. When a reader is TOO_LATE this differs from the
  * index it asked for — the slot has been reused by a newer grain.

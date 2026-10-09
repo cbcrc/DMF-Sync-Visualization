@@ -101,6 +101,71 @@
   cursor: pointer;
 }
 
+.game-hud__checkbox--nested {
+  margin-left: 18px;
+  margin-top: -4px;
+  opacity: 0.85;
+}
+
+.game-hud__playback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+}
+
+.game-hud__playback-label {
+  opacity: 0.85;
+}
+
+.game-hud__playback-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.game-hud__playback-btn {
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.game-hud__playback-btn:hover {
+  border-color: #ffffff;
+}
+
+.game-hud__playback-btn--active {
+  background: #2a2b30;
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.game-hud__step-btn {
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.game-hud__step-btn:hover {
+  background: #2a2b30;
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
 .game-hud__stats {
   display: flex;
   align-items: center;

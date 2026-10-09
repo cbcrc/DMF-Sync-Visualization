@@ -21,8 +21,16 @@ export function useGameLoop(
   nodes: Node<MediaFunctionNodeData>[],
   edges: Edge[],
   domainSizeMs: number,
+  /** Shared simulated clock (item #9) — reads instead of `Date.now()` so ring
+   *  buffer evaluation and the stability fail-timer move in lockstep with the
+   *  HUD's playback mode (Normal/Stepping/Manual). */
+  getNow: () => number = () => Date.now(),
 ): GameLoopState {
-  const [clockTimestampMs, setClockTimestampMs] = useState(() => Date.now());
+  const [clockTimestampMs, setClockTimestampMs] = useState(() => getNow());
+  const getNowRef = useRef(getNow);
+  getNowRef.current = getNow;
+  const lastTickClockRef = useRef(clockTimestampMs);
+
   const graph = useMemo(
     () => computeGraphLatency(nodes, edges, domainSizeMs, clockTimestampMs),
     [nodes, edges, domainSizeMs, clockTimestampMs],
@@ -34,12 +42,20 @@ export function useGameLoop(
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setClockTimestampMs(Date.now());
+      const nowMs = getNowRef.current();
+      // Advance the stability fail-timer by *simulated* elapsed time, not a
+      // fixed per-poll constant — in Stepping/Manual mode the simulated
+      // clock moves slower (or only on an explicit Step), so a node frozen
+      // on screen doesn't silently keep accumulating real-time toward the
+      // 3s fail condition in the background.
+      const dtMs = Math.max(0, nowMs - lastTickClockRef.current);
+      lastTickClockRef.current = nowMs;
+      setClockTimestampMs(nowMs);
       const currentGraph = graphRef.current;
       const statusByNodeId = new Map(
         Array.from(currentGraph.evaluations, ([id, { evaluation }]) => [id, evaluation.status] as const),
       );
-      setStability((prev) => tickStability(prev, statusByNodeId, TICK_MS));
+      setStability((prev) => tickStability(prev, statusByNodeId, dtMs));
     }, TICK_MS);
     return () => clearInterval(interval);
   }, []);

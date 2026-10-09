@@ -27,6 +27,9 @@ import './FlowCanvas.css';
 
 const nodeTypes: NodeTypes = { mediaFunction: MediaFunctionNode };
 
+/** How long (ms) an edge's "just carried a grain" highlight stays visible (item #9 follow-up). */
+const EDGE_PULSE_MS = 300;
+
 /**
  * Starter pipeline — the minimal MXL workload, matching the reference
  * ingress/egress flowchart. One paced external stream enters an Ingress
@@ -174,6 +177,13 @@ export interface FlowCanvasProps {
   waveResetKey?: number;
   /** Show each grain's MXL origin-timestamp index/offset and node write flashes (item #10.ii). */
   showOriginTimestamps?: boolean;
+  /** Show the raw epoch-scaled MXL grain index instead of the small ring-relative one (item #11). */
+  showRealGrainIndex?: boolean;
+  /** Current MXL Domain size, needed to compute the ring-relative grain index (item #11). */
+  domainSizeMs: number;
+  /** Shared simulated clock (item #9) — threaded into grain timing + the overlay
+   *  instead of each reading performance.now()/Date.now() independently. */
+  getNow?: () => number;
   /**
    * Reports which reader inputs (keyed `${nodeId}:${inputIndex}`, same keying as
    * `statusByInputKey`) currently have a grain parked on canvas waiting for a sync
@@ -191,6 +201,9 @@ function FlowCanvasInner({
   levelId,
   waveResetKey,
   showOriginTimestamps,
+  showRealGrainIndex,
+  domainSizeMs,
+  getNow,
   onParkedInputsChange,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialNodes);
@@ -273,7 +286,7 @@ function FlowCanvasInner({
     onGraphChange(nodes, edges);
   }, [nodes, edges, onGraphChange]);
 
-  const grains = useGrainFlow(nodes, edges, statusByInputKey, waveResetKey);
+  const { grains, edgeActivity } = useGrainFlow(nodes, edges, statusByInputKey, waveResetKey, getNow);
 
   // Same keying (`${nodeId}:${inputIndex}`) as `statusByInputKey` — lets App correlate a
   // grain parked on canvas with its matching reader row in the Ring Buffer Telemetry panel.
@@ -345,18 +358,36 @@ function FlowCanvasInner({
             processingStreamIndex: hold?.streamIndex,
             processingOriginTs: hold?.originTs,
             showOriginTimestamps,
+            showRealGrainIndex,
+            domainSizeMs,
             syncStalled: stalledNodeIds.has(n.id),
             onLatencyChange: handleLatencyChange,
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs],
   );
+
+  // Item #9 follow-up: briefly highlight an edge's drawn path the moment a
+  // grain actually embarks on it — a pulse on the path itself, standing in
+  // for the old (now near-instant) traveling dot, to show "data was just
+  // read off this edge" without implying meaningful transit time.
+  const displayEdges = useMemo(() => {
+    const nowFn = getNow ?? (() => performance.now());
+    const t = nowFn();
+    return edges.map((e) => {
+      const lastActive = edgeActivity.get(e.id);
+      const active = lastActive !== undefined && t - lastActive < EDGE_PULSE_MS;
+      if (!active) return e;
+      return { ...e, className: `${e.className ?? ''} edge-pulse-active`.trim() };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute every grain tick, not just when `edges` identity changes
+  }, [edges, grains, getNow]);
 
   return (
     <ReactFlow
       nodes={styledNodes}
-      edges={edges}
+      edges={displayEdges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
@@ -367,7 +398,14 @@ function FlowCanvasInner({
       <Background color="#333" gap={24} />
       <Controls />
       <MiniMap pannable zoomable style={{ background: '#111214' }} />
-      <GrainOverlay nodes={nodes} grains={grains} showOriginTimestamps={showOriginTimestamps} />
+      <GrainOverlay
+        nodes={nodes}
+        grains={grains}
+        showOriginTimestamps={showOriginTimestamps}
+        showRealGrainIndex={showRealGrainIndex}
+        domainSizeMs={domainSizeMs}
+        getNow={getNow}
+      />
       <RingBufferBadgeOverlay nodes={nodes} inputsByNodeId={inputsByNodeId} />
       <Panel position="top-left" className="fc-palette">
         <div className="fc-palette__title">Add node</div>
