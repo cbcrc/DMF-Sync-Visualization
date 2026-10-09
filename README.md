@@ -69,19 +69,15 @@ without checking first — see `AI_RULES.md`).
       - **iii.** The same toggle shows a `ref #<idx> kept` badge on a processing node while it holds a grain, proving the origin index/time reference is preserved through processing, not re-stamped.
       - Known simplification (intentionally not modeled — see `AI_RULES.md`): MXL's true Continuous ring buffer (per-sample, half-buffer writer/reader split) is approximated as a very fine-grained Discrete buffer; a literal Continuous implementation remains a possible future deliverable (D5) if deeper fidelity is wanted.
 11. ~~Clean up the origin timestamp mechanism. - the current setup is nice, but moves too fast for the huma to read.~~ **Done.** The raw MXL grain index was a giant epoch-scaled number and the age counter repainted every ~40ms tick — both made it unreadable. Now shows the small `RingBufferIndex` (grain index mod ring length) by default, with a nested HUD toggle ("Use real MXL index") to reveal the raw epoch index once a player understands the small one; the age counter rounds to 100ms steps; and tags linger, fading out over ~220ms at their last known spot instead of vanishing the instant a fast grain's travel/hold ends. See `AI_RULES.md`'s "Grain-flow visualization" section.
-12. Improve visualization of the time index. MXL has exactly one shared clock
-    (the PTP/TAI epoch per `docs/Timing.md`): a video grain and an audio grain
-    captured at the same instant carry the same origin timestamp, but each
-    track's `GrainIndex` is that one shared timestamp divided by its own
-    `GrainDurationNs` — so video and audio indices legitimately diverge in
-    magnitude even though the underlying clock is identical. Right now the
-    on-canvas tags show each track's index side by side with no visual cue
-    that they trace back to one shared instant, which reads as "two
-    different time contexts" rather than "one clock, two units." Make that
-    relationship visible — e.g. surface the shared origin timestamp
-    alongside each track's derived index, or otherwise link paired
-    video/audio grains at Ingress so a player can see them collapse to the
-    same instant.
+12. ~~Improve visualization of the time index.~~ **Done.** MXL has exactly one
+    shared clock (the PTP/TAI epoch per `docs/Timing.md`): a video grain and
+    an audio grain captured at the same instant carry the same origin
+    timestamp, but each track's `GrainIndex` is that one shared timestamp
+    divided by its own `GrainDurationNs` — so video and audio indices
+    legitimately diverge in magnitude even though the underlying clock is
+    identical. Fixed in two parts:
+      - **Shared-origin connector:** when Ingress spawns a video grain and an audio grain in the same instant, a brief connector line now appears between their "writing" flash points, labeled `shared origin · V#<idx> · A#<idx>` — makes the shared instant visible instead of only implied by two separately-ticking tags.
+      - **Freeze-to-read flashes:** item #9's edge-travel fix (near-instant ~1ms hops) had an unintended side effect — every origin-timestamp tag and "writing" flash was tied to a specific grain object that, with travel now near-instant, only existed in the live grain list for a single ~40ms tick, making them barely visible in Normal/Stepping mode. Flashes are now event-based (recorded once, independent of the underlying grain object's lifetime) and guaranteed at least 700ms of full visibility before a 300ms fade-out, regardless of how briefly the real simulated event lasted. In Manual mode the whole simulated clock is already frozen (see item #9), so these stay fully visible indefinitely until the player clicks "Step." See `AI_RULES.md`'s "Grain-flow visualization" section.
 13. show end-to-end workload latency - Possible bar at the top, possible window next to the egress points that reads "Time from ingress is x" - Please offer other scenarios. 
 
 ## Bugs & Status

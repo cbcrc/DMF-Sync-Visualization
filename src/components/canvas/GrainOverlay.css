@@ -168,7 +168,10 @@
    following the dot so the user can watch the offset grow along the path. */
 .grain-origin-tag {
   position: absolute;
-  transform: translate(-50%, -22px);
+  /* `x`/`y` are already the "above the node" anchor point computed in
+     GrainOverlay.tsx (TAG_ABOVE_NODE_PX) — just center the label itself
+     on that point rather than re-offsetting from a grain dot's position. */
+  transform: translate(-50%, -100%);
   white-space: nowrap;
   font-size: 0.6rem;
   font-family: monospace;
@@ -215,8 +218,24 @@
   white-space: nowrap;
   font-size: 0.6rem;
   font-family: monospace;
-  color: #ee0000;
+  color: #ffffff;
   font-weight: 700;
+  /* Opaque background (item #12 follow-up): plain red text directly over an
+     edge line/handle was unreadable — a solid chip makes it legible
+     regardless of what's drawn underneath it. */
+  background: #ee0000;
+  border-radius: 3px;
+  padding: 1px 4px;
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
+
+/* Item #12 follow-up: the write-flash label now persists for a guaranteed
+   `FLASH_VISIBLE_MS` (see GrainOverlay.tsx) regardless of how briefly the
+   underlying grain occupies the 'traveling' phase, then fades over
+   `FLASH_FADE_MS` instead of vanishing the instant that phase ends. */
+.grain-write-flash--fading .grain-write-flash__label {
+  opacity: 0;
 }
 
 @keyframes grain-write-flash-ring {
@@ -228,5 +247,43 @@
     transform: scale(1.6);
     opacity: 0;
   }
+}
+
+/* Item #12: a brief connector between two grains (e.g. video + audio) that
+   departed the same producer in the same instant and so share one MXL
+   origin timestamp, even though their derived indices diverge in
+   magnitude — makes that shared instant visible instead of only implied. */
+.grain-sibling-link {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, #ffb703, #ffb703);
+  transform-origin: left center;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: opacity 300ms ease-out;
+}
+
+.grain-sibling-link--fading {
+  opacity: 0;
+}
+
+.grain-sibling-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: #1a1b1e;
+  background: #ffb703;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
+
+.grain-sibling-label--fading {
+  opacity: 0;
 }
 

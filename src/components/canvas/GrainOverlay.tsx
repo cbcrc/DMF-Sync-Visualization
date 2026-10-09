@@ -23,8 +23,37 @@ export interface GrainOverlayProps {
   getNow?: () => number;
 }
 
-/** How long (ms) after a grain embarks on an edge the "writing" flash shows at its departure point. */
-const WRITE_FLASH_MS = 250;
+/**
+ * Item #12 follow-up: since item #9's edge-travel fix collapsed travel to a
+ * near-instant ~1ms hop, any flash/tag tied to a *specific* transient grain
+ * object (each phase transition creates a brand-new grain id) only existed
+ * in the live `grains` list for a single ~40ms tick — effectively invisible
+ * in Normal/Stepping mode, not just "fast." Every flash below is now
+ * event-based (recorded once, keyed by something stable across that single
+ * tick) and guaranteed to stay fully visible for `FLASH_VISIBLE_MS` before
+ * it's even eligible to start fading over `FLASH_FADE_MS` — independent of
+ * how long the underlying grain object happens to exist for. In Manual
+ * playback mode the simulated clock itself is frozen, so these timers don't
+ * advance at all until the player clicks "Step".
+ */
+const FLASH_VISIBLE_MS = 700;
+const FLASH_FADE_MS = 300;
+
+/**
+ * Origin tags anchor above the node's own top edge, not at the grain dot's
+ * position — a held/parked grain's dot sits right where its edge connects
+ * to the box, which is exactly where incoming lines and handle labels
+ * already are. A fixed spot above the box stays clear of that clutter.
+ * Offset is large enough to also clear `.mf-node__stalled-badge`
+ * (`MediaFunctionNode.css`, anchored at `top: -24px`), which otherwise sits
+ * in the same band.
+ */
+const TAG_ABOVE_NODE_PX = 48;
+/** Extra vertical gap between stacked video/audio tags at the same node
+ *  (item #12 follow-up: one tag per node, stacked rather than spread
+ *  sideways — avoids every tag at a busy node like Egress piling up in a
+ *  horizontal row that no longer reads as "above the box"). */
+const TAG_STACK_GAP_PX = 20;
 
 /**
  * Item #11: rounding the displayed age to this step keeps the on-screen
@@ -33,13 +62,6 @@ const WRITE_FLASH_MS = 250;
  * reads as flicker rather than a number a human can actually track.
  */
 const AGE_DISPLAY_STEP_MS = 100;
-
-/**
- * Item #11: how long a tag keeps rendering (fading out) at its last known
- * position after its grain leaves the live `grains` list, so a fast-traveling
- * grain's tag doesn't vanish before a player has had a chance to read it.
- */
-const TAG_LINGER_MS = 220;
 
 /** Matches `graphLatency.ts`'s `indexToTrack` convention (producer output 0 = video, 1 = audio). */
 function grainRateForStreamIndex(streamIndex: number | undefined) {
@@ -52,8 +74,30 @@ interface RetainedTag {
   idx: number;
   ageMs: number;
   streamClass: string;
-  /** Set once the owning grain is no longer in the live list — starts the fade-out countdown. */
+  /** Underlying grain currently backing this node+stream slot — when this
+   *  changes, a newer grain has taken over the slot and the guaranteed
+   *  visible window restarts (item #12 follow-up: one tag per node). */
+  grainId: string;
+  /** Simulated-clock time this tag first appeared — guarantees `FLASH_VISIBLE_MS`
+   *  of visibility before it's eligible to start fading, regardless of how
+   *  briefly the underlying grain occupies this phase. */
+  firstShownAt: number;
+  /** Set once the owning grain is no longer in the live list *and* `FLASH_VISIBLE_MS`
+   *  has elapsed since `firstShownAt` — starts the fade-out countdown. */
   removedAt?: number;
+}
+
+/** A one-time "writing #idx" event at a node's output anchor (item #10.ii /
+ *  #12 follow-up) — recorded once per departure so it survives the
+ *  departing grain object itself only existing for a single tick. */
+interface WriteFlashEntry {
+  x: number;
+  y: number;
+  idx: number;
+  fromId: string;
+  originTs: number;
+  streamIndex: number | undefined;
+  appearedAt: number;
 }
 
 /**
@@ -91,38 +135,120 @@ export function GrainOverlay({
   // Item #11 (D3): tags linger at their last known spot for a brief beat after
   // their grain disappears from `grains`, instead of vanishing instantly.
   const retainedTagsRef = useRef<Map<string, RetainedTag>>(new Map());
+  // Item #12 follow-up: one-time "writing #idx" events, keyed by edge+origin
+  // so they survive the departing grain object (which now only exists for a
+  // single tick — see the `FLASH_VISIBLE_MS` doc comment above).
+  const writeFlashesRef = useRef<Map<string, WriteFlashEntry>>(new Map());
   useEffect(() => {
-    if (!showOriginTimestamps) retainedTagsRef.current.clear();
+    if (!showOriginTimestamps) {
+      retainedTagsRef.current.clear();
+      writeFlashesRef.current.clear();
+    }
   }, [showOriginTimestamps]);
 
   const retained = retainedTagsRef.current;
+  const writeFlashes = writeFlashesRef.current;
   const currentTagIds = new Set<string>();
+
+  // Record each departure exactly once (grain is only ever 'traveling' for a
+  // single tick now) — position/index are frozen at the moment of writing.
+  if (showOriginTimestamps) {
+    for (const g of grains) {
+      if (g.phase !== 'traveling' || !g.edgeId) continue;
+      const key = `${g.edgeId}-${g.originTs}`;
+      if (writeFlashes.has(key)) continue;
+      const fromGeom = geometry.get(g.fromId);
+      if (!fromGeom) continue;
+      const anchor = outputAnchor(fromGeom, g.sourceHandleIndex ?? 0);
+      writeFlashes.set(key, {
+        x: anchor.x,
+        y: anchor.y,
+        idx: grainIndexForDisplay(
+          g.originTs ?? wallNow,
+          grainRateForStreamIndex(g.streamIndex),
+          domainSizeMs,
+          showRealGrainIndex,
+        ),
+        fromId: g.fromId,
+        originTs: g.originTs ?? wallNow,
+        streamIndex: g.streamIndex,
+        appearedAt: now,
+      });
+    }
+    // Prune fully-faded flash events.
+    for (const [key, flash] of writeFlashes) {
+      if (now - flash.appearedAt > FLASH_VISIBLE_MS + FLASH_FADE_MS) writeFlashes.delete(key);
+    }
+  }
+
+  // Item #12 follow-up: show at most one origin tag per node per stream (the
+  // most recent grain occupying that node+stream), instead of one per grain
+  // id. Busy nodes like Egress — where audio commonly parks waiting on its
+  // sibling video grain — would otherwise accumulate a stack of overlapping
+  // tags from every grain that has ever held there.
+  const latestByKey = new Map<string, Grain>();
+  if (showOriginTimestamps) {
+    for (const g of grains) {
+      if (g.phase !== 'holding' && g.phase !== 'dropped') continue;
+      const hiddenByPath =
+        g.phase === 'holding' && !g.parked && !g.stalled && nodesWithPath.has(g.fromId);
+      if (hiddenByPath) continue;
+      const streamClass = g.streamIndex === 0 ? 'video' : g.streamIndex === 1 ? 'audio' : 'other';
+      const key = `${g.fromId}|${streamClass}`;
+      const existing = latestByKey.get(key);
+      if (!existing || (g.originTs ?? 0) >= (existing.originTs ?? 0)) latestByKey.set(key, g);
+    }
+  }
+  // Stack order within a node: video closest to the box, audio above it.
+  const streamStackOrder: Record<string, number> = { video: 0, audio: 1, other: 2 };
+  const slotsByNode = new Map<string, string[]>(); // fromId -> ordered stream keys present
+  for (const key of latestByKey.keys()) {
+    const [fromId, streamClass] = key.split('|');
+    const list = slotsByNode.get(fromId) ?? [];
+    list.push(streamClass);
+    slotsByNode.set(fromId, list);
+  }
+  for (const list of slotsByNode.values()) list.sort((a, b) => streamStackOrder[a] - streamStackOrder[b]);
+
+  if (showOriginTimestamps) {
+    for (const [key, g] of latestByKey) {
+      const [fromId, streamClass] = key.split('|');
+      const idx = grainIndexForDisplay(
+        g.originTs ?? wallNow,
+        grainRateForStreamIndex(g.streamIndex),
+        domainSizeMs,
+        showRealGrainIndex,
+      );
+      const rawAgeMs = wallNow - (g.originTs ?? wallNow);
+      const ageMs = Math.max(0, Math.round(rawAgeMs / AGE_DISPLAY_STEP_MS) * AGE_DISPLAY_STEP_MS);
+      currentTagIds.add(key);
+      const existing = retained.get(key);
+      // Anchor above the node's top edge (not the dot's own position, which
+      // for parked/holding grains sits right where an edge connects to the
+      // box — exactly where incoming lines and handle labels already are).
+      const hostGeom = geometry.get(fromId);
+      const slot = slotsByNode.get(fromId)?.indexOf(streamClass) ?? 0;
+      const tagX = hostGeom ? hostGeom.x + hostGeom.size / 2 : 0;
+      const tagY = hostGeom ? hostGeom.y - TAG_ABOVE_NODE_PX - slot * TAG_STACK_GAP_PX : 0;
+      // A different grain now occupies this node+stream slot — restart the
+      // guaranteed-visible window rather than reusing the old grain's timer.
+      const isNewOccupant = existing?.grainId !== g.id;
+      retained.set(key, {
+        x: tagX,
+        y: tagY,
+        idx,
+        ageMs,
+        streamClass: streamClass === 'video' ? ' grain-dot--video' : streamClass === 'audio' ? ' grain-dot--audio' : '',
+        grainId: g.id,
+        firstShownAt: isNewOccupant ? now : existing!.firstShownAt,
+        removedAt: undefined,
+      });
+    }
+  }
 
   const rows = grains.map((g) => {
     const pos = getGrainPosition(g, now, geometry);
     if (!pos) return null;
-
-    // Just embarked on an edge: this is the moment the departing node's
-    // output ring buffer was "written" — flash a brief pulse at the
-    // exact anchor point it left from, labeled with the grain index it
-    // was written at (MXL preserves this index all the way downstream).
-    let writeFlash: { flashX: number; flashY: number; idx: number } | null = null;
-    if (showOriginTimestamps && g.phase === 'traveling' && now - g.startTime < WRITE_FLASH_MS) {
-      const fromGeom = geometry.get(g.fromId);
-      if (fromGeom) {
-        const anchor = outputAnchor(fromGeom, g.sourceHandleIndex ?? 0);
-        writeFlash = {
-          flashX: anchor.x,
-          flashY: anchor.y,
-          idx: grainIndexForDisplay(
-            g.originTs ?? wallNow,
-            grainRateForStreamIndex(g.streamIndex),
-            domainSizeMs,
-            showRealGrainIndex,
-          ),
-        };
-      }
-    }
 
     if (g.phase === 'dropped') {
       return (
@@ -140,26 +266,8 @@ export function GrainOverlay({
     const streamClass =
       g.streamIndex === 0 ? ' grain-dot--video' : g.streamIndex === 1 ? ' grain-dot--audio' : '';
 
-    if (!hiddenByPath && showOriginTimestamps) {
-      const idx = grainIndexForDisplay(
-        g.originTs ?? wallNow,
-        grainRateForStreamIndex(g.streamIndex),
-        domainSizeMs,
-        showRealGrainIndex,
-      );
-      const rawAgeMs = wallNow - (g.originTs ?? wallNow);
-      const ageMs = Math.max(0, Math.round(rawAgeMs / AGE_DISPLAY_STEP_MS) * AGE_DISPLAY_STEP_MS);
-      currentTagIds.add(g.id);
-      retained.set(g.id, { x: pos.x, y: pos.y, idx, ageMs, streamClass, removedAt: undefined });
-    }
-
     return (
       <Fragment key={g.id}>
-        {writeFlash && (
-          <div className="grain-write-flash" style={{ left: writeFlash.flashX, top: writeFlash.flashY }}>
-            <span className="grain-write-flash__label">writing #{writeFlash.idx}</span>
-          </div>
-        )}
         {!hiddenByPath && (
           <div
             className={`grain-dot${streamClass}${g.phase === 'holding' ? ' grain-dot--holding' : ''}${
@@ -172,12 +280,18 @@ export function GrainOverlay({
     );
   });
 
-  // Age out and drop tags whose grain is no longer present, after a short linger.
+  // Age out and drop tags, guaranteeing at least `FLASH_VISIBLE_MS` of total
+  // visibility from first appearance before they're even eligible to start
+  // the `FLASH_FADE_MS` fade-out (item #12 follow-up — see doc comment above).
   for (const [id, tag] of retained) {
-    if (currentTagIds.has(id)) continue;
+    if (currentTagIds.has(id)) {
+      tag.removedAt = undefined;
+      continue;
+    }
+    if (now - tag.firstShownAt < FLASH_VISIBLE_MS) continue;
     if (tag.removedAt === undefined) {
       tag.removedAt = now;
-    } else if (now - tag.removedAt > TAG_LINGER_MS) {
+    } else if (now - tag.removedAt > FLASH_FADE_MS) {
       retained.delete(id);
     }
   }
@@ -194,9 +308,65 @@ export function GrainOverlay({
       ))
     : null;
 
+  const writeFlashRows = showOriginTimestamps
+    ? Array.from(writeFlashes.entries()).map(([key, flash]) => (
+        <div
+          key={`flash-${key}`}
+          className={`grain-write-flash${now - flash.appearedAt > FLASH_VISIBLE_MS ? ' grain-write-flash--fading' : ''}`}
+          style={{ left: flash.x, top: flash.y }}
+        >
+          <span className="grain-write-flash__label">writing #{flash.idx}</span>
+        </div>
+      ))
+    : null;
+
+  // Item #12: video and audio grains spawned from the same producer in the
+  // same instant share one `originTs` even though their derived indices
+  // diverge in magnitude (see `mxlGrainIndex.ts`) — draw a brief connector
+  // between their write-flash points so that shared origin is visible, not
+  // just implied.
+  let siblingRows: JSX.Element[] | null = null;
+  if (showOriginTimestamps) {
+    const groups = new Map<string, WriteFlashEntry[]>();
+    for (const flash of writeFlashes.values()) {
+      const groupKey = `${flash.fromId}|${flash.originTs}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey)!.push(flash);
+    }
+    siblingRows = [];
+    for (const [groupKey, members] of groups) {
+      if (members.length < 2) continue;
+      const [a, b] = [...members].sort((m1, m2) => (m1.streamIndex ?? 0) - (m2.streamIndex ?? 0));
+      const earliestAppearedAt = Math.min(...members.map((m) => m.appearedAt));
+      const fading = now - earliestAppearedAt > FLASH_VISIBLE_MS;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = Math.hypot(dx, dy);
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      siblingRows.push(
+        <Fragment key={`sibling-${groupKey}`}>
+          <div
+            className={`grain-sibling-link${fading ? ' grain-sibling-link--fading' : ''}`}
+            style={{ left: a.x, top: a.y, width: length, transform: `rotate(${angle}deg)` }}
+          />
+          <div
+            className={`grain-sibling-label${fading ? ' grain-sibling-label--fading' : ''}`}
+            style={{ left: midX, top: midY }}
+          >
+            shared origin · V#{a.idx} · A#{b.idx}
+          </div>
+        </Fragment>,
+      );
+    }
+  }
+
   return (
     <div className="grain-overlay" style={{ transform: `translate(${x}px, ${y}px) scale(${zoom})` }}>
       {rows}
+      {writeFlashRows}
+      {siblingRows}
       {tagRows}
     </div>
   );

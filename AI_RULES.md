@@ -25,7 +25,17 @@ visualization" below.
 Item #9 ("Slow down the animation — three playback modes") is also
 **complete** — a shared simulated clock (`useSimClock.ts`) now drives every
 timing engine, with a HUD switch for Normal/Stepping/Manual plus a Manual
-"Step ▶" button; see "Playback modes (shared simulated clock)" below.
+"Step ▶" button; see "Playback modes (shared simulated clock)" below. A
+follow-up fix replaced the old edge-travel-time dot (350ms+, scaling with
+edge length) with a near-instant hop + an edge-path pulse, since real MXL
+write→read handoff between nodes is effectively instantaneous.
+
+Item #12 ("Improve visualization of the time index") is also **complete**
+— a connector now links sibling video/audio grains that share one Ingress
+origin timestamp, and every origin-timestamp tag/flash now guarantees a
+minimum readable visible time before fading, fixing a readability
+regression the item #9 edge-travel fix had introduced; see "Grain-flow
+visualization" below.
 
 No open threads/in-progress edits — safe to start a new deliverable from
 scratch next session (see README's "Future development" for remaining
@@ -264,6 +274,57 @@ instantaneous (shared memory, not a wire). Fixed:
 - A node's `hold` phase (scaled by `holdDuration(latencyMs)`) remains the
   only thing that visually represents real added latency — exactly matching
   where real MXL processing time actually accrues.
+
+### Item #12 — time index visualization (shared origin + freeze-to-read)
+
+Reassessed after item #9 landed, with two fixes in `GrainOverlay.tsx`:
+
+- **Freeze-to-read regression fix:** item #9's edge-travel fix (near-instant
+  ~1ms hop) had an unintended side effect — every flash/tag that read state
+  off a *specific* grain object (the "writing #idx" flash, the origin tag)
+  only existed in the live `grains` list for a single ~40ms tick before that
+  phase transitioned and a brand-new grain id replaced it. In Normal/Stepping
+  mode this made them barely perceptible, not just brief. Fixed by making
+  both event-based instead of tied to the transient object: `writeFlashesRef`
+  (keyed `${edgeId}-${originTs}`) records a "writing" event once, and the
+  origin-tag `retained` map now tracks a `firstShownAt` per tag id. Both are
+  guaranteed `FLASH_VISIBLE_MS` (700ms) of full visibility — counted from
+  first appearance, not from whatever's left of the underlying grain's
+  phase — before they're even eligible to start the `FLASH_FADE_MS` (300ms)
+  fade. In Manual playback mode the simulated clock itself doesn't advance
+  at all, so these stay fully visible indefinitely until the player clicks
+  "Step" — a deliberate second way to "freeze to read."
+- **Shared-origin connector:** video and audio grains spawned by the same
+  producer in the same tick carry the identical `originTs` (confirmed by
+  walking `grainFlow.ts`'s wave-injection loop — see the item #9 D0
+  investigation). `writeFlashes` entries are grouped by `${fromId}|${originTs}`;
+  a group with 2+ members (distinct `streamIndex`) renders a short connector
+  line between their write-flash points plus a `shared origin · V#<idx> ·
+  A#<idx>` label (`.grain-sibling-link`/`.grain-sibling-label` in
+  `GrainOverlay.css`) — makes the "one clock, two units" relationship visible
+  rather than only inferable from two separately-ticking tags.
+- **Readability pass (user feedback round):** three follow-on fixes, all in
+  `GrainOverlay.tsx`/`.css`:
+  - Origin tags anchor **above the node's top edge** (`TAG_ABOVE_NODE_PX`,
+    offset from `geometry.get(grain.fromId)`, not the grain dot's own
+    position) instead of wherever the grain happens to be parked — a parked
+    grain's dot sits right at the handle where its edge connects to the box,
+    which collided with incoming lines. The offset (48px) is deliberately
+    large enough to also clear `.mf-node__stalled-badge`
+    (`MediaFunctionNode.css`), which already occupies the `top: -24px` band.
+  - Tags are now **one-per-node-per-stream** (the most recent grain, keyed
+    by `${fromId}|streamClass}` via a `latestByKey` pass over `grains`),
+    stacked vertically (`TAG_STACK_GAP_PX`, video closest to the box, audio
+    above it) rather than one per grain id. Busy nodes — Egress in
+    particular, where audio commonly parks waiting on its sibling video
+    grain — would otherwise accumulate a stack of overlapping tags from
+    every grain that had ever held there. `RetainedTag.grainId` detects when
+    a new grain takes over a node+stream slot and restarts that slot's
+    `firstShownAt` guaranteed-visible window.
+  - The "writing #idx" flash label got a solid opaque background chip
+    (`background: #ee0000`, white text) instead of bare colored text —
+    plain text directly over an edge line/handle was unreadable regardless
+    of color.
 
 ## Level 4 — A/V Sync Overrun
 
