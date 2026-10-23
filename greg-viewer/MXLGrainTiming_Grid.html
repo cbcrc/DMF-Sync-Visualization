@@ -1,0 +1,723 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>MXL Grain Timing</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Martian+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a control-room instrument — clock strip on top, a scrolling strip-chart of real time,
+   ring buffers + a per-grain ledger beneath, then the reference notes. */
+:root{
+  --paper:#EDF0F2; --panel:#F8FAFB; --ink:#14202B; --muted:#5A6774; --rule:#CCD3D9; --wash:#E2E7EB;
+  --ots:#17935A;   /* origination: preview-tally green */
+  --its:#C27D0C;   /* index time stamp: amber */
+  --pt:#D21F3C;    /* presentation: program-tally red */
+  --block-ink:#0E1822;
+  --s0:oklch(0.79 0.09 250); --s1:oklch(0.80 0.09 210); --s2:oklch(0.81 0.09 175); --s3:oklch(0.83 0.09 135);
+  --s4:oklch(0.84 0.09 95);  --s5:oklch(0.80 0.09 55);  --s6:oklch(0.78 0.09 15);  --s7:oklch(0.77 0.09 310);
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"Martian Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0E141A; --panel:#151D25; --ink:#E4EAEF; --muted:#8C99A5; --rule:#283440; --wash:#1B252F;
+  --ots:#38C77C; --its:#EFB03A; --pt:#FF4B5F; --block-ink:#0B131B;
+  --s0:oklch(0.66 0.10 250); --s1:oklch(0.68 0.10 210); --s2:oklch(0.69 0.10 175); --s3:oklch(0.71 0.10 135);
+  --s4:oklch(0.73 0.10 95);  --s5:oklch(0.68 0.10 55);  --s6:oklch(0.66 0.10 15);  --s7:oklch(0.65 0.10 310);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0E141A; --panel:#151D25; --ink:#E4EAEF; --muted:#8C99A5; --rule:#283440; --wash:#1B252F;
+  --ots:#38C77C; --its:#EFB03A; --pt:#FF4B5F; --block-ink:#0B131B;
+  --s0:oklch(0.66 0.10 250); --s1:oklch(0.68 0.10 210); --s2:oklch(0.69 0.10 175); --s3:oklch(0.71 0.10 135);
+  --s4:oklch(0.73 0.10 95);  --s5:oklch(0.68 0.10 55);  --s6:oklch(0.66 0.10 15);  --s7:oklch(0.65 0.10 310);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-display);font-size:15px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-block:28px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:22px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+h1{font-size:clamp(28px,4.4vw,44px);font-stretch:72%;font-weight:800;letter-spacing:-.01em;line-height:1.02;margin:0;text-wrap:balance}
+h2{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:0;color:var(--muted)}
+h3{font-size:17px;font-weight:700;margin:0;font-stretch:88%}
+p{margin:0}
+.lede{max-width:68ch;color:var(--muted);font-size:16px}
+.lede b{color:var(--ink);font-weight:600}
+.k-ots{color:var(--ots)} .k-its{color:var(--its)} .k-pt{color:var(--pt)}
+
+header.top{display:grid;gap:10px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+
+/* clock strip */
+.clock{background:var(--ink);color:var(--paper);border-radius:6px;padding:14px 16px;display:grid;
+  grid-template-columns:minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,.7fr);gap:12px 20px}
+@media (max-width:860px){.clock{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.clock .cell:first-child{grid-column:1/-1}}
+.clock .cell{min-width:0}
+.clock .lab{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.65}
+.clock .val{font-family:var(--f-mono);font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.clock .val.big{font-size:clamp(15px,1.9vw,20px)}
+.clock .formula{grid-column:1/-1;font-family:var(--f-mono);font-size:11.5px;opacity:.85;border-top:1px solid color-mix(in oklab,var(--paper) 22%,transparent);padding-top:10px;overflow-wrap:anywhere}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.btns{display:flex;gap:6px}
+button,select{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:6px 12px;cursor:pointer}
+button:hover,select:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--its);outline-offset:2px}
+button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);min-width:86px;font-weight:600}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
+.ctl .lab{color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.seg label{padding:5px 10px;cursor:pointer;background:var(--panel);font-size:13px;white-space:nowrap}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg input:checked+span{font-weight:700}
+.seg label:has(input:checked){background:var(--ink);color:var(--paper)}
+.seg label:has(input:focus-visible){outline:2px solid var(--its);outline-offset:-2px}
+input[type=range]{accent-color:var(--pt);width:110px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:var(--f-mono);font-size:11.5px;padding:4px 9px;border-radius:999px;border:1px solid var(--rule);background:var(--panel);display:inline-flex;gap:6px;align-items:center}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--ots);display:inline-block}
+.chip.warn i{background:var(--its)} .chip.bad i{background:var(--pt)}
+.chip.bad{border-color:var(--pt)}
+
+/* panels */
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:16px;display:grid;gap:12px;min-width:0}
+.panel-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px}
+.hint{font-size:13px;color:var(--muted)}
+.tl-wrap{position:relative;overflow-x:auto}
+#tl{min-width:920px}
+canvas{display:block;width:100%}
+#tl{cursor:crosshair;touch-action:manipulation}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:2px;display:inline-block;background:var(--s3)}
+.sw.cap{opacity:.38}.sw.tx{opacity:.65}
+.ln{width:14px;height:0;border-top:2px solid var(--ink);display:inline-block}
+.ln.ots{border-color:var(--ots)} .ln.pt{border-color:var(--pt)}
+.dm{width:9px;height:9px;transform:rotate(45deg);background:var(--its);display:inline-block}
+.slots{display:inline-flex;gap:2px}.slots b{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+.lower{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px}
+@media (max-width:900px){.lower{grid-template-columns:1fr}}
+.rings{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ring{display:grid;gap:4px;justify-items:center;text-align:center;min-width:0}
+.ring canvas{max-width:190px;aspect-ratio:1}
+.ring .nm{font-weight:700;font-size:14px;font-stretch:88%}
+.ring .meta{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);line-height:1.45}
+.ring .meta.bad{color:var(--pt)}
+
+table{border-collapse:collapse;width:100%;font-size:13px}
+.tbl{overflow-x:auto}
+th{font-weight:600;text-align:left;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--rule)}
+td{padding:7px 8px;border-bottom:1px solid var(--wash);vertical-align:top}
+td.num{font-family:var(--f-mono);font-size:12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td .ns{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--muted);overflow-wrap:anywhere}
+tr.pending td{opacity:.38}
+tr.bad td{color:var(--pt)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+.trace-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.trace-head .mono{font-size:13px}
+
+.clocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.clockcard{border-top:3px solid var(--ink);padding-top:10px;display:grid;gap:6px;align-content:start}
+.clockcard.ots{border-color:var(--ots)} .clockcard.its{border-color:var(--its)} .clockcard.pt{border-color:var(--pt)}
+.clockcard p{font-size:14px;color:var(--muted)}
+.clockcard code,.notes code{font-family:var(--f-mono);font-size:12px;color:var(--ink);background:var(--wash);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px}
+.notes ul,.notes ol{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px}
+.notes li{max-width:62ch}
+.src{font-size:13px;color:var(--muted)}
+.notes{grid-template-columns:1fr}
+.tips summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+.tips summary::-webkit-details-marker{display:none}
+.tips summary::before{content:"+";font-family:var(--f-mono);font-weight:600;width:18px;height:18px;display:inline-grid;place-items:center;border:1px solid var(--rule);border-radius:3px;color:var(--muted)}
+.tips[open] summary::before{content:"−"}
+.tips summary:focus-visible{outline:2px solid var(--its);outline-offset:4px}
+.tips ol{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px}
+.src a{color:inherit}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Dynamic Media Facility · MXL timing model · 50/1 grain rate · 8-grain ring</div>
+    <h1>MXL Grain Timing</h1>
+    <p class="lede">Each grain from <b class="k-ots">origination</b>, through its <b class="k-its">indexing time stamp</b> in the MXL ring buffers, to <b class="k-pt">presentation</b>, as TAI time runs at a fraction of real speed.</p>
+  </header>
+
+  <section class="panel" aria-label="Timeline">
+    <div class="panel-head">
+      <h2>Timing grid · grain index (ITS) columns</h2>
+      <span class="hint">Each column is one grain index. Its left edge is the TAI origination time that index stands for. Click a column to trace it.</span>
+    </div>
+    <div class="tl-wrap"><canvas id="tl" height="330" aria-label="Grid of grain indexes showing capture, MXL ring buffer writes, processing and presentation as time runs"></canvas></div>
+    <div class="legend">
+      <span><span class="ln ots"></span>origination time of the cell's content</span>
+      <span><span class="sw"></span>written to the ring (colour = slot)</span>
+      <span><span class="sw cap"></span>older than 8 grains, overwritten</span>
+      <span><span class="ln" style="border-color:var(--its)"></span>grains the ring still holds</span>
+      <span><span class="sw" style="background:none;border:2px solid var(--ink)"></span>being read</span>
+      <span><span class="sw" style="background:none;border:2px solid var(--pt)"></span>on air</span>
+      <span><span class="ln"></span>NOW</span>
+      <span>Slots <span class="slots" id="slotkey"></span></span>
+    </div>
+  </section>
+
+  <section class="clock" aria-label="Host clock">
+    <div class="cell"><div class="lab">Now · TAI ns since SMPTE epoch</div><div class="val big" id="r-ns">–</div></div>
+    <div class="cell"><div class="lab">TAI time of day · 50 fps</div><div class="val big" id="r-tc">–</div></div>
+    <div class="cell"><div class="lab">Grain index now</div><div class="val big" id="r-gi">–</div></div>
+    <div class="cell"><div class="lab">Ring slot now</div><div class="val big" id="r-slot">–</div></div>
+    <div class="formula" id="r-formula">–</div>
+  </section>
+
+  <section class="controls" aria-label="Playback and scenario">
+    <div class="btns">
+      <button class="primary" id="play" type="button">Pause</button>
+      <button id="back" type="button" title="Step back half a grain (←)">−10 ms</button>
+      <button id="fwd" type="button" title="Step forward half a grain (→)">+10 ms</button>
+    </div>
+    <label class="ctl"><span class="lab">Speed</span>
+      <select id="speed">
+        <option value="0.01">1/100 ×</option>
+        <option value="0.025">1/40 ×</option>
+        <option value="0.05" selected>1/20 ×</option>
+        <option value="0.1">1/10 ×</option>
+        <option value="0.25">1/4 ×</option>
+      </select></label>
+    <div class="ctl"><span class="lab">Cam 3 static offset</span>
+      <span class="seg" role="radiogroup" aria-label="Cam 3 static offset">
+        <label><input type="radio" name="off3" id="off3-0" value="0"><span>0</span></label>
+        <label><input type="radio" name="off3" id="off3-1" value="1" checked><span>1 grain</span></label>
+      </span></div>
+    <label class="ctl"><span class="lab">Presentation offset</span>
+      <input type="range" id="delay" min="2" max="5" step="1" value="3">
+      <span class="mono" id="delay-v">3 grains · 60 ms</span></label>
+    <label class="ctl"><input type="checkbox" id="jitter" checked> <span>RF jitter on Cam 2 (±4 ms)</span></label>
+  </section>
+
+  <section class="controls" aria-label="View">
+    <div class="ctl"><span class="lab">NOW aligned to</span>
+      <span class="seg" role="radiogroup" aria-label="Align NOW to">
+        <label><input type="radio" name="align" id="al-ots" value="ots" checked><span>Origination</span></label>
+        <label><input type="radio" name="align" id="al-mxl" value="mxl"><span>MXL write</span></label>
+        <label><input type="radio" name="align" id="al-pt" value="pt"><span>Presentation</span></label>
+      </span>
+      <input type="range" id="align" min="0" max="60" step="1" value="0" aria-label="NOW alignment, ms after origination">
+      <span class="mono" id="align-v">OTS + 0 ms</span></div>
+    <div class="ctl"><span class="lab">Grid</span>
+      <span class="seg" role="radiogroup" aria-label="Grid motion">
+        <label><input type="radio" name="motion" id="mo-sweep" value="sweep" checked><span>Sweep (as on the slide)</span></label>
+        <label><input type="radio" name="motion" id="mo-scroll" value="scroll"><span>Scroll</span></label>
+      </span></div>
+  </section>
+
+  <div class="chips" id="chips" aria-live="polite"></div>
+
+  <div class="lower">
+    <section class="panel" aria-label="Ring buffers">
+      <div class="panel-head"><h2>MXL ring buffers · 8 grains · 160 ms history</h2></div>
+      <div class="rings" id="rings"></div>
+      <p class="hint">Slot = grain index mod 8. The slot is fixed by time, so a writer can't just append to the next free slot.
+        <b style="color:var(--ink)">now</b> marks the slot for the current TAI grain and the amber <b class="k-its">head</b> is the newest grain written.
+        The gap between them is that flow's latency. A slot is overwritten when its grain is 8 grains old.</p>
+    </section>
+
+    <section class="panel" aria-label="Traced grain">
+      <div class="trace-head">
+        <h2>Grain ledger</h2>
+        <button id="follow" type="button" hidden>Follow on-air grain</button>
+      </div>
+      <div class="mono" id="trace-title">–</div>
+      <div class="tbl"><table>
+        <thead><tr><th>Event</th><th style="text-align:right">Δ from OTS</th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="The clocks">
+    <h2>Four clocks, one time domain</h2>
+    <div class="clocks">
+      <div class="clockcard">
+        <h3>Actual time (now)</h3>
+        <p>The host's TAI clock, as nanoseconds since the SMPTE ST 2059-1 epoch. MXL uses that epoch and clock definition but doesn't require PTP. Any stable source works on one host. Across hosts, the clocks must not drift in frequency. Jitter is fine.</p>
+      </div>
+      <div class="clockcard ots">
+        <h3>Origination time · OTS</h3>
+        <p>The moment the media came into being: the shutter or the microphone capsule. Few transports carry it today. An RTP timestamp is at best a proxy. Cams 1 and 2 have a trustworthy one. Cam 3, on SDI, has none.</p>
+      </div>
+      <div class="clockcard its">
+        <h3>Indexing time stamp · ITS</h3>
+        <p>The timestamp a grain carries inside the workload, phase-aligned to the grain rate. It is the index for alignment and selection, and it's carried unchanged through every media function.
+          <code>index = ⌊ts / 20'000'000⌋</code> <code>slot = index mod 8</code></p>
+      </div>
+      <div class="clockcard pt">
+        <h3>Presentation time · PT</h3>
+        <p>When a synchronous egress (SDI, 2110 sender) emits the grain: <code>PT = ITS + offset</code>. The offset is fixed, so lip-sync and inter-camera timing hold at the output. It has to cover the slowest path, or the grain misses its slot.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <div class="panel">
+      <h2>How each camera gets its ITS</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Source</th><th>Timing it brings</th><th>ITS assigned</th></tr></thead>
+        <tbody>
+          <tr><td>Cam 1 · 2110, PTP, direct</td><td>Trusted clock and timestamps</td><td>Mapped from OTS, offset 0. Written 14 ms after capture.</td></tr>
+          <tr><td>Cam 2 · 2110, PTP, RF 10 ms</td><td>Trusted clock and timestamps, variable transport delay</td><td>Mapped from OTS, offset 0. Jitter changes when it's written, not where.</td></tr>
+          <tr><td>Cam 3 · SDI via gateway 20 ms</td><td>Trusted frequency (genlocked), no timestamp</td><td>Re-stamped from local arrival time minus a static offset of 1 grain.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="hint">These follow the draft JT-DMF ingress cases. Both clock and timestamps trusted: map them through. Clock trusted, timestamps not: stamp on arrival with a static offset. Neither trusted: a virtual frame store clocked by the DMF. The ingress work is still in progress.</p>
+    </div>
+  </section>
+
+  <details class="panel tips">
+    <summary><h2>Things to try</h2></summary>
+      <ol>
+        <li>Set <b>Cam 3 static offset</b> to 0. Cam 3's green origination ticks move one column left of its cells, with an arrow into the next column. Its frames are filed one index late, and the mix combines frames captured one grain apart.</li>
+        <li>Drag <b>Presentation offset</b> to 2 grains (40 ms). The path from capture to ME output takes 47 ms, so every grain misses its presentation time and the output shows MISS.</li>
+        <li>Turn <b>RF jitter</b> on and off. Cam 2's cells fill a little earlier or later but stay in the same column, because the index comes from origination time and not from arrival.</li>
+        <li>Change <b>NOW aligned to</b>. At Origination the line is where cameras are capturing, and cells fill in behind it as grains reach MXL. At Presentation it sits on the column going to air, with the processed grains already waiting to its right. The slider sets anything in between.</li>
+        <li>Pause and step ±10 ms, the same half-grain steps as the original slide.</li>
+      </ol>
+  </details>
+
+  <p class="src">Sources: <a href="https://url.uk.m.mimecastprotect.com/s/ZQXACrYvvTr5Q7j9s6T6Os4Gef5?domain=github.com" target="_blank" rel="noopener">MXL Timing Model</a> ·
+    <a href="https://url.uk.m.mimecastprotect.com/s/fg4LCvjzzFEDwqgXtYUlqsQfykA?domain=github.com" target="_blank" rel="noopener">AMWA IN-002, Time &amp; Identity in the DMF</a> ·
+    signal chain after the "Animated DMF Sync Block" deck. Latencies are illustrative and the TAI epoch offset is a fixed example value.</p>
+</div>
+
+<script>
+(() => {
+  // ---------- model (all times in ms relative to T0, a grain boundary) ----------
+  const G = 20, N = 8;
+  const IDX0 = 89642400000n;              // grain index at T0 (divisible by 8, so slot = j mod 8)
+  const NS0 = IDX0 * 20000000n;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const st = { t: 312, playing: !reduce, speed: 0.05, off3: 1, D: 3, jitter: true, pinned: null, align: 'ots', alignMs: 0, motion: 'sweep' };
+
+  const mod = (a, n) => ((a % n) + n) % n;
+  function jit(k) { if (!st.jitter) return 0; const x = Math.sin(k * 12.9898 + 4.1) * 43758.5453; return ((x - Math.floor(x)) * 2 - 1) * 4; }
+  // camera c (0..2), content captured at OTS = k*G
+  function cam(c, k) {
+    const o = k * G;
+    if (c === 0) return { segs: [[o, o + 10, 'cap'], [o + 10, o + 12, 'tx'], [o + 12, o + 14, 'conf']], W: o + 14, its: k, ots: o };
+    if (c === 1) { const a = o + 20 + jit(k); return { segs: [[o, o + 10, 'cap'], [o + 10, a, 'tx'], [a, a + 2, 'conf']], W: a + 2, its: k, ots: o }; }
+    const arr = o + 30; // SDI frame out of camera + 20 ms gateway; no timestamp, so stamp on arrival
+    return { segs: [[o, o + 10, 'cap'], [o + 10, arr, 'tx'], [arr, arr + 2, 'conf']], W: arr + 2, its: Math.floor(arr / G) - st.off3, ots: o };
+  }
+  const contentFor = (c, j) => c === 2 ? j - 1 + st.off3 : j;
+  const camW = (c, j) => { const k = contentFor(c, j); return k < 0 ? Infinity : cam(c, k).W; };
+  const mixT = j => { const s = Math.max(camW(0, j), camW(1, j), camW(2, j)) + 0.5; return [s, s + 8]; };
+  const meT = j => { const m = mixT(j)[1]; return [m + 0.5, m + 6.5]; };
+  const PT = j => (j + st.D) * G;
+  const onTime = j => meT(j)[1] <= PT(j);
+
+  const flows = [
+    { name: 'Cam 1', W: j => camW(0, j), reader: 'mix' },
+    { name: 'Cam 2', W: j => camW(1, j), reader: 'mix' },
+    { name: 'Cam 3', W: j => camW(2, j), reader: 'mix', cam3: true },
+    { name: 'Mix', W: j => mixT(j)[1], reader: 'me' },
+    { name: 'ME', W: j => meT(j)[1], reader: 'pt' },
+  ];
+
+  // ---------- formatting ----------
+  const grp = s => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  const absIdx = j => grp((IDX0 + BigInt(j)).toString());
+  const shortIdx = j => String((IDX0 + BigInt(j)) % 1000n).padStart(3, '0');
+  const nsAt = ms => grp((NS0 + BigInt(Math.round(ms * 1e6))).toString());
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  const fmtMs = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' ms';
+  function timecode(gi) {
+    const f = IDX0 + BigInt(gi); const ff = Number(f % 50n); const s = f / 50n; const tod = Number(s % 86400n);
+    return `${pad(Math.floor(tod / 3600))}:${pad(Math.floor(tod / 60) % 60)}:${pad(tod % 60)}:${pad(ff)}`;
+  }
+
+  // ---------- theme ----------
+  let C = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    C = { paper: g('--paper'), panel: g('--panel'), ink: g('--ink'), muted: g('--muted'), rule: g('--rule'), wash: g('--wash'),
+      ots: g('--ots'), its: g('--its'), pt: g('--pt'), bink: g('--block-ink'), slot: [...Array(N)].map((_, i) => g('--s' + i)),
+      mono: g('--f-mono'), disp: g('--f-display') };
+  }
+  readTheme();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); draw(true); });
+  new MutationObserver(() => { readTheme(); draw(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  document.getElementById('slotkey').innerHTML = [...Array(N)].map((_, i) => `<b style="background:var(--s${i})" title="slot ${i}"></b>`).join('');
+
+  // ---------- canvas helpers ----------
+  function fit(cv, cssH) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = cv.clientWidth, h = cssH ?? cv.clientWidth;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px'; }
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return { ctx, w, h };
+  }
+  function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2)); else ctx.rect(x, y, w, h); }
+
+  // ---------- ITS grid, laid out after the slide: stage boxes | ring-buffer grid | buffer · linear output ----------
+  const tl = document.getElementById('tl');
+  const rows = [
+    { label: 'Cam 1', sub: 'PTP · direct', W: j => camW(0, j), cam: 0 },
+    { label: 'Cam 2', sub: 'PTP · RF 10 ms', W: j => camW(1, j), cam: 1 },
+    { label: 'Cam 3', sub: 'SDI · gateway', W: j => camW(2, j), cam: 2 },
+    { label: 'Mix', sub: 'Cam 1 + 2 + 3', W: j => mixT(j)[1] },
+    { label: 'ME on mix', sub: 'keys · graphics', W: j => meT(j)[1] },
+    { label: 'Presentation', sub: 'ITS + offset', W: j => onTime(j) ? PT(j) : Infinity, pt: true },
+  ];
+  let L = {};
+  function layout(w) {
+    const labW = 104, boxW = 58, gap = 6, stageW = 3 * boxW + 2 * gap, rbW = 64;
+    const gridL = labW + stageW + 16, gridR = w - (2 * rbW + gap) - 16;
+    const cols = st.motion === 'sweep' ? 16 : Math.max(8, Math.round((gridR - gridL) / 46));
+    const top = 64, rowH = 40;
+    L = { labW, boxW, gap, stageW, rbW, gridL, gridR, cols, cw: (gridR - gridL) / cols, top, rowH, h: top + rows.length * rowH + 34, c0: L.c0 ?? 0 };
+  }
+  const colX = c => L.gridL + (c - L.c0) * L.cw;
+  const rowY = i => L.top + i * L.rowH;
+  function alignMs() {
+    if (st.align === 'ots') return 0;
+    if (st.align === 'pt') return st.D * G;
+    if (st.align === 'mxl') { const jr = 1000; return Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map(d => Math.max(camW(0, jr - d), camW(1, jr - d), camW(2, jr - d)) - (jr - d) * G)); }
+    return Math.min(st.alignMs, st.D * G);
+  }
+  function headOf(row, t) { for (let j = Math.floor(t / G) + 1; j >= Math.floor(t / G) - N - 6; j--) if (j >= 0 && row.W(j) <= t) return j; return null; }
+  const secLabel = j => { const f = IDX0 + BigInt(j); return `:${pad(Number((f / 50n) % 60n))}.${pad(Number(f % 50n) * 20, 3)}`; };
+
+  function traced() {
+    if (st.pinned !== null) return st.pinned;
+    return Math.max(0, Math.floor(st.t / G) - st.D); // the grain on air right now
+  }
+
+  function drawTimeline() {
+    layout(tl.clientWidth);
+    const { ctx, w, h } = fit(tl, L.h);
+    const t = st.t, a = alignMs(), nowCol = (t - a) / G;
+    if (st.motion === 'sweep') { const step = L.cols - 4; L.c0 = Math.floor((nowCol - 2) / step) * step; }
+    else L.c0 = nowCol - 0.72 * L.cols;
+    ctx.clearRect(0, 0, w, h);
+    const bodyT = L.top, bodyB = rowY(rows.length), cw = L.cw;
+    const jLo = Math.floor(L.c0) - 1, jHi = Math.ceil(L.c0 + L.cols);
+    const tr = traced();
+    const txt = (s, x, y, color, font, align = 'left') => { ctx.fillStyle = color; ctx.font = font; ctx.textAlign = align; ctx.fillText(s, x, y); };
+    const fMono = (sz, wt = 500) => `${wt} ${sz}px ${C.mono}`, fDisp = (sz, wt = 700) => `${wt} ${sz}px ${C.disp}`;
+    ctx.textBaseline = 'middle';
+
+    // group headings, as on the slide
+    const bx = i => L.labW + i * (L.boxW + L.gap);
+    ['Capture', 'Transfer', 'Conform'].forEach((s, i) => txt(s, bx(i) + L.boxW / 2, 14, C.muted, fDisp(12, 700), 'center'));
+    txt('MXL ring buffers · one column per grain index (ITS)', L.gridL, 14, C.muted, fDisp(12, 700));
+    const rx = i => L.gridR + 16 + i * (L.rbW + L.gap);
+    txt('Buffer', rx(0) + L.rbW / 2, 14, C.muted, fDisp(12, 700), 'center');
+    txt('Linear out', rx(1) + L.rbW / 2, 14, C.muted, fDisp(12, 700), 'center');
+
+    // row labels and separators
+    rows.forEach((r, i) => {
+      const y = rowY(i);
+      ctx.strokeStyle = i === 3 || i === 5 ? C.muted : C.rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(w, y + .5); ctx.stroke();
+      txt(r.label, 2, y + 14, r.pt ? C.pt : C.ink, fDisp(13, 700));
+      txt(r.sub, 2, y + 28, C.muted, fMono(8.5, 400));
+    });
+    ctx.strokeStyle = C.rule; ctx.beginPath(); ctx.moveTo(0, bodyB + .5); ctx.lineTo(w, bodyB + .5); ctx.stroke();
+
+    // ---- stage boxes (left) ----
+    const box = (x, y, bw, color, label, sub, outline) => {
+      const bh = L.rowH - 12;
+      if (color) { ctx.fillStyle = color; rrect(ctx, x, y + 6, bw, bh, 3); ctx.fill(); }
+      ctx.strokeStyle = outline || (color ? color : C.rule); ctx.lineWidth = outline ? 2 : 1; rrect(ctx, x + .5, y + 6.5, bw - 1, bh - 1, 3); ctx.stroke();
+      if (label) txt(label, x + bw / 2, y + L.rowH / 2 + (sub ? -5 : 0), color ? C.bink : C.muted, fMono(10, 600), 'center');
+      if (sub) txt(sub, x + bw / 2, y + L.rowH / 2 + 7, color ? C.bink : C.muted, fMono(8, 400), 'center');
+    };
+    const hold = 8; // keep short stages lit long enough to see
+    for (let c = 0; c < 3; c++) {
+      const occ = [null, null, null];
+      for (let k = Math.floor(t / G) - 3; k <= Math.floor(t / G); k++) {
+        if (k < 0) continue; const g = cam(c, k);
+        g.segs.forEach(([s0, s1], si) => { if (s0 <= t && t < Math.max(s1, s0 + hold)) occ[si] = g; });
+      }
+      occ.forEach((g, si) => box(bx(si), rowY(c), L.boxW, g ? C.slot[mod(g.its, N)] : null, g ? '…' + shortIdx(g.its) : '', g && c === 2 && si === 2 ? `ITS ${st.off3 ? '−1' : '±0'}` : (g && si === 0 ? 'OTS …' + shortIdx(g.ots / G) : '')));
+    }
+    const proc = (i, fn, name) => {
+      let on = null;
+      for (let j = Math.floor(t / G) - 4; j <= Math.floor(t / G); j++) { if (j < 0) continue; const [s0, s1] = fn(j); if (s0 <= t && t < Math.max(s1, s0 + hold)) on = j; }
+      box(L.labW, rowY(i), L.stageW, on !== null ? C.slot[mod(on, N)] : null, on !== null ? `${name} …${shortIdx(on)}` : name, on !== null ? 'ITS carried through' : 'idle');
+    };
+    proc(3, mixT, 'Mixing'); proc(4, meT, 'Keying');
+    txt(`reads ITS = now − ${st.D * G} ms`, L.labW + L.stageW / 2, rowY(5) + L.rowH / 2, C.pt, fMono(10, 500), 'center');
+
+    // ---- right boxes: out buffer, SDI and 2110-20 senders ----
+    let held = null;
+    for (let j = Math.floor(t / G) - st.D - 1; j <= Math.floor(t / G); j++) if (j >= 0 && onTime(j) && meT(j)[1] <= t && t < PT(j)) held = j;
+    box(rx(0), rowY(4), L.rbW, held !== null ? C.slot[mod(held, N)] : null, held !== null ? '…' + shortIdx(held) : 'empty', held !== null ? `${(PT(held) - t).toFixed(0)} ms to PT` : '');
+    const air = Math.floor(t / G) - st.D;
+    const airOk = air >= 0 && onTime(air);
+    box(rx(1), rowY(4), L.rbW, airOk ? C.slot[mod(air, N)] : null, air < 0 ? '' : airOk ? '…' + shortIdx(air) : 'MISS', 'SDI', C.pt);
+    box(rx(1), rowY(5), L.rbW, airOk ? C.slot[mod(air, N)] : null, air < 0 ? '' : airOk ? '…' + shortIdx(air) : 'MISS', '2110-20', C.pt);
+
+    // ---- grid ----
+    ctx.save(); ctx.beginPath(); ctx.rect(L.gridL - 1, 0, L.gridR - L.gridL + 2, h); ctx.clip();
+    // not yet originated (right of real time)
+    const xRT = colX(t / G);
+    ctx.fillStyle = C.wash; ctx.fillRect(xRT, bodyT, L.gridR - xRT, bodyB - bodyT);
+    // column headers: grain index, TAI seconds of its origination instant, slot colour
+    const every = cw < 36 ? 2 : 1;
+    for (let j = jLo; j <= jHi; j++) {
+      const x = colX(j);
+      ctx.strokeStyle = C.rule; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, 34); ctx.lineTo(Math.round(x) + .5, bodyB); ctx.stroke();
+      if (j < 0) continue;
+      ctx.fillStyle = C.slot[mod(j, N)]; ctx.fillRect(x + 1, L.top - 7, cw - 2, 4);
+      if (mod(j, every) === 0) {
+        txt('…' + shortIdx(j), x + 3, 32, C.ink, fMono(9.5, 600));
+        txt(secLabel(j), x + 3, 45, C.ots, fMono(8.5, 400));
+        ctx.fillStyle = C.ots; ctx.fillRect(Math.round(x), 38, 2, 12);
+      }
+    }
+    // cells
+    rows.forEach((r, i) => {
+      const y = rowY(i), head = r.pt ? null : headOf(r, t);
+      for (let j = jLo; j <= jHi; j++) {
+        if (j < 0) continue;
+        const x = colX(j) + 2, cwi = cw - 4, cy = y + 6, chh = L.rowH - 12;
+        const Wj = r.W(j), written = Wj <= t;
+        if (written) {
+          const inRing = r.pt || j > head - N;
+          ctx.globalAlpha = inRing ? 1 : 0.22; ctx.fillStyle = C.slot[mod(j, N)]; rrect(ctx, x, cy, cwi, chh, 3); ctx.fill(); ctx.globalAlpha = 1;
+          if (cw >= 30 && inRing) txt(shortIdx(j), x + cwi / 2, cy + chh / 2 + 1, C.bink, fMono(9, 600), 'center');
+        } else {
+          ctx.strokeStyle = C.rule; ctx.lineWidth = 1; rrect(ctx, x + .5, cy + .5, cwi - 1, chh - 1, 3); ctx.stroke();
+        }
+        // who is reading this cell right now
+        let reading = false;
+        if (r.cam !== undefined) { const m = mixT(j); reading = m[0] <= t && t < Math.max(m[1], m[0] + hold); }
+        else if (i === 3) { const e = meT(j); reading = e[0] <= t && t < Math.max(e[1], e[0] + hold); }
+        else if (i === 4) reading = onTime(j) && PT(j) <= t && t < PT(j) + G;
+        if (reading && written) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; rrect(ctx, x, cy, cwi, chh, 3); ctx.stroke(); }
+        if (r.pt && PT(j) <= t && t < PT(j) + G) {
+          ctx.strokeStyle = C.pt; ctx.lineWidth = 2.5; if (!written) ctx.setLineDash([4, 3]); rrect(ctx, x, cy, cwi, chh, 3); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (r.pt && !onTime(j) && PT(j) <= t) txt('MISS', x + cwi / 2, cy + chh / 2 + 1, C.pt, fMono(8.5, 700), 'center');
+        // origination of this cell's content: a green tick at the left edge of the column whose time it was captured
+        if (r.cam !== undefined) {
+          const k = contentFor(r.cam, j);
+          if (k >= 0 && k * G <= t) {
+            const xo = Math.round(colX(k)) + .5;
+            ctx.strokeStyle = C.ots; ctx.fillStyle = C.ots; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(xo, y + 4); ctx.lineTo(xo, y + L.rowH - 4); ctx.stroke();
+            ctx.beginPath(); ctx.arc(xo, y + 5, 2.5, 0, 7); ctx.fill();
+            if (k !== j) { // captured one column earlier than the index it was given
+              ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(xo, y + 9); ctx.lineTo(x - 1, y + 9); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(x - 1, y + 9); ctx.lineTo(x - 6, y + 6); ctx.lineTo(x - 6, y + 12); ctx.closePath(); ctx.fill();
+              if (written) { ctx.strokeStyle = C.pt; ctx.lineWidth = 1.5; rrect(ctx, x, cy, cwi, chh, 3); ctx.stroke(); }
+            }
+          }
+        }
+      }
+      // ring window: the 8 grains this flow's ring buffer still holds
+      if (head !== null) {
+        const xa = colX(Math.max(0, head - N + 1)) + 2, xb = colX(head + 1) - 2, yb = y + L.rowH - 3;
+        ctx.strokeStyle = C.its; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(xa, yb - 3); ctx.lineTo(xa, yb); ctx.lineTo(xb, yb); ctx.lineTo(xb, yb - 3); ctx.stroke();
+      }
+    });
+    // traced column
+    if (tr >= jLo && tr <= jHi) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.strokeRect(colX(tr) + .5, 22, cw - 1, bodyB - 22); ctx.setLineDash([]); }
+    // reference markers under the grid: real time and on-air time, in ITS columns
+    const mk = (col, color, label) => {
+      const x = colX(col); if (x < L.gridL - 2 || x > L.gridR + 2) return;
+      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, bodyB + 2); ctx.lineTo(x - 5, bodyB + 10); ctx.lineTo(x + 5, bodyB + 10); ctx.closePath(); ctx.fill();
+      txt(label, x, bodyB + 21, color, fMono(9, 600), x > L.gridR - 60 ? 'right' : 'center');
+    };
+    mk(t / G, C.ots, 'originating now');
+    mk((t - st.D * G) / G, C.pt, 'on air now');
+    ctx.restore();
+
+    // NOW line
+    const xn = Math.round(colX(nowCol)) + .5;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(xn, 24); ctx.lineTo(xn, bodyB); ctx.stroke();
+    ctx.fillStyle = C.ink; rrect(ctx, xn - 18, 18, 36, 13, 3); ctx.fill();
+    txt('NOW', xn, 25, C.paper, fMono(9, 700), 'center');
+  }
+
+  // click a column to trace that grain
+  tl.addEventListener('click', ev => {
+    const r = tl.getBoundingClientRect(), x = ev.clientX - r.left;
+    if (x < L.gridL || x > L.gridR) return;
+    const j = Math.floor(L.c0 + (x - L.gridL) / L.cw);
+    if (j < 0 || j * G > st.t) return;
+    st.pinned = j; updateFollow(); draw(true);
+  });
+
+  // ---------- ring buffers ----------
+  const ringsEl = document.getElementById('rings');
+  const ringUI = flows.map(f => {
+    const d = document.createElement('div'); d.className = 'ring';
+    d.innerHTML = `<canvas aria-label="${f.name} ring buffer"></canvas><div class="nm">${f.name}</div><div class="meta"></div>`;
+    ringsEl.appendChild(d); return { cv: d.querySelector('canvas'), meta: d.querySelector('.meta') };
+  });
+
+  function ringState(f, t) {
+    const gi = Math.floor(t / G), slots = Array(N).fill(null); let head = null, writing = null;
+    for (let j = gi + 1; j >= gi - N - 6; j--) {
+      if (j < 0) continue; const w = f.W(j);
+      if (w <= t) { const s = mod(j, N); if (slots[s] === null) slots[s] = j; if (head === null || j > head) head = j; if (t - w < 2.5) writing = j; }
+    }
+    let read = null;
+    if (f.reader === 'mix') { for (let j = gi; j >= gi - N; j--) if (j >= 0 && mixT(j)[0] <= t) { read = j; break; } }
+    else if (f.reader === 'me') { for (let j = gi; j >= gi - N; j--) if (j >= 0 && meT(j)[0] <= t) { read = j; break; } }
+    else { const j = Math.floor(t / G) - st.D; if (j >= 0 && onTime(j)) read = j; }
+    return { gi, slots, head, writing, read };
+  }
+
+  function drawRing(ui, f) {
+    const { ctx, w } = fit(ui.cv);
+    const S = ringState(f, st.t), cx = w / 2, cy = w / 2, R = w * 0.36, r = w * 0.20, gap = 0.035;
+    ctx.clearRect(0, 0, w, w);
+    const ang = s => -Math.PI / 2 + s * (2 * Math.PI / N);
+    const tr = traced();
+    for (let s = 0; s < N; s++) {
+      const a0 = ang(s) - Math.PI / N + gap, a1 = ang(s) + Math.PI / N - gap, j = S.slots[s];
+      ctx.beginPath(); ctx.arc(cx, cy, R, a0, a1); ctx.arc(cx, cy, r, a1, a0, true); ctx.closePath();
+      if (j !== null) {
+        const age = S.gi - j; ctx.globalAlpha = Math.max(0.28, 1 - age / (N + 1)); ctx.fillStyle = C.slot[s]; ctx.fill(); ctx.globalAlpha = 1;
+        if (j === tr) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke(); }
+      } else { ctx.strokeStyle = C.rule; ctx.lineWidth = 1; ctx.stroke(); }
+      if (j !== null && j === S.writing) { ctx.strokeStyle = C.its; ctx.lineWidth = 3; ctx.stroke(); }
+      const am = ang(s), rm = (R + r) / 2;
+      ctx.fillStyle = C.bink; ctx.font = `600 ${Math.max(8, w * 0.055)}px ${C.mono}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (j !== null) ctx.fillText(shortIdx(j), cx + Math.cos(am) * rm, cy + Math.sin(am) * rm);
+      ctx.fillStyle = C.muted; ctx.font = `400 ${Math.max(7, w * 0.045)}px ${C.mono}`;
+      ctx.fillText(s, cx + Math.cos(am) * (r - w * 0.045), cy + Math.sin(am) * (r - w * 0.045));
+    }
+    const clampX = (txt, x) => { const hw = ctx.measureText(txt).width / 2 + 2; return Math.min(w - hw, Math.max(hw, x)); };
+    // markers outside the ring
+    const mark = (s, color, label, rad, inward) => {
+      const am = ang(s), x = cx + Math.cos(am) * rad, y = cy + Math.sin(am) * rad;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(am + (inward ? Math.PI : 0));
+      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, 0); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+      if (label) { ctx.fillStyle = color; ctx.font = `700 ${Math.max(8, w * 0.05)}px ${C.mono}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const lr = rad + w * 0.075; ctx.fillText(label, clampX(label, cx + Math.cos(am) * lr), cy + Math.sin(am) * lr); }
+    };
+    mark(mod(S.gi, N), C.ink, 'now', R + w * 0.035, true);
+    if (S.head !== null) {
+      const hs = mod(S.head, N);
+      // place head marker slightly offset so it doesn't sit on top of "now" when equal
+      const am = ang(hs) + (hs === mod(S.gi, N) ? 0.24 : 0);
+      ctx.save(); ctx.translate(cx + Math.cos(am) * (R + w * 0.035), cy + Math.sin(am) * (R + w * 0.035)); ctx.rotate(am + Math.PI);
+      ctx.fillStyle = C.its; ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, 0); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    if (S.read !== null) { // reader pointer on inner edge
+      const am = ang(mod(S.read, N)), x = cx + Math.cos(am) * (r - w * 0.11), y = cy + Math.sin(am) * (r - w * 0.11);
+      ctx.fillStyle = f.reader === 'pt' ? C.pt : C.ink; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 7); ctx.fill();
+    }
+
+    const reader = f.reader === 'mix' ? 'Mix reads' : f.reader === 'me' ? 'ME reads' : 'Egress reads';
+    let meta = S.head === null ? 'empty' : `<span style="color:var(--its)">head …${shortIdx(S.head)}</span> · lag ${S.gi - S.head} grain${S.gi - S.head === 1 ? '' : 's'}`;
+    meta += `<br>${reader} ${S.read === null ? '–' : '…' + shortIdx(S.read)}`;
+    let bad = false;
+    if (f.cam3 && st.off3 === 0) { meta += '<br>slot holds content 1 grain older'; bad = true; }
+    else if (S.head !== null) meta += `<br>written ${(st.t - f.W(S.head)).toFixed(1)} ms ago`;
+    if (f.reader === 'pt' && S.read === null && Math.floor(st.t / G) - st.D >= 0) { meta = 'Egress: grain not ready'; bad = true; }
+    ui.meta.innerHTML = meta; ui.meta.classList.toggle('bad', bad);
+  }
+
+  // ---------- ledger & readouts ----------
+  const $ = id => document.getElementById(id);
+  function ledger() {
+    const j = traced(), t = st.t, ots = j * G;
+    $('trace-title').innerHTML = `${st.pinned === null ? 'On air now' : 'Pinned'} · grain index ${absIdx(j)} · slot ${mod(j, N)}`;
+    const ev = [];
+    ev.push({ c: C.ots, name: 'Originated · Cams 1–3 capture', at: ots });
+    [0, 1, 2].forEach(c => {
+      const k = contentFor(c, j); if (k < 0) return; const g = cam(c, k);
+      let note = c === 2 ? `ITS from arrival − ${st.off3} grain` : 'ITS = OTS';
+      if (c === 2 && k !== j) note = `<span style="color:var(--pt)">content captured at …${shortIdx(k)}, 1 grain early</span>`;
+      ev.push({ c: C.its, name: `Cam ${c + 1} written to slot ${mod(j, N)} <span class="ns">${note}</span>`, at: g.W });
+    });
+    const m = mixT(j), e = meT(j), p = PT(j);
+    ev.push({ c: C.ink, name: 'Mix reads all three (min of heads ≥ index)', at: m[0] });
+    ev.push({ c: C.its, name: 'Mix grain written, ITS carried through', at: m[1] });
+    ev.push({ c: C.its, name: 'ME grain written', at: e[1] });
+    const ok = onTime(j);
+    ev.push({ c: C.pt, name: ok ? `Presented on output · buffered ${(p - e[1]).toFixed(1)} ms` : `Missed presentation · arrived ${(e[1] - p).toFixed(1)} ms late`, at: p, bad: !ok });
+    $('ledger').innerHTML = ev.map(x => {
+      const done = x.at <= t;
+      return `<tr class="${done ? '' : 'pending'} ${x.bad && done ? 'bad' : ''}"><td><span class="dot" style="background:${x.c}"></span>${x.name}<span class="ns">${done ? nsAt(x.at) + ' ns' : 'not yet'}</span></td><td class="num">${fmtMs(x.at - ots)}</td></tr>`;
+    }).join('');
+  }
+
+  function readouts() {
+    const t = st.t, gi = Math.floor(t / G);
+    $('r-ns').textContent = nsAt(t);
+    $('r-tc').textContent = timecode(gi);
+    $('r-gi').textContent = absIdx(gi);
+    $('r-slot').textContent = mod(gi, N);
+    $('r-formula').textContent = `index = ⌊ ${nsAt(t)} / 20'000'000 ⌋ = ${absIdx(gi)}   ·   slot = index mod 8 = ${mod(gi, N)}   ·   PT(index) = ITS + ${st.D} × 20 ms`;
+    const jr = Math.max(gi, 50), need = Math.max(...[0, 1, 2, 3, 4, 5].map(d => meT(jr - d)[1] - (jr - d) * G));
+    const chips = [];
+    chips.push(st.off3 === 1 ? { k: '', t: 'Cam 3 aligned: arrival − 1 grain = OTS index' } : { k: 'bad', t: 'Cam 3 one frame late in the mix (offset 0)' });
+    chips.push(need <= st.D * G ? { k: '', t: `Output on time: slowest path ${need.toFixed(1)} ms ≤ PT offset ${st.D * G} ms` } : { k: 'bad', t: `Output misses PT: slowest path ${need.toFixed(1)} ms > offset ${st.D * G} ms` });
+    chips.push({ k: st.jitter ? 'warn' : '', t: st.jitter ? 'Cam 2 jitter absorbed: index comes from OTS' : 'Cam 2 jitter off' });
+    $('chips').innerHTML = chips.map(c => `<span class="chip ${c.k}"><i></i>${c.t}</span>`).join('');
+  }
+
+  // ---------- loop ----------
+  let lastUI = 0;
+  function draw(force) {
+    drawTimeline();
+    flows.forEach((f, i) => drawRing(ringUI[i], f));
+    const now = performance.now();
+    if (force || now - lastUI > 90) { ledger(); readouts(); lastUI = now; }
+  }
+  let prev = null;
+  function frame(ts) {
+    if (prev !== null && st.playing) {
+      st.t += Math.min(100, ts - prev) * st.speed;
+      if (st.pinned !== null && st.pinned < L.c0 - 1) { st.pinned = null; updateFollow(); }
+      draw();
+    }
+    prev = ts; requestAnimationFrame(frame);
+  }
+
+  // ---------- controls ----------
+  const playBtn = $('play');
+  function setPlay(p) { st.playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
+  function updateFollow() { $('follow').hidden = st.pinned === null; }
+  playBtn.onclick = () => setPlay(!st.playing);
+  const step = d => { setPlay(false); st.t = Math.max(0, Math.round((st.t + d) / 10) * 10); draw(true); };
+  $('back').onclick = () => step(-10);
+  $('fwd').onclick = () => step(10);
+  $('speed').onchange = e => { st.speed = +e.target.value; };
+  document.querySelectorAll('input[name=off3]').forEach(r => r.onchange = e => { st.off3 = +e.target.value; draw(true); });
+  $('delay').oninput = e => { st.D = +e.target.value; $('delay-v').textContent = `${st.D} grains · ${st.D * G} ms`; syncAlign(); draw(true); };
+  $('jitter').onchange = e => { st.jitter = e.target.checked; draw(true); };
+  function syncAlign() {
+    const sl = $('align'); sl.max = st.D * G;
+    if (st.align !== 'custom') sl.value = Math.round(alignMs());
+    const a = alignMs();
+    $('align-v').textContent = a >= st.D * G ? `PT (OTS + ${st.D * G} ms)` : `OTS + ${a.toFixed(0)} ms`;
+  }
+  document.querySelectorAll('input[name=align]').forEach(r => r.onchange = e => { st.align = e.target.value; syncAlign(); draw(true); });
+  $('align').oninput = e => { st.align = 'custom'; st.alignMs = +e.target.value; document.querySelectorAll('input[name=align]').forEach(r => r.checked = false); syncAlign(); draw(true); };
+  document.querySelectorAll('input[name=motion]').forEach(r => r.onchange = e => { st.motion = e.target.value; draw(true); });
+  $('follow').onclick = () => { st.pinned = null; updateFollow(); draw(true); };
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input,select,textarea')) return;
+    if (e.key === ' ') { e.preventDefault(); setPlay(!st.playing); }
+    else if (e.key === 'ArrowRight') step(10); else if (e.key === 'ArrowLeft') step(-10);
+  });
+  addEventListener('resize', () => draw(true));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw(true));
+
+  setPlay(st.playing);
+  syncAlign();
+  draw(true);
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
