@@ -3,11 +3,14 @@
 ## Why this exists
 
 An interactive, browser-based tool for testing and working with latency and
-synchronization in the EBU's Dynamic Media Facility (DMF). A DMF has linear,
-synchronous boundaries (Ingress and Egress) around an asynchronous domain,
-and inside that asynchronous domain behaviour follows the Media eXchange
-Layer (MXL; normative source: https://github.com/dmf-mxl/mxl). Users wire
-Media Function nodes between an Ingress and an Egress and watch, in real
+synchronization in the EBU's Dynamic Media Facility (DMF). 
+
+A DMF has linear, synchronous boundaries (Ingress and Egress) around an 
+asynchronous domain, and inside that asynchronous domain behaviour follows 
+the Media eXchange Layer (MXL; normative source: https://github.com/dmf-mxl/mxl). 
+
+### How It Works
+Users wire Media Function nodes between an Ingress and an Egress and watch, in real
 time, how media flows (grains) move through the workflow: a flow's grain
 index is preserved through processing while its published head lags, and
 that differential lag can cause a faster sibling flow's grain to be
@@ -22,7 +25,11 @@ follow MXL: where this repo and
 [dmf-mxl/mxl](https://github.com/dmf-mxl/mxl) disagree, dmf-mxl/mxl is
 correct.
 
-## Getting started (first time)
+### Basic Definitions
+![Unofficial Definitions](assets\images\Definition_Block_Diagram.png)
+*Figure 1: The unoffical DMF definitions*
+
+## Getting started after cloning this repo
 
 ```bash
 npm install
