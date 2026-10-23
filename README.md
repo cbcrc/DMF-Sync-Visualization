@@ -26,7 +26,7 @@ follow MXL: where this repo and
 correct.
 
 ### Basic Definitions
-![Unofficial Definitions](assets\images\Definition_Block_Diagram.png)
+![Unofficial Definitions](assets/images/Definition_Block_Diagram.png)
 *Figure 1: The unoffical DMF definitions*
 
 ## Getting started after cloning this repo
