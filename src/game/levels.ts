@@ -1,6 +1,6 @@
-// Level challenges (Initial_prompt.md §4 / Task 4). Each level sets the MXL
-// Domain buffer size and a short goal; pass/fail is evaluated live against
-// the current graph by `useGameLoop`.
+// Preset scenarios (SPEC.md §4 / Task 4). Each scenario sets the MXL
+// Domain buffer size and a short description; overrun alerts are evaluated
+// live against the current graph by `useGameLoop`.
 
 export interface Level {
   id: string;

@@ -1,5 +1,5 @@
 // Node visual sizing helper for the canvas.
-// See Initial_prompt.md §2.B: "Visual node size scales proportionally to its
+// See SPEC.md §2.B: "Visual node size scales proportionally to its
 // processing latency."
 
 /** Smallest a node can render, regardless of latency (e.g. 0ms Input/Output passthroughs). */

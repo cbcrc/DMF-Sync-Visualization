@@ -1,1 +1,3 @@
 When working in this repository, always read and apply the rules defined in AI_RULES.md before generating code or answering questions.
+
+This project is a latency and sync *visualization tool* (not a game) for testing and working with latencies in the EBU's Dynamic Media Facility (DMF). Behaviour in the DMF's asynchronous domain follows MXL (Media eXchange Layer), and the normative reference for it is https://github.com/dmf-mxl/mxl (dmf-mxl/mxl). Always respect it: if SPEC.md, AI_RULES.md, or the code disagree with dmf-mxl/mxl, dmf-mxl/mxl wins. Do not invent MXL behaviour; check the upstream repo, and record any deliberate simplification in AI_RULES.md.

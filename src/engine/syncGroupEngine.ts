@@ -1,5 +1,5 @@
 // Sync Group evaluation logic.
-// See Initial_prompt.md §2.D: signals in the same SyncGroup must be aligned to
+// See SPEC.md §2.D: signals in the same SyncGroup must be aligned to
 // the highest-latency member by padding the faster members with extra delay.
 
 import type { Signal, SyncGroup } from '../types';

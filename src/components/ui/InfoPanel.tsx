@@ -4,7 +4,7 @@ import './InfoPanel.css';
 /**
  * Collapsible explainer for the MXL timing model this simulator implements.
  * Kept deliberately short — one line per concept — so it's a quick reference,
- * not a document. Starts open so new players see it immediately.
+ * not a document. Starts open so new users see it immediately.
  */
 export function InfoPanel() {
   const [open, setOpen] = useState(true);

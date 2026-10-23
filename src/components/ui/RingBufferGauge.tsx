@@ -10,7 +10,7 @@ export interface RingBufferGaugeProps {
 }
 
 /**
- * Linear ring buffer track (Initial_prompt.md §3) for one reader input.
+ * Linear ring buffer track (SPEC.md §3) for one reader input.
  *
  * The track spans this flow's retained history: the writer's published head
  * sits fixed at the right edge, the back edge (oldest retained grain) at the

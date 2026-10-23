@@ -1,6 +1,6 @@
 // Stability monitor: tracks how long each node has continuously sat in the
 // Red (Overflow) zone, and raises the spec's fail condition.
-// See Initial_prompt.md §4.3: "Any node staying in the Red Zone (Overrun) for > 3 seconds."
+// See SPEC.md §4.3: "Any node staying in the Red Zone (Overrun) for > 3 seconds."
 
 import type { RingBufferStatus } from '../types';
 

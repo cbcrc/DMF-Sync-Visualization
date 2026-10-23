@@ -1,5 +1,5 @@
 // Derives per-input MXL ring buffer state directly from the live canvas graph
-// (nodes + edges). See Initial_prompt.md §2.A/§2.D/§3.
+// (nodes + edges). See SPEC.md §2.A/§2.D/§3.
 //
 // Timing model (matches the MXL reference semantics):
 //

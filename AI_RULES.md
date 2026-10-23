@@ -2,9 +2,30 @@
 
 _Read this first when resuming work._
 
+## Ground rules: respect dmf-mxl/mxl
+
+- This project is a **visualization tool** for testing and working with
+  latencies in the EBU's **Dynamic Media Facility (DMF)**, helping users
+  build and understand latency and sync scenarios and isolate where
+  buildups and overruns can happen. It is **not a game** — no scores,
+  win/lose states, or "players". Use "user", "scenario", and "alert" in docs
+  and UI text.
+- **Behaviour in the DMF's asynchronous domain follows MXL**, and the
+  normative reference is
+  https://github.com/dmf-mxl/mxl (dmf-mxl/mxl). All models and future
+  iterations (human or AI) must respect it. Consult it before changing any
+  timing, grain, ring-buffer, flow, or sync logic. If `SPEC.md`, this file,
+  or the code disagree with dmf-mxl/mxl, dmf-mxl/mxl wins. The linear, synchronous world outside the Ingress and Egress is not governed by MXL.
+- Never invent MXL behaviour. Any deliberate departure from MXL (for
+  teaching clarity) must be listed under "Known simplifications" below.
+- `SPEC.md` is the domain spec (how this tool models MXL); this file holds
+  current status, architecture, and deviations. Legacy names (`src/game/`,
+  `GameHud`, `useGameLoop`) remain from the original game framing and are
+  not renamed.
+
 ## Status
 
-README "Future development" item #10 ("Visualisation of grains and
+TO-DO.md "Future development" item #10 ("Visualisation of grains and
 alignment Improvements") is **complete** — all sub-deliverables (D0 research,
 D1 per-track grain rate + audio visualization, D2 alignment highlight, D3
 origin-timestamp viz, D4 reference-time invariance demo) are implemented and
@@ -38,7 +59,7 @@ regression the item #9 edge-travel fix had introduced; see "Grain-flow
 visualization" below.
 
 No open threads/in-progress edits — safe to start a new deliverable from
-scratch next session (see README's "Future development" for remaining
+scratch next session (see TO-DO.md's "Future development" for remaining
 numbered items, and this file's "Known simplifications" for follow-on ideas
 like a literal Continuous ring-buffer model).
 
@@ -51,7 +72,7 @@ grains — it only makes a flow's published head lag real time by the path's
 accumulated latency. Do not replace this with a model where nodes "re-time"
 grains, and do not reduce it to a continuous-milliseconds-only approximation.
 
-Consequence that drives the whole game: a purely serial chain never overruns
+Consequence that drives the whole tool: a purely serial chain never overruns
 (every node reads at its upstream's head). A **too-late** read only happens at
 a sync point (multi-input node), on the *fast* branch, whose requested grain
 aged out while it waited for a slower sibling branch to publish the same
@@ -84,7 +105,7 @@ src/
                              (grain-slot timeline w/ write/read head markers),
                              GameHud, InfoPanel (short explainer)
   game/                      graphLatency (tick runner + per-input buffer evaluation),
-                             stabilityMonitor, useGameLoop, levels (4 challenges),
+                             stabilityMonitor, useGameLoop, levels (4 scenarios),
                              grainFlow/useGrainFlow (grain animation + spawn/sync logic)
 ```
 
@@ -127,7 +148,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   `onParkedInputsChange`; `App` passes it to `RingBufferPanel`, which
   highlights the matching reader row (`.rb-panel__entry--parked` pulse) and,
   for audio inputs, pulses the `ContinuousBufferTrack` read marker
-  (`.cb-track__marker--parked`) too — so a player sees the canvas parking and
+  (`.cb-track__marker--parked`) too — so a user sees the canvas parking and
   the buffer's "waiting" telemetry light up together as one correlated event.
 - **Stream color:** each grain carries a `streamIndex` (its producer's output
   branch index) end to end, purely for color-coding distinct flows (video vs.
@@ -136,7 +157,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   and does not fan out (real data loss). A grain on a TOO_EARLY input holds
   and passes through as normal but renders pale/wobbling.
 - **Adjustable latency:** Media Functions expose a range slider
-  (`nodeDefaults.ts`'s `LATENCY_RANGE`, per kind) so players can retune a
+  (`nodeDefaults.ts`'s `LATENCY_RANGE`, per kind) so users can retune a
   node's "efficiency" live and watch downstream ring-buffer status react.
 - **Per-track grain rate (D1):** audio flows use their own, much finer grain
   rate than video (`mxlGrainIndex.ts`'s `AUDIO_GRAIN_RATE`, 1ms grains vs.
@@ -192,7 +213,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
     by: (D1) showing the small `RingBufferIndex` (`grainIndex mod
     ringBufferLength`, `mxlGrainIndex.ts`'s `grainIndexForDisplay`) by
     default, with a nested HUD toggle ("Use real MXL index") to switch to
-    the raw epoch index once a player understands the small one; (D2)
+    the raw epoch index once a user understands the small one; (D2)
     rounding the displayed age to 100ms steps so it changes in readable
     increments instead of every tick; (D3) tags now linger, fading out over
     ~220ms at their last known position after their grain leaves the live
@@ -292,7 +313,7 @@ Reassessed after item #9 landed, with two fixes in `GrainOverlay.tsx`:
   first appearance, not from whatever's left of the underlying grain's
   phase — before they're even eligible to start the `FLASH_FADE_MS` (300ms)
   fade. In Manual playback mode the simulated clock itself doesn't advance
-  at all, so these stay fully visible indefinitely until the player clicks
+  at all, so these stay fully visible indefinitely until the user clicks
   "Step" — a deliberate second way to "freeze to read."
 - **Shared-origin connector:** video and audio grains spawned by the same
   producer in the same tick carry the identical `originTs` (confirmed by
@@ -329,7 +350,7 @@ Reassessed after item #9 landed, with two fixes in `GrainOverlay.tsx`:
     plain text directly over an edge line/handle was unreadable regardless
     of color.
 
-## Level 4 — A/V Sync Overrun
+## Scenario 4 — A/V Sync Overrun
 
 A single **Ingress Function** writes flows V1 (video) and A1 (audio) sharing
 a timestamp origin. Video is processed twice (V1 → V1a → V1b, 82ms total),
@@ -338,7 +359,7 @@ reading the same *point in time* from both (video and audio keep their own
 per-track grain index for that instant — see "Per-track grain rate" above);
 by the time the slow video branch publishes that instant, the audio flow
 (only 2ms behind real time) has moved 80ms past it and recycled that slot.
-In the level's 100ms domain, both tracks retain the same ~60ms of usable
+In the scenario's 100ms domain, both tracks retain the same ~60ms of usable
 history (`WRITER_RESERVED_MS` pins the writer-reserved safety margin to a
 fixed *time* budget, re-derived into each track's own grain count, so the
 reserved margin stays worth the same real time for fine-grained audio as for
@@ -367,7 +388,7 @@ the Slow Video Function's latency slider down.
   slots, regardless of a flow's grain rate) is instead pinned to a fixed
   *time* budget (`WRITER_RESERVED_MS`, anchored to video's 2-grain/40ms
   margin) and re-derived into each track's own grain count. This keeps
-  existing levels' pass/fail balance consistent across video's coarse and
+  existing scenarios' pass/fail balance consistent across video's coarse and
   audio's fine grain rate, at the cost of diverging from MXL's literal
   fixed-slot-count reader behavior (which would make a fine-grained audio
   flow's real safety margin negligible in time).
@@ -381,7 +402,7 @@ the Slow Video Function's latency slider down.
 - Surgical changes. Touch only what the task requires; don't refactor
   unrelated code.
 - Keep docs in sync. When you add or change a feature, update this file and
-  `README.md` to match.
+  `README.md` and `TO-DO.md` to match.
 
 ## Project conventions
 
@@ -406,6 +427,6 @@ the Slow Video Function's latency slider down.
 - Grey (secondary text) `#757575`
 - Black (normal text) `#000000`
 
-`assets/theme.css` is a slide-deck theme from a different project with a
-different palette — do not import it as-is. Only reuse its font files or
-color references when needed.
+Fonts live in `public/fonts/` (loaded by `src/index.css`). A slide-deck theme
+from another project (`assets/theme.css`) was removed from this repo; do not
+reintroduce it.

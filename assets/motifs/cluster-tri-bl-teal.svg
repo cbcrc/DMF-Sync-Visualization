@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 220" width="240" height="220">
-  <!-- Bottom-left: pale-teal solid triangle + pale-teal outline triangle,
-       both pointing right. Corner at (0,220). -->
-  <polygon points="6,44 6,158 110,101" fill="#B7DADE"/>
-  <polygon points="70,72 70,206 196,139" fill="none" stroke="#B7DADE" stroke-width="6"/>
-</svg>

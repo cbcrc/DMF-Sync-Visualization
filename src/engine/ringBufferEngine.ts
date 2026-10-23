@@ -1,5 +1,5 @@
 // Core Ring Buffer evaluation logic.
-// See Initial_prompt.md §2.A and §3 for the MXL too-early/too-late rules.
+// See SPEC.md §2.A and §3 for the MXL too-early/too-late rules.
 
 import type { RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs } from './mxlGrainIndex';

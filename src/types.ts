@@ -1,5 +1,5 @@
 // Core domain types for the MXL Ring Buffer Simulator.
-// See Initial_prompt.md §2 for the domain concepts these model.
+// See SPEC.md §2 for the domain concepts these model.
 
 /** Kinds of Media Function nodes a player can place on the canvas. */
 export type MediaFunctionKind =
@@ -127,7 +127,7 @@ export interface RingBufferEvaluation {
 
 /**
  * A set of signals (e.g. program video + audio) that must arrive aligned at a
- * common downstream node. See Initial_prompt.md §2.D.
+ * common downstream node. See SPEC.md §2.D.
  */
 export interface SyncGroup {
   id: string;

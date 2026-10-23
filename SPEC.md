@@ -1,10 +1,23 @@
-# Specification: MXL Ring Buffer Simulator & Educational Game
+# Specification: DMF Latency & Sync Visualizer
+
+> **Authority:** this tool is for testing and working with latencies in the
+> EBU's Dynamic Media Facility (DMF). Behaviour in the DMF's asynchronous
+> domain follows MXL, and the [dmf-mxl/mxl](https://github.com/dmf-mxl/mxl)
+> repository (https://github.com/dmf-mxl/mxl.git) is the normative reference
+> for it (grain model, ring buffers, timing, flow semantics). This document
+> describes how this tool models a DMF; it never overrides MXL. When this
+> document, `AI_RULES.md`, or the code disagree with dmf-mxl/mxl, dmf-mxl/mxl
+> wins — and any deliberate departure must be recorded as a known
+> simplification in `AI_RULES.md`.
 
 ## 1. Project Overview & Context
-Build a browser-based interactive educational visual simulation game that teaches engineers how ring buffers and signal flow latency work inside a **Media eXchange Layer (MXL)** Dynamic Media Facility (as defined by EBU: https://github.com/dmf-mxl/mxl.git). When a conflict happens always use https://github.com/dmf-mxl/mxl.git as the main reference.
+A browser-based interactive visualization tool for testing and working with latency and synchronization in the EBU's **Dynamic Media Facility (DMF)**. A DMF has linear, synchronous boundaries (Ingress and Egress); inside them, the asynchronous domain follows the **Media eXchange Layer (MXL)** (https://github.com/dmf-mxl/mxl.git). The tool shows how media flows (grains) move through Media Functions and ring buffers, so a user can see where latency builds up and where overruns (reads that arrive too late) can occur. It is an analysis and teaching aid, not a game: there are no scores, levels to beat, or win/lose states.
 
 ### Core Objective
-The player configures and builds a dynamic media pipeline by connecting Media Functions between Inputs and Outputs. The goal is to route signals from Input to Output with the lowest possible latency while keeping all processing nodes strictly within the MXL Domain Ring Buffer boundaries (avoiding Underflow and Overflow).
+The user composes a media workflow by connecting Media Functions between an Ingress and an Egress, tunes each function's processing latency and the MXL Domain size, and watches the resulting flow. The tool lets the user:
+* See how media flows through the workflow and how latency accumulates along each path.
+* Isolate where latency builds up, and where a ring buffer overrun (too-late read) or wait (too-early read) arises, and why.
+* Experiment with mitigations (shorter paths, a larger Domain, Grain Repeaters) and see their effect immediately.
 
 ---
 
@@ -46,7 +59,7 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
 4. **Recording Media Functions:**
    * *Role:* Pure consumers/readers. Records signals to disk.
 5. **Grain Repeaters (Artificial Buffer Nodes):**
-   * *Role:* Special utility node inserted by player when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Low latency penalty, resets the boundary limit.
+   * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Low latency penalty, resets the boundary limit.
    * *Implementation note:* a repeater cannot un-delay a signal, so it adds its
      latency like any other node. What it "resets" is **capacity**: its sub-ring
      buffer adds another domain window of retained history to that branch.
@@ -80,17 +93,20 @@ For every active consumer node/reader, render an interactive **Circular Gauge** 
 
 ---
 
-## 4. Game Objectives & Scoring
+## 4. Analysis Goals & Alerts
 
-1. **Primary Goal:** Successfully deliver all required signals to Outputs while satisfying all Sync Group alignment rules.
-2. **Secondary Goal:** Minimize Total Workload Latency.
-3. **Fail Condition:** Any node staying in the Red Zone (Overrun) for > 3 seconds.
+1. **Primary Goal:** Let the user understand how media flows through a workflow and pinpoint where latency accumulates and where overruns can happen.
+2. **Secondary Goal:** Show Total Workload Latency and Stability Margin so alternative workflow designs can be compared.
+3. **Sustained-overrun alert:** Any node staying in the Red Zone (Overrun) for > 3 seconds of simulated time raises a prominent alert (with a Reset action). This is a diagnostic cue, not a game-over.
 
 ---
 
-## 5. Technical Implementation Steps for Copilot
+## 5. Implementation History (completed — not a build plan)
 
-Execute the implementation in the following sequential order:
+This section records how the tool was first built. All tasks are done; do not
+re-execute them. Current status lives in `AI_RULES.md`, open work in `TO-DO.md`.
+The `src/game/` directory name and `Game*` identifiers are legacy naming from
+the original game framing.
 
 ### Task 1: Core Domain Engine (`src/engine/`)
 - [x] Define TypeScript types: `Signal`, `MediaFunction`, `RingBuffer`, `SyncGroup`, `MXLDomain`.
@@ -109,11 +125,11 @@ Execute the implementation in the following sequential order:
 - [x] Color-code status: Yellow for too early (future grain), Red for too late
   / overflow (grain outside retained history).
 
-### Task 4: Game Loop & Scoring System (`src/game/`)
+### Task 4: Simulation Loop & Latency Analysis (`src/game/`)
 - [x] Implement global tick runner to pass grains along the node graph.
 - [x] Implement global latency calculator and stability/overflow monitors.
-- [x] Add level challenges (e.g., "Align 4K Video and 8-channel Audio without overrunning a 50ms MXL Buffer").
-- [x] Add a selectable A/V Sync Overrun challenge modelling an ingress→egress
+- [x] Add preset scenarios (e.g., "Align 4K Video and 8-channel Audio without overrunning a 50ms MXL Buffer").
+- [x] Add a selectable A/V Sync Overrun scenario modelling an ingress→egress
   workload: one Ingress writes flows V1 and A1; video is processed twice and
   audio once; the Egress must re-pair them at a common grain index, so the
   *audio* input reads too late while it waits for video. Guidance to grow the

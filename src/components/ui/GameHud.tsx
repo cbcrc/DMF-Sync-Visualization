@@ -172,8 +172,8 @@ export function GameHud({
       {stability.failed && (
         <div className="game-hud__fail">
           <div>
-            READ TOO LATE! Node stayed in Red for &gt; {FAIL_RED_DURATION_MS / 1000}s. Insert a Grain Repeater or
-            reduce latency.
+            ALERT: read too late. A node stayed in Red for &gt; {FAIL_RED_DURATION_MS / 1000}s. Shorten the slow
+            path, grow the MXL Domain, or insert a Grain Repeater.
           </div>
           <button type="button" onClick={onReset}>
             Reset
