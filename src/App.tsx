@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
 import type { MediaFunctionNodeData } from './components/canvas/MediaFunctionNode';
@@ -29,6 +29,14 @@ function App() {
   // Item #9: single shared simulated clock driving grain-flow animation, ring
   // buffer evaluation, and the stability fail-timer in lockstep.
   const clock = useSimClock();
+  // Item #9 follow-up: FlowCanvas owns the grain-flow state Manual mode's
+  // "Step ▶" needs to inspect (what's about to be read next), so it hands
+  // this component the actual stepping function rather than App computing a
+  // fixed clock increment blind to what's currently in flight.
+  const manualStepRef = useRef<() => void>(() => {});
+  const registerManualStep = useCallback((fn: () => void) => {
+    manualStepRef.current = fn;
+  }, []);
 
   const onGraphChange = useCallback((nodes: Node<MediaFunctionNodeData>[], edges: Edge[]) => {
     setGraphNodes(nodes);
@@ -73,7 +81,6 @@ function App() {
   const handleRestartWave = useCallback(() => {
     setWaveResetKey((k) => k + 1);
   }, []);
-
   const handleSelectLevel = useCallback(
     (id: string) => {
       setLevelId(id);
@@ -104,6 +111,8 @@ function App() {
         domainSizeMs={domainSizeMs}
         getNow={clock.getNow}
         onParkedInputsChange={setParkedInputKeys}
+        stepClockBy={clock.step}
+        onManualStepReady={registerManualStep}
       />
       <RingBufferPanel nodes={graphNodes} graph={graph} parkedInputKeys={parkedInputKeys} />
       <GameHud
@@ -124,7 +133,7 @@ function App() {
         onToggleRealGrainIndex={setShowRealGrainIndex}
         playbackMode={clock.mode}
         onSetPlaybackMode={clock.setMode}
-        onStep={() => clock.step()}
+        onStep={() => manualStepRef.current()}
       />
       <InfoPanel />
     </div>

@@ -14,6 +14,7 @@ import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import { nodeSizeForLatency } from '../components/canvas/nodeSizing';
 import type { RingBufferStatus } from '../types';
+import { DEFAULT_GRAIN_RATE, grainDurationMs } from '../engine/mxlGrainIndex';
 
 export type GrainPhase = 'traveling' | 'holding' | 'dropped';
 
@@ -101,6 +102,24 @@ const HOLD_MS_PER_LATENCY_MS = 15;
 const HOLD_MAX_MS = 1800;
 /** Pause (ms) after the pipeline drains before the next grain set is injected. */
 const RESPAWN_GAP_MS = 350;
+/**
+ * Spacing (simulated ms) of the ticks drawn on the linear Ingress/Egress
+ * lanes, and the instants an Ingress write can begin. Deliberately a multiple
+ * of the 20ms video frame: real 20ms ticks are too close to a screen's refresh
+ * interval to be followed by eye (they alias and appear to run backwards), so
+ * each drawn tick stands for one frame in a human-readable cadence.
+ */
+export const LINEAR_TICK_MS = grainDurationMs(DEFAULT_GRAIN_RATE) * 24;
+
+/** Latest linear tick boundary at or before `t`. */
+export function tickBoundaryAtOrBefore(t: number): number {
+  return Math.floor((t + 1e-6) / LINEAR_TICK_MS) * LINEAR_TICK_MS;
+}
+
+/** First instant at or after the respawn gap that coincides with a linear tick arriving. */
+export function nextSpawnAt(drainedAt: number): number {
+  return Math.ceil((drainedAt + RESPAWN_GAP_MS - 1e-6) / LINEAR_TICK_MS) * LINEAR_TICK_MS;
+}
 /** How long (ms) a dropped grain's "shatter" burst plays before it's removed. */
 const DROPPED_MS = 450;
 /** Safety cap in case of graph cycles / runaway fan-out. */
@@ -426,7 +445,7 @@ export function stepGrains(
     lastSpawnByNode.set(DRAIN_KEY, now); // just drained; start the gap timer
   }
 
-  const readyToSpawn = !pipelineBusy && drainedAt !== undefined && now - drainedAt >= RESPAWN_GAP_MS;
+  const readyToSpawn = !pipelineBusy && drainedAt !== undefined && now + 1e-6 >= nextSpawnAt(drainedAt);
 
   if (readyToSpawn) {
     lastSpawnByNode.delete(DRAIN_KEY);
@@ -436,7 +455,10 @@ export function stepGrains(
     // forward unchanged. Uses the same simulated clock as `now` (see
     // `useSimClock`) so origin-timestamp age display (item #11) and travel/
     // hold timing stay in lockstep under Stepping/Manual playback modes.
-    const wallNow = now;
+    // The wave is triggered by the linear feed: the Ingress can only write
+    // once a tick has arrived with data, so the grains carry that tick's
+    // capture time (the latest video-frame boundary), not an arbitrary `now`.
+    const wallNow = tickBoundaryAtOrBefore(now);
     for (const n of nodes) {
       if (n.data.inputCount > 0) continue; // only producers (Input/Synthetic) spawn new grains
       const outs = outgoingByNode.get(n.id);
@@ -464,6 +486,41 @@ export function stepGrains(
   }
 
   return released.length > MAX_GRAINS ? released.slice(released.length - MAX_GRAINS) : released;
+}
+
+/** Edge travel duration (ms), exported for callers that need to schedule
+ *  exactly past a hop (see `nextReadEventAt`'s doc comment below). */
+export function edgeTravelDurationMs(): number {
+  return EDGE_TRAVEL_MS;
+}
+
+/**
+ * Item #9 follow-up: the simulated-clock time of the next "read" event — the
+ * moment some downstream Media Function next receives a grain into its
+ * input ring buffer. Considers two sources, both resolving through one
+ * remaining `EDGE_TRAVEL_MS` hop:
+ *  - a currently-holding (actively aging, not parked-waiting-on-a-sibling)
+ *    grain finishing its hold and fanning out across the edge, or
+ *  - a grain already mid-hop (`'traveling'`) — relevant because Manual
+ *    mode's frozen clock can leave one sitting mid-travel between clicks
+ *    (its own single remaining `EDGE_TRAVEL_MS` hop hasn't happened yet).
+ * Returns `null` if nothing is currently counting down (e.g. the pipeline is
+ * fully parked waiting on a stalled sibling, or fully drained between waves).
+ */
+export function nextReadEventAt(grains: Grain[]): number | null {
+  let min: number | null = null;
+  for (const g of grains) {
+    let endTime: number;
+    if (g.phase === 'holding' && !g.parked && Number.isFinite(g.durationMs)) {
+      endTime = g.startTime + g.durationMs + EDGE_TRAVEL_MS;
+    } else if (g.phase === 'traveling') {
+      endTime = g.startTime + g.durationMs; // already in flight — this *is* its arrival time
+    } else {
+      continue;
+    }
+    if (min === null || endTime < min) min = endTime;
+  }
+  return min;
 }
 
 function easeOutQuad(t: number): number {

@@ -139,10 +139,17 @@ export function GrainOverlay({
   // so they survive the departing grain object (which now only exists for a
   // single tick — see the `FLASH_VISIBLE_MS` doc comment above).
   const writeFlashesRef = useRef<Map<string, WriteFlashEntry>>(new Map());
+  const latestSharedOriginRef = useRef<{
+    originTs: number;
+    videoIdx: number | string;
+    audioIdx: number | string;
+    appearedAt: number;
+  } | null>(null);
   useEffect(() => {
     if (!showOriginTimestamps) {
       retainedTagsRef.current.clear();
       writeFlashesRef.current.clear();
+      latestSharedOriginRef.current = null;
     }
   }, [showOriginTimestamps]);
 
@@ -324,7 +331,10 @@ export function GrainOverlay({
   // same instant share one `originTs` even though their derived indices
   // diverge in magnitude (see `mxlGrainIndex.ts`) — draw a brief connector
   // between their write-flash points so that shared origin is visible, not
-  // just implied.
+  // The "shared origin" readout is a fixed HUD-style chip at the top of the
+  // canvas (not drawn at the connector midpoint, where it collided with the
+  // "writing #" labels). It keeps showing the latest shared-origin pair and
+  // pulses whenever a new one is written.
   let siblingRows: JSX.Element[] | null = null;
   if (showOriginTimestamps) {
     const groups = new Map<string, WriteFlashEntry[]>();
@@ -343,31 +353,45 @@ export function GrainOverlay({
       const dy = b.y - a.y;
       const length = Math.hypot(dx, dy);
       const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-      const midX = (a.x + b.x) / 2;
-      const midY = (a.y + b.y) / 2;
       siblingRows.push(
-        <Fragment key={`sibling-${groupKey}`}>
-          <div
-            className={`grain-sibling-link${fading ? ' grain-sibling-link--fading' : ''}`}
-            style={{ left: a.x, top: a.y, width: length, transform: `rotate(${angle}deg)` }}
-          />
-          <div
-            className={`grain-sibling-label${fading ? ' grain-sibling-label--fading' : ''}`}
-            style={{ left: midX, top: midY }}
-          >
-            shared origin · V#{a.idx} · A#{b.idx}
-          </div>
-        </Fragment>,
+        <div
+          key={`sibling-${groupKey}`}
+          className={`grain-sibling-link${fading ? ' grain-sibling-link--fading' : ''}`}
+          style={{ left: a.x, top: a.y, width: length, transform: `rotate(${angle}deg)` }}
+        />,
       );
+      const latest = latestSharedOriginRef.current;
+      if (!latest || a.originTs > latest.originTs) {
+        latestSharedOriginRef.current = { originTs: a.originTs, videoIdx: a.idx, audioIdx: b.idx, appearedAt: now };
+      }
     }
   }
 
-  return (
-    <div className="grain-overlay" style={{ transform: `translate(${x}px, ${y}px) scale(${zoom})` }}>
-      {rows}
-      {writeFlashRows}
-      {siblingRows}
-      {tagRows}
+  const sharedOrigin = showOriginTimestamps ? latestSharedOriginRef.current : null;
+  const sharedOriginChip = sharedOrigin ? (
+    <div
+      key={`shared-origin-${sharedOrigin.originTs}`}
+      className={`shared-origin-chip${
+        now - sharedOrigin.appearedAt < FLASH_VISIBLE_MS ? ' shared-origin-chip--pulse' : ''
+      }`}
+    >
+      <div>⏱ shared origin · V#{sharedOrigin.videoIdx} · A#{sharedOrigin.audioIdx}</div>
+      <div className="shared-origin-chip__note">
+        Same instant, different grain sizes — video (~20ms) and audio (~1ms) count it in their own grains, so the
+        numbers differ.
+      </div>
     </div>
+  ) : null;
+
+  return (
+    <>
+      <div className="grain-overlay" style={{ transform: `translate(${x}px, ${y}px) scale(${zoom})` }}>
+        {rows}
+        {writeFlashRows}
+        {siblingRows}
+        {tagRows}
+      </div>
+      {sharedOriginChip}
+    </>
   );
 }

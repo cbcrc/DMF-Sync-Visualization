@@ -1,5 +1,5 @@
 import type { RingBuffer, RingBufferEvaluation } from '../../types';
-import { WRITER_RESERVED_MS } from '../../engine/ringBufferEngine';
+import { READ_BEHIND_WRITE_GRAINS, WRITER_RESERVED_MS } from '../../engine/ringBufferEngine';
 import './ContinuousBufferTrack.css';
 
 export interface ContinuousBufferTrackProps {
@@ -65,7 +65,11 @@ export function ContinuousBufferTrack({
   const overshotLate = evaluation.occupancyRatio > 1; // past the retention boundary
   const overshotEarly = evaluation.occupancyRatio < 0; // requesting a not-yet-published instant
   // Read marker position along the strip: 0% = oldest/left, 100% = head/right.
-  const readMarkerPercent = 100 - clampedOccupancyPercent;
+  // The reader sits one grain behind the write head (MXL can't read the grain
+  // being written), so offset the marker by one grain's worth of time.
+  const readOffsetMs = evaluation.stalenessMs + READ_BEHIND_WRITE_GRAINS * buffer.grainDurationMs;
+  const readMarkerPercent =
+    buffer.retainedMs > 0 ? Math.min(100, Math.max(0, 100 * (1 - readOffsetMs / buffer.retainedMs))) : 0;
 
   const reservedWidthPercent = buffer.sizeMs > 0 ? Math.min(40, (100 * WRITER_RESERVED_MS) / buffer.sizeMs) : 0;
 

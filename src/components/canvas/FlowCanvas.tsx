@@ -19,6 +19,7 @@ import 'reactflow/dist/style.css';
 import type { MediaFunctionKind, RingBufferStatus } from '../../types';
 import { MediaFunctionNode, type MediaFunctionNodeData } from './MediaFunctionNode';
 import { GrainOverlay } from './GrainOverlay';
+import { LinearBoundaryOverlay } from './LinearBoundaryOverlay';
 import { RingBufferBadgeOverlay } from './RingBufferBadgeOverlay';
 import { LATENCY_RANGE, NODE_KIND_DEFAULTS, PALETTE_KINDS } from './nodeDefaults';
 import { useGrainFlow } from '../../game/useGrainFlow';
@@ -54,19 +55,19 @@ const initialNodes: Node<MediaFunctionNodeData>[] = [
     id: 'video-fast',
     type: 'mediaFunction',
     position: { x: 320, y: 90 },
-    data: { kind: 'technical', label: 'Fast Video MF', latencyMs: 10, inputCount: 1, outputCount: 1 },
+    data: { kind: 'technical', label: 'Fast Video Function', latencyMs: 10, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'video-slow',
     type: 'mediaFunction',
     position: { x: 590, y: 80 },
-    data: { kind: 'editorial', label: 'Slow Video MF', latencyMs: 20, inputCount: 1, outputCount: 1 },
+    data: { kind: 'editorial', label: 'Slow Video Function', latencyMs: 20, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'audio-fast',
     type: 'mediaFunction',
     position: { x: 340, y: 430 },
-    data: { kind: 'technical', label: 'Ultra-Fast Audio MF', latencyMs: 2, inputCount: 1, outputCount: 1 },
+    data: { kind: 'technical', label: 'Ultra-Fast Audio Function', latencyMs: 2, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'egress',
@@ -113,19 +114,19 @@ const avSyncNodes: Node<MediaFunctionNodeData>[] = [
     id: 'av-vfast',
     type: 'mediaFunction',
     position: { x: 300, y: 70 },
-    data: { kind: 'technical', label: 'Fast Video MF', latencyMs: 10, inputCount: 1, outputCount: 1 },
+    data: { kind: 'technical', label: 'Fast Video Function', latencyMs: 10, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'av-vslow',
     type: 'mediaFunction',
     position: { x: 570, y: 50 },
-    data: { kind: 'editorial', label: 'Slow Video MF', latencyMs: 72, inputCount: 1, outputCount: 1 },
+    data: { kind: 'editorial', label: 'Slow Video Function', latencyMs: 72, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'av-afast',
     type: 'mediaFunction',
     position: { x: 320, y: 480 },
-    data: { kind: 'technical', label: 'Ultra-Fast Audio MF', latencyMs: 2, inputCount: 1, outputCount: 1 },
+    data: { kind: 'technical', label: 'Ultra-Fast Audio Function', latencyMs: 2, inputCount: 1, outputCount: 1 },
   },
   {
     id: 'av-egress',
@@ -191,6 +192,17 @@ export interface FlowCanvasProps {
    * reader row — the same "waiting" event shown as two correlated views.
    */
   onParkedInputsChange?: (keys: Set<string>) => void;
+  /** Advances the shared simulated clock by a delta (item #9's `SimClock.step`) —
+   *  forwarded into `useGrainFlow` so Manual mode's "Step ▶" can move the clock in
+   *  lockstep with exactly the grain event it resolves (item #9 follow-up). */
+  stepClockBy?: (incrementMs: number) => void;
+  /**
+   * Hands the parent a function that advances the simulation to the next
+   * "read" event (item #9 follow-up) — called once whenever that function's
+   * identity changes (it's stable across renders), since this component owns
+   * the grain-flow state the HUD's Step button needs to act on.
+   */
+  onManualStepReady?: (stepToNextRead: () => void) => void;
 }
 
 function FlowCanvasInner({
@@ -205,6 +217,8 @@ function FlowCanvasInner({
   domainSizeMs,
   getNow,
   onParkedInputsChange,
+  stepClockBy,
+  onManualStepReady,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -286,7 +300,18 @@ function FlowCanvasInner({
     onGraphChange(nodes, edges);
   }, [nodes, edges, onGraphChange]);
 
-  const { grains, edgeActivity } = useGrainFlow(nodes, edges, statusByInputKey, waveResetKey, getNow);
+  const { grains, edgeActivity, stepToNextRead } = useGrainFlow(
+    nodes,
+    edges,
+    statusByInputKey,
+    waveResetKey,
+    getNow,
+    stepClockBy,
+  );
+
+  useEffect(() => {
+    onManualStepReady?.(stepToNextRead);
+  }, [stepToNextRead, onManualStepReady]);
 
   // Same keying (`${nodeId}:${inputIndex}`) as `statusByInputKey` — lets App correlate a
   // grain parked on canvas with its matching reader row in the Ring Buffer Telemetry panel.
@@ -393,6 +418,7 @@ function FlowCanvasInner({
       onConnect={onConnect}
       nodeTypes={nodeTypes}
       fitView
+      fitViewOptions={{ padding: 0.3 }}
       proOptions={{ hideAttribution: true }}
     >
       <Background color="#333" gap={24} />
@@ -404,6 +430,16 @@ function FlowCanvasInner({
         showOriginTimestamps={showOriginTimestamps}
         showRealGrainIndex={showRealGrainIndex}
         domainSizeMs={domainSizeMs}
+        getNow={getNow}
+      />
+      <LinearBoundaryOverlay
+        nodes={nodes}
+        edges={edges}
+        inputsByNodeId={inputsByNodeId}
+        edgeActivity={edgeActivity}
+        grains={grains}
+        domainSizeMs={domainSizeMs}
+        showRealGrainIndex={showRealGrainIndex}
         getNow={getNow}
       />
       <RingBufferBadgeOverlay nodes={nodes} inputsByNodeId={inputsByNodeId} />

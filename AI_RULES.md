@@ -299,9 +299,12 @@ Reassessed after item #9 landed, with two fixes in `GrainOverlay.tsx`:
   walking `grainFlow.ts`'s wave-injection loop — see the item #9 D0
   investigation). `writeFlashes` entries are grouped by `${fromId}|${originTs}`;
   a group with 2+ members (distinct `streamIndex`) renders a short connector
-  line between their write-flash points plus a `shared origin · V#<idx> ·
-  A#<idx>` label (`.grain-sibling-link`/`.grain-sibling-label` in
-  `GrainOverlay.css`) — makes the "one clock, two units" relationship visible
+  line between their write-flash points (`.grain-sibling-link`), and the
+  latest pair is shown in a fixed chip at the top of the canvas
+  (`.shared-origin-chip` in `GrainOverlay.css`) — `shared origin · V#<idx> ·
+  A#<idx>` plus a one-line note that video (~20ms) and audio (~1ms) grains
+  differ in size, so the same instant has different indices. The chip replaced
+  a midpoint label that overlapped the "writing #" flashes. Makes the "one clock, two units" relationship visible
   rather than only inferable from two separately-ticking tags.
 - **Readability pass (user feedback round):** three follow-on fixes, all in
   `GrainOverlay.tsx`/`.css`:
@@ -341,8 +344,8 @@ fixed *time* budget, re-derived into each track's own grain count, so the
 reserved margin stays worth the same real time for fine-grained audio as for
 video — see Known Simplifications), so the audio input goes TOO_LATE while
 video stays OK. Verified fixes: grow the domain to 110ms, delete the Slow
-Video MF and reconnect, insert a Grain Repeater in the audio branch, or drag
-the Slow Video MF's latency slider down.
+Video Function and reconnect, insert a Grain Repeater in the audio branch, or drag
+the Slow Video Function's latency slider down.
 
 ## Known simplifications
 

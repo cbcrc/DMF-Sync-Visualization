@@ -13,6 +13,12 @@ import { DEFAULT_GRAIN_RATE, grainDurationMs } from './mxlGrainIndex';
 export const WRITER_RESERVED_SLOTS = 2;
 
 /**
+ * A reader can never read the grain currently being written: the newest
+ * readable grain is one behind the write head (`publishedGrainIndex`).
+ */
+export const READ_BEHIND_WRITE_GRAINS = 1;
+
+/**
  * The writer-reserved margin above, expressed as *time* rather than a grain
  * count. MXL's real reader always reserves exactly `WRITER_RESERVED_SLOTS`
  * slots regardless of a flow's own grain rate — for a fine-grained audio
@@ -70,7 +76,8 @@ export function retainedGrainsFor(
  * - OK: the requested index is still inside the retained window.
  */
 export function evaluateRingBuffer(buffer: RingBuffer): RingBufferEvaluation {
-  const deltaGrains = buffer.publishedGrainIndex - buffer.requestedGrainIndex;
+  // Lag measured from the newest *readable* grain (one behind the write head).
+  const deltaGrains = buffer.publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - buffer.requestedGrainIndex;
 
   let status: RingBufferStatus;
   if (deltaGrains < 0) {

@@ -1,0 +1,153 @@
+.lb-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.lb-panel {
+  position: absolute;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9px;
+  color: #9aa0a6;
+}
+
+.lb-panel__title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #d0d4d9;
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+}
+
+.lb-panel__caption {
+  margin-top: 4px;
+}
+
+.lb-panel__readout {
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.lb-lane {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  --lb-color: #4fc3f7;
+}
+
+.lb-lane--audio {
+  --lb-color: #ffb74d;
+}
+
+/* The boundary where the linear wire meets the MXL node. */
+.lb-lane__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.lb-lane--in .lb-lane__edge {
+  right: 0;
+}
+
+.lb-lane--out .lb-lane__edge {
+  left: 0;
+}
+
+.lb-tick {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--lb-color);
+  border-radius: 1px;
+}
+
+.lb-tick--boundary {
+  background: #fff;
+  opacity: 0.85;
+}
+
+.lb-tick--leading {
+  box-shadow: 0 0 6px 1px var(--lb-color);
+}
+
+.lb-tick__label {
+  position: absolute;
+  top: -1px;
+  left: 4px;
+  font-size: 9px;
+  line-height: 1;
+  color: #e8eaed;
+  white-space: nowrap;
+}
+
+.lb-lane--in .lb-tick__label {
+  left: auto;
+  right: 4px;
+}
+
+/* Audio's fine 1ms grains, drawn as one continuous band (see TRACK_LABEL). */
+.lb-lane__band {
+  position: absolute;
+  inset: 5px 0;
+  background: linear-gradient(180deg, rgba(255, 183, 77, 0.55), rgba(255, 183, 77, 0.25));
+  border-radius: 2px;
+}
+
+/* The tick that just reached the node and triggered an MXL write. */
+.lb-lane__trigger {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 36px;
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.85), transparent);
+}
+
+/* Reader couldn't get this track's grain (TOO_LATE): the wire carries a dropout. */
+.lb-lane--lost {
+  --lb-color: #ef5350;
+  border-color: #ef5350;
+  background: repeating-linear-gradient(135deg, rgba(239, 83, 80, 0.18) 0 4px, transparent 4px 8px);
+}
+
+.lb-lane--early {
+  --lb-color: #ffd54f;
+  border-style: dashed;
+}
+
+/* This input's grain has arrived but the Egress is holding off reading until its sibling shows up. */
+.lb-lane__wait {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  font-size: 9px;
+  color: #fff;
+  white-space: nowrap;
+  background: repeating-linear-gradient(135deg, rgba(255, 213, 79, 0.35) 0 5px, rgba(0, 0, 0, 0.45) 5px 10px);
+  animation: lb-wait-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes lb-wait-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}

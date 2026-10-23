@@ -31,7 +31,7 @@ import type {
   RingBuffer,
   RingBufferEvaluation,
 } from '../types';
-import { evaluateRingBuffer, retainedGrainsFor, statusSeverity } from '../engine/ringBufferEngine';
+import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, statusSeverity } from '../engine/ringBufferEngine';
 import {
   DEFAULT_GRAIN_RATE,
   grainDurationMs,
@@ -292,7 +292,9 @@ export function computeGraphLatency(
 
       const deltaGrains = Math.round(stalenessMs / trackDurationMs);
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
-      const requestedGrainIndex = publishedGrainIndex - deltaGrains;
+      // MXL readers can't read the grain being written, so a zero-lag read
+      // lands one grain behind the write head.
+      const requestedGrainIndex = publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - deltaGrains;
       const retainedGrains = retainedGrainsFor(trackGrainCount, branch.repeaterCount, trackDurationMs);
 
       const buffer: RingBuffer = {

@@ -41,7 +41,7 @@ export const LEVELS: Level[] = [
       'One Ingress Function writes flows V1 (video) and A1 (audio) from the same paced stream. Video is processed twice (V1→V1a→V1b, 82ms), audio once (A1→A1a, 2ms). Grain indices are preserved per-track, so the Egress Function must read the SAME point in time from both — it waits on the slow video branch, by which time the audio grain it needs sits 80ms behind the audio head and its slot has been recycled.',
     domainSizeMs: 100,
     guidance:
-      'The audio flow only retains 3 grains (60ms) of history but is asked for a grain 4 grains old. Three fixes: (1) grow the MXL Domain to 110ms so the audio flow retains 4 grains, (2) delete the Slow Video MF and reconnect V1a straight to the Egress to shrink the differential, or (3) drop a Grain Repeater into the audio branch so A1a is re-buffered into a second sub-ring buffer.',
+      'The audio flow only retains 3 grains (60ms) of history but is asked for a grain 4 grains old. Three fixes: (1) grow the MXL Domain to 110ms so the audio flow retains 4 grains, (2) delete the Slow Video Function and reconnect V1a straight to the Egress to shrink the differential, or (3) drop a Grain Repeater into the audio branch so A1a is re-buffered into a second sub-ring buffer.',
   },
 ];
 
