@@ -43,6 +43,22 @@ export const LEVELS: Level[] = [
     guidance:
       'The audio flow only retains 3 grains (60ms) of history but is asked for a grain 4 grains old. Three fixes: (1) grow the MXL Domain to 110ms so the audio flow retains 4 grains, (2) delete the Slow Video Function and reconnect V1a straight to the Egress to shrink the differential, or (3) drop a Grain Repeater into the audio branch so A1a is re-buffered into a second sub-ring buffer.',
   },
+  {
+    id: 'many-readers',
+    title: '5. Many Readers, One Writer',
+    description:
+      'One Ingress Function writes a single video flow (V1) that five functions read. Each reader asks for a grain at its own point in time: the recorder reads near the head, while each mixer has to wait for a slower branch and so reads V1 further back.',
+    domainSizeMs: 120,
+    guidance:
+      'Look at the single V1 ring in the telemetry panel: the numbered markers show where each reader is on it, relative to the head and now. Raise the Slow Function latency and watch Mix B\'s marker slide toward the oldest retained slot until it turns red.',
+  },
+  {
+    id: 'blank-canvas',
+    title: '6. Blank Canvas',
+    description:
+      'An empty canvas. Use the Add node palette to build your own pipeline, connect the nodes, and watch the ring buffers respond.',
+    domainSizeMs: 100,
+  },
 ];
 
 export const DEFAULT_LEVEL_ID = LEVELS[0].id;

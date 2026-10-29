@@ -1,0 +1,183 @@
+.ws {
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 3px 8px 4px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ws--focused {
+  border-color: #ee0000;
+  box-shadow: 0 0 6px rgba(238, 0, 0, 0.6);
+}
+
+.ws__title {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #cfcfcf;
+  text-transform: capitalize;
+  margin-bottom: 14px;
+}
+
+.ws__track {
+  position: relative;
+}
+
+.ws__write {
+  position: absolute;
+  top: -15px;
+  transform: translateX(-50%);
+  padding: 0 4px 5px;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #fff;
+  background: #1a73e8;
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
+  line-height: 1.5;
+}
+
+.ws__cells {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ws__cell,
+.ws__bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: #12301a;
+  background: #e1f7e1;
+}
+
+.ws__cell + .ws__cell {
+  border-left: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.ws__cell--head {
+  background: #9cc4f5;
+  color: #0b2a52;
+}
+
+.ws__overwritten {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 1px dashed rgba(255, 82, 82, 0.6);
+  border-radius: 3px 0 0 3px;
+  background: repeating-linear-gradient(135deg, #3a1015, #3a1015 3px, #240a0d 3px, #240a0d 6px);
+}
+
+.ws__cell--unreadable,
+.ws__bar--unreadable {
+  background: repeating-linear-gradient(135deg, #3a3d42, #3a3d42 3px, #2a2c30 3px, #2a2c30 6px);
+  color: #9a9a9a;
+}
+
+.ws__bar {
+  flex-basis: 0;
+}
+
+.ws__bar--head {
+  background: #9cc4f5;
+}
+
+.ws__ptr {
+  position: absolute;
+  transform: translateX(-50%);
+  min-width: 24px;
+  padding: 5px 4px 0;
+  border: none;
+  font: inherit;
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 1.6;
+  color: #fff;
+  background: #f4902c;
+  cursor: pointer;
+  pointer-events: auto;
+  clip-path: polygon(50% 0, 100% 35%, 100% 100%, 0 100%, 0 35%);
+}
+
+.ws__ptr:hover {
+  background: #ffa94d;
+}
+
+.ws__ptr--focused {
+  background: #ee0000;
+  z-index: 1;
+}
+
+/* Too late: the requested grain was overwritten — pinned to the oldest end as an error. */
+.ws__ptr--late {
+  background: #7a0010;
+  color: #fff;
+  animation: ws-late-blink 1s ease-in-out infinite;
+}
+
+.ws__ptr--late.ws__ptr--focused {
+  background: #ee0000;
+}
+
+@keyframes ws-late-blink {
+  50% {
+    filter: brightness(1.6);
+  }
+}
+
+.ws--error {
+  border-color: #ee0000;
+}
+
+.ws__alert {
+  color: #ff5252;
+  text-transform: none;
+}
+
+/* Too early: the requested grain isn't written yet, so the pointer waits hollow at the newest readable slot. */
+.ws__ptr--waiting {
+  background: rgba(244, 144, 44, 0.35);
+  color: #f4902c;
+}
+
+.ws__ptr--waiting.ws__ptr--focused {
+  background: rgba(238, 0, 0, 0.4);
+  color: #ff6b6b;
+}
+
+.ws__lag {
+  position: absolute;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #f5a623 0 3px, transparent 3px 5px);
+  z-index: 1;
+}
+
+.ws__now {
+  position: absolute;
+  top: -2px;
+  width: 0;
+  border-left: 2px solid #f5a623;
+  z-index: 2;
+}
+
+.ws__now span {
+  position: absolute;
+  top: -13px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #1a1b1e;
+  background: #f5a623;
+  padding: 0 4px;
+  border-radius: 2px;
+  line-height: 1.5;
+}

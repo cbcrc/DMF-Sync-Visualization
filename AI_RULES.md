@@ -10,6 +10,11 @@ _Read this first when resuming work._
   buildups and overruns can happen. It is **not a game** — no scores,
   win/lose states, or "players". Use "user", "scenario", and "alert" in docs
   and UI text.
+- **MXL source of truth: https://github.com/dmf-mxl/mxl.** Before any change
+  that touches timing, grains, ring buffers, flows, readers/writers or sync,
+  read the relevant code and `docs/` there (e.g. `docs/Timing.md`,
+  `PosixDiscreteFlowWriter.cpp`) and cite what you checked. Never rely on
+  memory, this file or `SPEC.md` alone.
 - **Behaviour in the DMF's asynchronous domain follows MXL**, and the
   normative reference is
   https://github.com/dmf-mxl/mxl (dmf-mxl/mxl). All models and future
@@ -25,44 +30,17 @@ _Read this first when resuming work._
 
 ## Status
 
-TO-DO.md "Future development" item #10 ("Visualisation of grains and
-alignment Improvements") is **complete** — all sub-deliverables (D0 research,
-D1 per-track grain rate + audio visualization, D2 alignment highlight, D3
-origin-timestamp viz, D4 reference-time invariance demo) are implemented and
-verified (`npm run lint` + `npm run build` both clean as of the last session).
-See "Grain-flow visualization" below for what each one does. Item #8 was
-folded into this work.
+Verified by `npx tsc -b`, `npx eslint src` and `npx vitest run` (13 tests).
+Nothing is committed from the current working session, so check `git status`.
 
-Item #1 ("Visualize the Egress parking signal... distinctly visible") is
-also **complete** — parked siblings no longer stack on the node's dead
-center; see "Sync parking" below.
+Done and described below: grain-flow visualization (TO-DO #1, #8-#14),
+playback modes, the writer-centric side panel, the Scenarios page and
+persistence, and the canvas editing and ring-buffer blocks ("Canvas editing
+and ring buffer blocks").
 
-Item #11 ("Clean up the origin timestamp mechanism") is also **complete** —
-the raw epoch-scaled grain index and the per-tick age repaint were replaced
-with a small ring-relative index (toggleable to the raw one), a 100ms-
-rounded age, and a lingering fade-out for tags; see "Grain-flow
-visualization" below.
-
-Item #9 ("Slow down the animation — three playback modes") is also
-**complete** — a shared simulated clock (`useSimClock.ts`) now drives every
-timing engine, with a HUD switch for Normal/Stepping/Manual plus a Manual
-"Step ▶" button; see "Playback modes (shared simulated clock)" below. A
-follow-up fix replaced the old edge-travel-time dot (350ms+, scaling with
-edge length) with a near-instant hop + an edge-path pulse, since real MXL
-write→read handoff between nodes is effectively instantaneous.
-
-Item #12 ("Improve visualization of the time index") is also **complete**
-— a connector now links sibling video/audio grains that share one Ingress
-origin timestamp, and every origin-timestamp tag/flash now guarantees a
-minimum readable visible time before fading, fixing a readability
-regression the item #9 edge-travel fix had introduced; see "Grain-flow
-visualization" below.
-
-No open threads/in-progress edits — safe to start a new deliverable from
-scratch next session (see TO-DO.md's "Future development" for remaining
-numbered items, and this file's "Known simplifications" for follow-on ideas
-like a literal Continuous ring-buffer model).
-
+Open work lives in `TO-DO.md` (#2, #3, #4, #7, #15 and the one open bug).
+Check any changes in a browser (`npm run dev`) as well as with the checks
+above.
 ## Core model — read this before touching timing logic
 
 The app models MXL timing with **preserved grain indices**: a Media Function
@@ -90,24 +68,65 @@ index. Evaluation is therefore **per input edge**, not per node.
 src/
   types.ts                 Signal, MediaFunction, RingBuffer, SyncGroup, MXLDomain
   engine/
-    ringBufferEngine.ts     evaluateRingBuffer (OK/TOO_EARLY/TOO_LATE), gaugeZone
-    syncGroupEngine.ts       sync-group delay padding for aligned signals
-    mxlGrainIndex.ts          MXL-accurate GrainIndex/RingBufferIndex math
+    ringBufferEngine.ts     evaluateRingBuffer (OK/TOO_EARLY/TOO_LATE), READ_BEHIND_WRITE_GRAINS
+    mxlGrainIndex.ts         MXL-accurate GrainIndex/RingBufferIndex math, per-track grain rate
   components/
-    canvas/                  FlowCanvas (editable graph + starter/level topologies),
-                             MediaFunctionNode (node render, latency slider, internal
-                             processing-path dot), nodeSizing, nodeDefaults (palette +
-                             adjustable-latency ranges), GrainOverlay (traveling/holding/
-                             parked/dropped dot rendering), RingBufferBadgeOverlay
-                             (per-node compact status + slot strip)
-    ui/                      RingBufferGauge, RingBufferRing (MXL-accurate dial),
-                             RingBufferPanel (full per-node inspector), GrainSlotStrip
-                             (grain-slot timeline w/ write/read head markers),
-                             GameHud, InfoPanel (short explainer)
-  game/                      graphLatency (tick runner + per-input buffer evaluation),
-                             stabilityMonitor, useGameLoop, levels (4 scenarios),
-                             grainFlow/useGrainFlow (grain animation + spawn/sync logic)
+    canvas/                  FlowCanvas (graph editing, toolbar, undo, connection rules, palette),
+                             MediaFunctionNode (the block: function body, mode select, ring
+                             column), RingBufferStrip + ringStripLayout (a writer's linear ring
+                             with reader pointers), nodeDefaults (palette presets, latency
+                             ranges, outputModeOf), nodeSizing, GrainOverlay (grain dots, tags),
+                             LinearBoundaryOverlay (Ingress/Egress linear tick trains)
+    ui/                      RingBufferPanel (per-writer inspector), WriterRing (circular ring
+                             per writer flow), ClockStrip (domain TAI clock), GrainSlotStrip and
+                             ContinuousBufferTrack (per-reader slot/continuous views),
+                             RingBufferGauge, GameHud, InfoPanel, ScenariosPage
+  game/                      graphLatency (per-input evaluation + writerFlows), writerRings
+                             (readings grouped per writer, one ring per output flow),
+                             connectionRules (which track an input may read), levels and
+                             scenarios (6 built-in scenarios), scenarioStorage, stabilityMonitor,
+                             useGameLoop, grainFlow/useGrainFlow, useSimClock, useHashRoute
 ```
+
+## Canvas editing and ring buffer blocks
+
+- **Ring buffers belong to the writer.** MXL's writer commits grains whether
+  or not anything reads (`PosixDiscreteFlowWriter::commit()` has no reader
+  check), so every output flow of every producing node has a ring.
+  `graphLatency.ts`'s `writerFlows` lists them; `writerRings.ts` attaches
+  readers (rings with no readers are empty). Rings keep a fixed order, video
+  then audio. A node with no outputs (an Egress) has no rings.
+- **Block layout.** `MediaFunctionNode` renders a `.mf-block`: the square
+  function body plus a column of `RingBufferStrip` cards. The frame is drawn
+  with `::before` outside the layout box because `grainFlow.ts` geometry
+  assumes a square body at `node.position`. Each card holds the source
+  `<Handle id={ring.handleId}>`, so edges still go writer node to reader node.
+  Built-in scenarios have their x positions spread (`spreadForRings`) to leave
+  room for the rings.
+- **Reader pointers.** The strip runs oldest to newest with the write head
+  rightmost. A reader sits `deltaGrains + READ_BEHIND_WRITE_GRAINS` slots left
+  of the head, so it can never sit on the write slot. A TOO_EARLY reader waits
+  hollow at the newest readable slot. A TOO_LATE reader slides into the hatched
+  overwritten zone by its true distance. Audio and video share this logic
+  (audio reserves 40ms, video 2 grains: `WRITER_RESERVED_MS`). Clicking a
+  pointer or a node focuses that reader (highlights its link and pointer).
+  The toolbar's **Now** toggle draws wall-clock now to the right of each head.
+- **Flow modes.** Inputs and Outputs have a video only / audio only / both
+  select (`outputModeOf`, `handleOutputModeChange`). Track convention: a
+  producer's output handle 0 is video, 1 is audio; other nodes inherit their
+  first input's track (`trackForEdge`).
+- **Connection rules** (`connectionRules.ts`, `isValidConnection`): an input
+  takes one link; dropping a link on an occupied input replaces it. Audio-only
+  functions read audio only, video-only functions (Video Mixer) video only,
+  an Output's first input is video and its second audio, and other
+  multi-input nodes need all inputs on the same track. Rewiring an existing
+  link that now breaks a rule is refused; links that already exist are kept.
+  Palette flags `audioOnly` and `videoOnly` are persisted in `scenarioStorage`.
+- **Toolbar and undo.** Top-centre toolbar: Undo and Now. Undo (button or
+  Ctrl/Cmd+Z) uses snapshot history in `FlowCanvas` (100 steps; connect, link
+  move, add, node drag, delete). It is cleared when a scenario loads. Latency
+  slider changes are not undoable and there is no redo.
+- **Blank canvas.** Scenario 6 starts empty. Autosave skips an empty graph.
 
 ## Grain-flow visualization
 
@@ -173,7 +192,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   `RingBufferPanel`'s top-level "Domain clock" line stays video-rate, since
   it has no single input to key off of.
 - **Audio-specific visualization (`ContinuousBufferTrack.tsx`):** video/data
-  inputs keep the discrete `GrainSlotStrip`/`RingBufferRing` slot views, but
+  inputs keep the discrete `GrainSlotStrip` slot view, but
   audio inputs render this component instead — a smooth, time-based strip
   with no discrete cells (matching MXL's Continuous, not Discrete, ring
   buffer), a fill meter that grows from empty-at-the-head to full-at-the-
@@ -368,9 +387,33 @@ video stays OK. Verified fixes: grow the domain to 110ms, delete the Slow
 Video Function and reconnect, insert a Grain Repeater in the audio branch, or drag
 the Slow Video Function's latency slider down.
 
+## Scenarios page and persistence
+
+- `src/game/scenarios.ts` holds the built-in scenario catalogue and graphs. `src/game/scenarioStorage.ts` persists to localStorage: user-saved scenarios (`dmf-sync-viz:scenarios:v1`; nodes, edges, domain size, name, description) and the autosaved working graph (`dmf-sync-viz:working:v1`, restored on load).
+- `ScenariosPage` is a full-screen overlay at hash route `#/scenarios` (opened from the HUD); the canvas stays mounted underneath. Saving with an existing name replaces that scenario.
+
+## Scenario 5 — Many Readers, One Writer
+
+One Ingress Function writes a single video flow (V1) that five functions
+read: a recorder and two branch functions at the head, and two mixers that
+also read V1 on a second input. Each mixer must wait for its slower branch
+(25ms / 50ms), so it requests an older grain of V1 than the others. The
+Ingress's ring and the telemetry panel's `WriterRing` show all five readers,
+which is the intended way to compare readers at different points in time.
+Its Egress takes two video mixes on both inputs, which the per-input track
+rule would not allow if rewired.
+
+## Scenario 6 — Blank Canvas
+
+An empty 100ms domain to build on from the palette.
+
 ## Known simplifications
 
-- Clock is `Date.now()`, not a PTP/TAI implementation.
+- Clock is not a PTP/TAI implementation. The sim clock starts at a fixed
+  example offset (`TAI_EPOCH_OFFSET_MS` in `mxlGrainIndex.ts`, a whole number
+  of video ticks and ring windows) so grain indices and the `ClockStrip`'s
+  "TAI ns since SMPTE epoch" read like real values; it is not a real TAI
+  reading.
 - The shared simulated clock (`useSimClock.ts`, item #9) that drives all
   timing-dependent engines can be slowed (Stepping) or frozen/single-stepped
   (Manual) for teaching purposes — a deliberate departure from MXL's true
@@ -418,7 +461,7 @@ the Slow Video Function's latency slider down.
   `onGraphChange` callback. Node creation uses the palette in
   `nodeDefaults.ts`; connections use React Flow drag-connect; deletion
   removes the node and its attached edges.
-- Only one game-loop tick runner (`useGameLoop.ts`) — do not introduce a
+- Only one tick runner (`useGameLoop.ts`) — do not introduce a
   second independent tick loop in components.
 
 ## Branding

@@ -8,6 +8,8 @@ import './GameHud.css';
 export interface GameHudProps {
   level: Level;
   onSelectLevel: (levelId: string) => void;
+  /** Opens the scenarios page (browse built-in and saved scenarios, save the current canvas). */
+  onOpenScenarios: () => void;
   domainSizeMs: number;
   onDomainSizeChange: (sizeMs: number) => void;
   totalWorkloadLatencyMs: number;
@@ -39,6 +41,7 @@ export interface GameHudProps {
 export function GameHud({
   level,
   onSelectLevel,
+  onOpenScenarios,
   domainSizeMs,
   onDomainSizeChange,
   totalWorkloadLatencyMs,
@@ -71,6 +74,9 @@ export function GameHud({
             {l.title}
           </button>
         ))}
+        <button type="button" className="game-hud__level-btn" onClick={onOpenScenarios}>
+          All / saved scenarios…
+        </button>
       </div>
       <div className="game-hud__desc">{level.description}</div>
       {level.guidance && <div className="game-hud__guidance">{level.guidance}</div>}

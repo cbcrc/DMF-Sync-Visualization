@@ -9,6 +9,8 @@ A DMF has linear, synchronous boundaries (Ingress and Egress) around an
 asynchronous domain, and inside that asynchronous domain behaviour follows 
 the Media eXchange Layer (MXL; normative source: https://github.com/dmf-mxl/mxl). 
 
+**Version 0.2** — combines the JT-DMF Sync Group discussions into the tool: per-writer ring buffers with reader pointers, a many-readers scenario, a blank canvas to build on, and saved scenarios.
+
 ### How It Works
 Users wire Media Function nodes between an Ingress and an Egress and watch, in real
 time, how media flows (grains) move through the workflow: a flow's grain
@@ -29,6 +31,14 @@ correct.
 ![Unofficial Definitions](assets/images/Definition_Block_Diagram.png)
 *Figure 1: The unoffical DMF definitions*
 
+### Using the canvas
+
+- Add functions from the **Add node** palette (audio-only functions, a Video Mixer and multi-input mixers included) and drag between handles to connect them.
+- Every media function carries its own ring buffers, drawn as part of its block. The function writes into them whether or not anything reads. Each reader appears as a pointer showing how far behind the write head it reads; click a pointer or a function to highlight that reader's link.
+- Inputs and Outputs can be video only, audio only or both. Audio readers read only audio and video readers only video. An input takes one link (drop a new one on it to replace it).
+- The toolbar has **Undo** (also Ctrl/Cmd+Z) and **Now**, which shows how far behind real time each writer is.
+- Scenario 6, "Blank Canvas", starts empty. The Scenarios page (`#/scenarios`) saves and reopens your own.
+
 ## Getting started after cloning this repo
 
 ```bash
@@ -47,6 +57,7 @@ Other commands:
 ```bash
 npm run build     # type-check + production build
 npm run lint      # eslint
+npm test          # vitest
 ```
 
 Requires Node 18 (do not upgrade Vite/tooling to a version requiring Node ≥20

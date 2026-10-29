@@ -11,7 +11,7 @@
 // pedagogical aid so a player can watch grains resolve at a readable pace.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { grainDurationMs } from '../engine/mxlGrainIndex';
+import { TAI_EPOCH_OFFSET_MS, grainDurationMs } from '../engine/mxlGrainIndex';
 
 export type PlaybackMode = 'normal' | 'stepping' | 'manual';
 
@@ -38,7 +38,7 @@ export interface SimClock {
 export function useSimClock(): SimClock {
   const [mode, setModeState] = useState<PlaybackMode>('normal');
   const modeRef = useRef<PlaybackMode>('normal');
-  const simNowRef = useRef(performance.now());
+  const simNowRef = useRef(TAI_EPOCH_OFFSET_MS + performance.now());
   const lastRealRef = useRef(performance.now());
 
   useEffect(() => {

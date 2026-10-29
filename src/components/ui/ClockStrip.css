@@ -1,0 +1,56 @@
+/* Domain clock strip — dark instrument bar echoing the Grid viewer's "Now" strip. */
+
+.clock-strip {
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  width: 220px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  padding: 8px 10px;
+  background: #e4eaef;
+  color: #14202b;
+  border-radius: 6px;
+  pointer-events: auto;
+}
+
+.clock-strip__cell {
+  min-width: 0;
+}
+
+.clock-strip__cell--wide {
+  grid-column: 1 / -1;
+}
+
+.clock-strip__lab {
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.clock-strip__val {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.clock-strip__val--big {
+  font-size: 0.85rem;
+}
+
+.clock-strip__formula {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(20, 32, 43, 0.22);
+  padding-top: 6px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.55rem;
+  overflow-wrap: anywhere;
+}
+
+.clock-strip__formula summary {
+  cursor: pointer;
+  opacity: 0.75;
+}

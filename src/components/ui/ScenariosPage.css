@@ -1,0 +1,189 @@
+.scn-page {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow-y: auto;
+  background: #1a1b1e;
+  color: #ffffff;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+}
+
+.scn-page__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.scn-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.scn-page__header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.scn-section {
+  margin: 28px 0 10px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+
+.scn-empty {
+  color: #757575;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.scn-save {
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.scn-save h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.scn-save__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scn-save__hint {
+  margin: 8px 0 0;
+  font-size: 0.7rem;
+  color: #9a9a9a;
+}
+
+.scn-msg {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: #4caf50;
+}
+
+.scn-msg--bad {
+  color: #ee0000;
+}
+
+.scn-input {
+  font: inherit;
+  font-size: 0.85rem;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  padding: 6px 8px;
+  min-width: 180px;
+}
+
+.scn-input--wide {
+  flex: 1 1 260px;
+}
+
+.scn-btn {
+  font: inherit;
+  font-size: 0.8rem;
+  color: #ffffff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.scn-btn:hover:not(:disabled) {
+  border-color: #ffffff;
+}
+
+.scn-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.scn-btn--primary {
+  background: #ffffff;
+  color: #111214;
+  font-weight: 600;
+}
+
+.scn-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.scn-card {
+  display: flex;
+  flex-direction: column;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.scn-card--active {
+  border-color: #4caf50;
+}
+
+.scn-card__thumb {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #0b0c0e;
+}
+
+.scn-card__thumb--empty {
+  height: 110px;
+  display: grid;
+  place-items: center;
+  color: #757575;
+  font-size: 0.75rem;
+}
+
+.scn-card__body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.scn-card__title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.scn-card__desc {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #cfcfcf;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.scn-card__meta {
+  font-size: 0.65rem;
+  color: #9a9a9a;
+}
+
+.scn-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}

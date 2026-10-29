@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   Controls,
@@ -7,6 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   addEdge,
+  updateEdge,
   useEdgesState,
   useNodesState,
   type Connection,
@@ -16,12 +17,14 @@ import {
   type NodeTypes,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import type { MediaFunctionKind, RingBufferStatus } from '../../types';
+import type { RingBufferStatus } from '../../types';
 import { MediaFunctionNode, type MediaFunctionNodeData } from './MediaFunctionNode';
 import { GrainOverlay } from './GrainOverlay';
 import { LinearBoundaryOverlay } from './LinearBoundaryOverlay';
-import { RingBufferBadgeOverlay } from './RingBufferBadgeOverlay';
-import { LATENCY_RANGE, NODE_KIND_DEFAULTS, PALETTE_KINDS } from './nodeDefaults';
+import type { WriterRing } from '../../game/writerRings';
+import { type OutputMode } from './MediaFunctionNode';
+import { requiredTrack } from '../../game/connectionRules';
+import { LATENCY_RANGE, PALETTE_PRESETS, type PalettePreset } from './nodeDefaults';
 import { useGrainFlow } from '../../game/useGrainFlow';
 import type { InputReading } from '../../game/graphLatency';
 import './FlowCanvas.css';
@@ -30,136 +33,7 @@ const nodeTypes: NodeTypes = { mediaFunction: MediaFunctionNode };
 
 /** How long (ms) an edge's "just carried a grain" highlight stays visible (item #9 follow-up). */
 const EDGE_PULSE_MS = 300;
-
-/**
- * Starter pipeline — the minimal MXL workload, matching the reference
- * ingress/egress flowchart. One paced external stream enters an Ingress
- * Function, which writes two flows into the domain: V1 (video) and A1 (audio).
- * Video takes a longer processing path than audio, and an Egress Function
- * re-pairs them for output.
- *
- * Deliberately small and healthy: at a 100ms domain the video branch lags 30ms
- * and audio 2ms, so the Egress absorbs a 28ms differential well inside the
- * retained history. Build outward from here — add Media Functions to the video
- * path and watch the differential grow until the audio input goes red.
- */
-const initialNodes: Node<MediaFunctionNodeData>[] = [
-  {
-    id: 'ingress',
-    type: 'mediaFunction',
-    position: { x: 0, y: 230 },
-    // Two outputs: one paced external stream becomes flows V1 and A1.
-    data: { kind: 'input', label: 'Ingress Function', latencyMs: 0, inputCount: 0, outputCount: 2 },
-  },
-  {
-    id: 'video-fast',
-    type: 'mediaFunction',
-    position: { x: 320, y: 90 },
-    data: { kind: 'technical', label: 'Fast Video Function', latencyMs: 10, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'video-slow',
-    type: 'mediaFunction',
-    position: { x: 590, y: 80 },
-    data: { kind: 'editorial', label: 'Slow Video Function', latencyMs: 20, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'audio-fast',
-    type: 'mediaFunction',
-    position: { x: 340, y: 430 },
-    data: { kind: 'technical', label: 'Ultra-Fast Audio Function', latencyMs: 2, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'egress',
-    type: 'mediaFunction',
-    position: { x: 900, y: 240 },
-    // Two inputs: re-pairs V1b and A1a at a common grain index before output.
-    data: { kind: 'output', label: 'Egress Function', latencyMs: 5, inputCount: 2, outputCount: 0 },
-  },
-];
-
-/** Flow names ride on the edges so the preserved-index story is readable. */
-const initialEdges: Edge[] = [
-  { id: 'ing-video', source: 'ingress', sourceHandle: 'out-0', target: 'video-fast', targetHandle: 'in-0', label: 'V1' },
-  { id: 'video-fast-slow', source: 'video-fast', sourceHandle: 'out-0', target: 'video-slow', targetHandle: 'in-0', label: 'V1a' },
-  { id: 'video-slow-egress', source: 'video-slow', sourceHandle: 'out-0', target: 'egress', targetHandle: 'in-0', label: 'V1b' },
-  { id: 'ing-audio', source: 'ingress', sourceHandle: 'out-1', target: 'audio-fast', targetHandle: 'in-0', label: 'A1' },
-  { id: 'audio-egress', source: 'audio-fast', sourceHandle: 'out-0', target: 'egress', targetHandle: 'in-1', label: 'A1a' },
-];
-
-/**
- * Level 4 challenge graph — the classic MXL A/V sync overrun.
- *
- * A single Ingress Function takes one paced external stream and writes two
- * flows into the domain: V1 (video) and A1 (audio). They share a timestamp
- * origin, which is exactly why the Egress Function must later re-pair them.
- *
- * Video is processed twice (V1 -> V1a -> V1b), audio once (A1 -> A1a). Every
- * Media Function preserves the original grain index: V1b grain T *is* V1 grain
- * T, just published 82ms later. So the Egress can only emit grain T once the
- * slow video branch has published it — and by then the audio flow, running
- * only 2ms behind real time, has moved 80ms (4 grains) past T and recycled
- * that slot. Result: READ TOO LATE on the audio input, while the video input
- * reads happily at its own head.
- */
-const avSyncNodes: Node<MediaFunctionNodeData>[] = [
-  {
-    id: 'av-ingress',
-    type: 'mediaFunction',
-    position: { x: 0, y: 250 },
-    // Two outputs: one paced external stream becomes flows V1 and A1.
-    data: { kind: 'input', label: 'Ingress Function', latencyMs: 0, inputCount: 0, outputCount: 2 },
-  },
-  {
-    id: 'av-vfast',
-    type: 'mediaFunction',
-    position: { x: 300, y: 70 },
-    data: { kind: 'technical', label: 'Fast Video Function', latencyMs: 10, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'av-vslow',
-    type: 'mediaFunction',
-    position: { x: 570, y: 50 },
-    data: { kind: 'editorial', label: 'Slow Video Function', latencyMs: 72, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'av-afast',
-    type: 'mediaFunction',
-    position: { x: 320, y: 480 },
-    data: { kind: 'technical', label: 'Ultra-Fast Audio Function', latencyMs: 2, inputCount: 1, outputCount: 1 },
-  },
-  {
-    id: 'av-egress',
-    type: 'mediaFunction',
-    position: { x: 930, y: 250 },
-    // Two inputs: re-pairs V1b and A1a at a common grain index before output.
-    data: { kind: 'output', label: 'Egress Function', latencyMs: 5, inputCount: 2, outputCount: 0 },
-  },
-];
-
-/** Flow names ride on the edges so the preserved-index story is readable. */
-const avSyncEdges: Edge[] = [
-  { id: 'av-ing-vfast', source: 'av-ingress', sourceHandle: 'out-0', target: 'av-vfast', targetHandle: 'in-0', label: 'V1' },
-  { id: 'av-vfast-vslow', source: 'av-vfast', sourceHandle: 'out-0', target: 'av-vslow', targetHandle: 'in-0', label: 'V1a' },
-  { id: 'av-vslow-egress', source: 'av-vslow', sourceHandle: 'out-0', target: 'av-egress', targetHandle: 'in-0', label: 'V1b' },
-  { id: 'av-ing-afast', source: 'av-ingress', sourceHandle: 'out-1', target: 'av-afast', targetHandle: 'in-0', label: 'A1' },
-  { id: 'av-afast-egress', source: 'av-afast', sourceHandle: 'out-0', target: 'av-egress', targetHandle: 'in-1', label: 'A1a' },
-];
-
-/** Starter graph + per-level challenge graphs, keyed by level id. */
-const LEVEL_GRAPHS: Record<string, { nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }> = {
-  'av-sync-overrun': { nodes: avSyncNodes, edges: avSyncEdges },
-};
-
-const PALETTE_LABELS: Record<MediaFunctionKind, string> = {
-  input: 'Input',
-  synthetic: 'Synthetic',
-  technical: 'Technical',
-  editorial: 'Editorial',
-  repeater: 'Repeater',
-  recording: 'Recording',
-  output: 'Output',
-};
+const MAX_HISTORY = 100;
 
 export interface FlowCanvasProps {
   /** Reports the live node/edge graph up so App can drive the game loop from it (Task 4). */
@@ -173,7 +47,16 @@ export interface FlowCanvasProps {
   statusByInputKey: Map<string, RingBufferStatus>;
   /** Live per-input readings, rendered as compact status bars directly under each reader node. */
   inputsByNodeId: Map<string, InputReading[]>;
-  levelId: string;
+  /** Every writer flow's ring with its readers, drawn as a linear strip above each writer node. */
+  writerRings: WriterRing[];
+  /** Reader function whose node, inbound links and ring pointers are highlighted (null = none). */
+  focusedNodeId: string | null;
+  /** Called when a node or a ring pointer is clicked (id), or the empty canvas is (null). */
+  onFocusNode: (nodeId: string | null) => void;
+  /** Graph to load onto the canvas whenever `graphLoadKey` changes (scenario switch, restore). */
+  initialGraph: { nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] };
+  /** Incremented to load `initialGraph` again; edits in between are the canvas's own. */
+  graphLoadKey: number;
   /** Key incremented to force a wave restart (e.g. from HUD restart button or level change). */
   waveResetKey?: number;
   /** Show each grain's MXL origin-timestamp index/offset and node write flashes (item #10.ii). */
@@ -210,7 +93,11 @@ function FlowCanvasInner({
   zoneByNodeId,
   statusByInputKey,
   inputsByNodeId,
-  levelId,
+  writerRings,
+  focusedNodeId,
+  onFocusNode,
+  initialGraph,
+  graphLoadKey,
   waveResetKey,
   showOriginTimestamps,
   showRealGrainIndex,
@@ -220,15 +107,54 @@ function FlowCanvasInner({
   stepClockBy,
   onManualStepReady,
 }: FlowCanvasProps) {
-  const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
   const addedCount = useRef(0);
 
+  // Undo history: snapshots of the graph taken just before each edit.
+  const graphRef = useRef({ nodes, edges });
+  graphRef.current = { nodes, edges };
+  const historyRef = useRef<{ nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }[]>([]);
+  const [historyDepth, setHistoryDepth] = useState(0);
+  const [showNow, setShowNow] = useState(false);
+  const pushHistory = useCallback(() => {
+    const h = historyRef.current;
+    const last = h[h.length - 1];
+    if (last && last.nodes === graphRef.current.nodes && last.edges === graphRef.current.edges) return;
+    h.push(graphRef.current);
+    if (h.length > MAX_HISTORY) h.shift();
+    setHistoryDepth(h.length);
+  }, []);
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    setHistoryDepth(historyRef.current.length);
+    if (!prev) return;
+    setNodes(prev.nodes);
+    setEdges(prev.edges);
+  }, [setNodes, setEdges]);
+
   useEffect(() => {
-    const graph = LEVEL_GRAPHS[levelId];
-    setNodes(graph ? graph.nodes : initialNodes);
-    setEdges(graph ? graph.edges : initialEdges);
-  }, [levelId, setEdges, setNodes]);
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.key.toLowerCase() !== 'z') return;
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      ev.preventDefault();
+      undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
+
+  // Intentionally keyed only on `graphLoadKey`: `initialGraph` is a snapshot to
+  // load, and must not clobber the player's edits when its identity changes.
+  const initialGraphRef = useRef(initialGraph);
+  initialGraphRef.current = initialGraph;
+  useEffect(() => {
+    setNodes(structuredClone(initialGraphRef.current.nodes));
+    setEdges(structuredClone(initialGraphRef.current.edges));
+    historyRef.current = [];
+    setHistoryDepth(0);
+  }, [graphLoadKey, setEdges, setNodes]);
 
   // React Flow doesn't auto-remove edges attached to a deleted node; clean them up ourselves.
   const onNodesChange = useCallback(
@@ -242,35 +168,94 @@ function FlowCanvasInner({
     [onNodesChangeBase, setEdges],
   );
 
+  // An input connector takes exactly one link; connecting or moving a link onto
+  // an occupied input replaces the old one. Outputs may fan out to many readers.
+  const withoutLinksTo = (eds: Edge[], c: { target: string | null; targetHandle: string | null }, keepId?: string) =>
+    eds.filter(
+      (e) =>
+        e.id === keepId || !(e.target === c.target && (e.targetHandle ?? null) === (c.targetHandle ?? null)),
+    );
+
+  // Track carried by the ring a link leaves from (undefined if unknown).
+  const trackOfSource = useCallback(
+    (source: string | null, sourceHandle: string | null | undefined) =>
+      writerRings.find((r) => r.writerNodeId === source && r.handleId === (sourceHandle ?? 'out-0'))?.track,
+    [writerRings],
+  );
+
+  // Audio readers take only audio sources and video readers only video; see `requiredTrack`.
+  const linkAllowed = useCallback(
+    (node: Node<MediaFunctionNodeData> | undefined, inputIndex: number, edgesIn: Edge[], source: Edge | Connection) => {
+      const sourceTrack = trackOfSource(source.source, source.sourceHandle);
+      if (!node || !sourceTrack) return true;
+      const others = edgesIn
+        .map((e) => trackOfSource(e.source, e.sourceHandle))
+        .filter((t): t is NonNullable<typeof t> => t !== undefined);
+      const need = requiredTrack(node.data, inputIndex, others);
+      return need === undefined || need === sourceTrack;
+    },
+    [trackOfSource],
+  );
+
+  const isValidConnection = useCallback(
+    (c: Connection | Edge) => {
+      const node = nodes.find((n) => n.id === c.target);
+      const inputIndex = Number((c.targetHandle ?? 'in-0').replace('in-', '')) || 0;
+      // Links already feeding this node's *other* inputs (an occupied target is replaced).
+      const others = edges.filter(
+        (e) => e.target === c.target && (e.targetHandle ?? 'in-0') !== (c.targetHandle ?? 'in-0'),
+      );
+      return linkAllowed(node, inputIndex, others, c);
+    },
+    [nodes, edges, linkAllowed],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
+      pushHistory();
       setEdges((eds) =>
         addEdge(
           {
             ...connection,
             id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}-${Date.now()}`,
           },
-          eds,
+          withoutLinksTo(eds, connection),
         ),
       );
     },
-    [setEdges],
+    [setEdges, pushHistory],
+  );
+
+  // Drag either end of an existing link to move it to another connector.
+  const onEdgeUpdate = useCallback(
+    (oldEdge: Edge, connection: Connection) => {
+      pushHistory();
+      setEdges((eds) => updateEdge(oldEdge, connection, withoutLinksTo(eds, connection, oldEdge.id)));
+    },
+    [setEdges, pushHistory],
   );
 
   const addNode = useCallback(
-    (kind: MediaFunctionKind) => {
-      const defaults = NODE_KIND_DEFAULTS[kind];
+    (preset: PalettePreset) => {
+      const { kind, defaults } = preset;
       const n = ++addedCount.current;
-      const id = `${kind}-${Date.now()}-${n}`;
+      const id = `${preset.id}-${Date.now()}-${n}`;
       const newNode: Node<MediaFunctionNodeData> = {
         id,
         type: 'mediaFunction',
         position: { x: 120 + ((n * 60) % 480), y: 60 + ((n * 90) % 420) },
-        data: { ...defaults, kind, label: `${defaults.label} ${n}` },
+        data: {
+          ...defaults,
+          kind,
+          label: `${defaults.label} ${n}`,
+          ...(preset.audioOnly ? { audioOnly: true } : {}),
+          ...(preset.videoOnly ? { videoOnly: true } : {}),
+        },
       };
+      pushHistory();
       setNodes((nds) => [...nds, newNode]);
     },
-    [setNodes],
+    [setNodes, pushHistory],
   );
 
   /**
@@ -293,6 +278,49 @@ function FlowCanvasInner({
       );
     },
     [setNodes],
+  );
+
+  /** Switch a producer between video only, audio only, or both flows. */
+  const handleOutputModeChange = useCallback(
+    (nodeId: string, mode: OutputMode) => {
+      pushHistory();
+      const count = mode === 'both' ? 2 : 1;
+      const isSink = graphRef.current.nodes.find((n) => n.id === nodeId)?.data.outputCount === 0;
+      const handles = mode === 'audio' ? ['out-1'] : mode === 'video' ? ['out-0'] : ['out-0', 'out-1'];
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  audioOnly: mode === 'audio' ? true : undefined,
+                  ...(isSink ? { inputCount: count } : { outputCount: count }),
+                },
+              }
+            : n,
+        ),
+      );
+      // Drop links on a connector that no longer exists, or that no longer carries the right track.
+      const updated = graphRef.current.nodes.find((n) => n.id === nodeId);
+      const nextData = updated && {
+        ...updated.data,
+        audioOnly: mode === 'audio' ? true : undefined,
+        ...(isSink ? { inputCount: count } : {}),
+      };
+      setEdges((eds) =>
+        eds.filter((e) => {
+          if (!isSink) return e.source !== nodeId || handles.includes(e.sourceHandle ?? 'out-0');
+          if (e.target !== nodeId) return true;
+          const index = Number((e.targetHandle ?? 'in-0').replace('in-', '')) || 0;
+          if (index >= count) return false;
+          const track = trackOfSource(e.source, e.sourceHandle);
+          const need = nextData ? requiredTrack(nextData, index, []) : undefined;
+          return !track || !need || track === need;
+        }),
+      );
+    },
+    [setNodes, setEdges, pushHistory, trackOfSource],
   );
 
   // Report the live graph up to App for game-loop derivation whenever it changes.
@@ -367,6 +395,17 @@ function FlowCanvasInner({
   }, [grains]);
 
   // Merge live zone/processing state into node data so MediaFunctionNode can style itself.
+  const ringsByWriter = useMemo(() => {
+    const map = new Map<string, WriterRing[]>();
+    for (const ring of writerRings) {
+      const list = map.get(ring.writerNodeId);
+      if (list) list.push(ring);
+      else map.set(ring.writerNodeId, [ring]);
+    }
+    return map;
+  }, [writerRings]);
+  const labelByNodeId = useMemo(() => new Map(nodes.map((n) => [n.id, n.data.label])), [nodes]);
+
   const styledNodes = useMemo(
     () =>
       nodes.map((n) => {
@@ -386,11 +425,18 @@ function FlowCanvasInner({
             showRealGrainIndex,
             domainSizeMs,
             syncStalled: stalledNodeIds.has(n.id),
+            focused: n.id === focusedNodeId,
             onLatencyChange: handleLatencyChange,
+            onOutputModeChange: handleOutputModeChange,
+            rings: ringsByWriter.get(n.id),
+            labelByNodeId,
+            focusedNodeId,
+            showNow,
+            onFocusNode,
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, onFocusNode, showNow],
   );
 
   // Item #9 follow-up: briefly highlight an edge's drawn path the moment a
@@ -403,11 +449,13 @@ function FlowCanvasInner({
     return edges.map((e) => {
       const lastActive = edgeActivity.get(e.id);
       const active = lastActive !== undefined && t - lastActive < EDGE_PULSE_MS;
-      if (!active) return e;
-      return { ...e, className: `${e.className ?? ''} edge-pulse-active`.trim() };
+      const focused = focusedNodeId !== null && e.target === focusedNodeId;
+      if (!active && !focused) return e;
+      const classes = [e.className, active && 'edge-pulse-active', focused && 'edge-focused'];
+      return { ...e, className: classes.filter(Boolean).join(' ') };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute every grain tick, not just when `edges` identity changes
-  }, [edges, grains, getNow]);
+  }, [edges, grains, getNow, focusedNodeId]);
 
   return (
     <ReactFlow
@@ -416,6 +464,13 @@ function FlowCanvasInner({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      isValidConnection={isValidConnection}
+      onEdgeUpdate={onEdgeUpdate}
+      onNodeDragStart={pushHistory}
+      onNodesDelete={pushHistory}
+      onEdgesDelete={pushHistory}
+      onNodeClick={(_, node) => onFocusNode(node.id)}
+      onPaneClick={() => onFocusNode(null)}
       nodeTypes={nodeTypes}
       fitView
       fitViewOptions={{ padding: 0.3 }}
@@ -442,18 +497,37 @@ function FlowCanvasInner({
         showRealGrainIndex={showRealGrainIndex}
         getNow={getNow}
       />
-      <RingBufferBadgeOverlay nodes={nodes} inputsByNodeId={inputsByNodeId} />
+      <Panel position="top-center" className="fc-toolbar" aria-label="Canvas toolbar">
+        <button
+          type="button"
+          className="fc-toolbar__btn"
+          onClick={undo}
+          disabled={historyDepth === 0}
+          title="Undo (Ctrl+Z)"
+        >
+          ↶ Undo
+        </button>
+        <button
+          type="button"
+          className={`fc-toolbar__btn${showNow ? ' fc-toolbar__btn--on' : ''}`}
+          onClick={() => setShowNow((v) => !v)}
+          aria-pressed={showNow}
+          title="Show wall-clock now on each ring buffer"
+        >
+          ◔ Now
+        </button>
+      </Panel>
       <Panel position="top-left" className="fc-palette">
         <div className="fc-palette__title">Add node</div>
         <div className="fc-palette__buttons">
-          {PALETTE_KINDS.map((kind) => (
-            <button key={kind} type="button" className="fc-palette__btn" onClick={() => addNode(kind)}>
-              {PALETTE_LABELS[kind]}
+          {PALETTE_PRESETS.map((preset) => (
+            <button key={preset.id} type="button" className="fc-palette__btn" onClick={() => addNode(preset)}>
+              {preset.button}
             </button>
           ))}
         </div>
         <div className="fc-palette__hint">
-          Drag between handles to connect · select + Backspace to delete · drag a node's slider to
+          Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · select + Backspace to delete · drag a node's slider to
           retune its processing latency · grain indices are kept end to end, so a grain shatters (✕)
           only on the input whose slot was already overwritten (READ TOO LATE), and pales/wobbles
           (?) while an input waits on a not-yet-written grain

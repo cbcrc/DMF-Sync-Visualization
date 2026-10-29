@@ -3,6 +3,7 @@
 // ranges per Media Function type.
 
 import type { MediaFunctionKind } from '../../types';
+import type { MediaFunctionNodeData, OutputMode } from './MediaFunctionNode';
 
 export interface NodeDefaults {
   label: string;
@@ -32,6 +33,85 @@ export const PALETTE_KINDS: MediaFunctionKind[] = [
   'output',
 ];
 
+/** One "Add node" button: a kind plus the field overrides that make it a specific function. */
+export interface PalettePreset {
+  id: string;
+  /** Button text. */
+  button: string;
+  kind: MediaFunctionKind;
+  defaults: NodeDefaults;
+  /** Audio-only producer: its single output is the audio flow (handle `out-1`). */
+  audioOnly?: boolean;
+  /** Video-only function: reads video sources only. */
+  videoOnly?: boolean;
+}
+
+const PALETTE_BUTTONS: Record<MediaFunctionKind, string> = {
+  input: 'Input',
+  synthetic: 'Synthetic',
+  technical: 'Technical',
+  editorial: 'Editorial',
+  repeater: 'Repeater',
+  recording: 'Recording',
+  output: 'Output',
+};
+
+/**
+ * Everything the "Add node" panel offers: one preset per kind, then audio-only
+ * functions and multi-input mixers. A multi-input node reads several sources
+ * (each a parked grain until all arrive, like the Egress) and writes a single
+ * output ring buffer.
+ */
+export const PALETTE_PRESETS: PalettePreset[] = [
+  ...PALETTE_KINDS.map((kind) => ({
+    id: kind,
+    button: PALETTE_BUTTONS[kind],
+    kind,
+    defaults: NODE_KIND_DEFAULTS[kind],
+  })),
+  {
+    id: 'audio-input',
+    button: 'Audio Input',
+    kind: 'input',
+    defaults: { label: 'Audio Input', latencyMs: 0, inputCount: 0, outputCount: 1 },
+    audioOnly: true,
+  },
+  {
+    id: 'audio-synthetic',
+    button: 'Tone Generator',
+    kind: 'synthetic',
+    defaults: { label: 'Tone Generator', latencyMs: 0, inputCount: 0, outputCount: 1 },
+    audioOnly: true,
+  },
+  {
+    id: 'audio-processor',
+    button: 'Audio Processor',
+    kind: 'technical',
+    defaults: { label: 'Audio Processor', latencyMs: 2, inputCount: 1, outputCount: 1 },
+    audioOnly: true,
+  },
+  {
+    id: 'audio-mixer',
+    button: 'Audio Mixer (3 in)',
+    kind: 'editorial',
+    defaults: { label: 'Audio Mixer', latencyMs: 8, inputCount: 3, outputCount: 1 },
+    audioOnly: true,
+  },
+  {
+    id: 'video-mixer',
+    button: 'Video Mixer (3 in)',
+    kind: 'editorial',
+    defaults: { label: 'Video Mixer', latencyMs: 30, inputCount: 3, outputCount: 1 },
+    videoOnly: true,
+  },
+  {
+    id: 'multi-mixer',
+    button: 'Mixer (4 in)',
+    kind: 'editorial',
+    defaults: { label: 'Multi-Input Mixer', latencyMs: 40, inputCount: 4, outputCount: 1 },
+  },
+];
+
 /**
  * Adjustable processing-latency range per kind, so the player can tune a Media
  * Function's efficiency (a faster box, a lighter algorithm) and watch the
@@ -53,3 +133,12 @@ export const LATENCY_RANGE: Partial<Record<MediaFunctionKind, LatencyRange>> = {
   editorial: { min: 5, max: 90, step: 1 },
   repeater: { min: 2, max: 30, step: 1 },
 };
+
+/** Whether a producer or a sink handles video only, audio only, or both, derived from its wiring. */
+export function outputModeOf(
+  data: Pick<MediaFunctionNodeData, 'audioOnly' | 'inputCount' | 'outputCount'>,
+): OutputMode {
+  if (data.audioOnly) return 'audio';
+  const flows = data.inputCount === 0 ? data.outputCount : data.inputCount;
+  return flows === 1 ? 'video' : 'both';
+}

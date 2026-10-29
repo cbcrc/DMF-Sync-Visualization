@@ -73,8 +73,51 @@
  * 350ms+ and misleadingly implied meaningful transit latency that doesn't
  * exist in real MXL (see `grainFlow.ts`'s `travelDuration`).
  */
+/* Declared after the pulse rule so the focus highlight wins when both apply. */
+.edge-focused .react-flow__edge-path {
+  stroke: #ee0000 !important;
+  stroke-width: 3px;
+}
+
 .edge-pulse-active .react-flow__edge-path {
   stroke: #4caf50;
   stroke-width: 3px;
   filter: drop-shadow(0 0 4px rgba(76, 175, 80, 0.9));
+}
+
+/* Canvas toolbar: a bar across the top of the canvas for editing tools (undo, and future ones). */
+.fc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(17, 18, 20, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+}
+
+.fc-toolbar__btn {
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.fc-toolbar__btn:hover:not(:disabled) {
+  border-color: #ee0000;
+}
+
+.fc-toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fc-toolbar__btn--on {
+  border-color: #f5a623;
+  color: #f5a623;
 }

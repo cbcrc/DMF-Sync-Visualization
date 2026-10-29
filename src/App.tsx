@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
 import type { MediaFunctionNodeData } from './components/canvas/MediaFunctionNode';
@@ -9,15 +9,36 @@ import { GameHud } from './components/ui/GameHud';
 import { InfoPanel } from './components/ui/InfoPanel';
 import { useGameLoop } from './game/useGameLoop';
 import { useSimClock } from './game/useSimClock';
-import { LEVELS, DEFAULT_LEVEL_ID } from './game/levels';
+import { ScenariosPage } from './components/ui/ScenariosPage';
+import { BUILTIN_SCENARIOS, DEFAULT_SCENARIO_ID, type Scenario } from './game/scenarios';
+import {
+  loadSavedScenarios,
+  loadWorkingGraph,
+  persistSavedScenarios,
+  persistWorkingGraph,
+  upsertScenario,
+  type SavedScenario,
+} from './game/scenarioStorage';
+import { useHashRoute } from './game/useHashRoute';
+import { groupReadingsByWriter } from './game/writerRings';
 import './App.css';
 
 function App() {
   const [graphNodes, setGraphNodes] = useState<Node<MediaFunctionNodeData>[]>([]);
   const [graphEdges, setGraphEdges] = useState<Edge[]>([]);
-  const [levelId, setLevelId] = useState(DEFAULT_LEVEL_ID);
-  const level = useMemo(() => LEVELS.find((l) => l.id === levelId) ?? LEVELS[0], [levelId]);
-  const [domainSizeMs, setDomainSizeMs] = useState(level.domainSizeMs);
+  const [route, navigate] = useHashRoute();
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>(() => loadSavedScenarios(localStorage));
+  const scenarios = useMemo<Scenario[]>(() => [...BUILTIN_SCENARIOS, ...savedScenarios], [savedScenarios]);
+  // The autosaved canvas from the last session, if any, so a refresh keeps edits.
+  const [restored] = useState(() => loadWorkingGraph(localStorage));
+  const [levelId, setLevelId] = useState(restored?.scenarioId ?? DEFAULT_SCENARIO_ID);
+  const level = useMemo(
+    () => scenarios.find((s) => s.id === levelId) ?? BUILTIN_SCENARIOS[0],
+    [scenarios, levelId],
+  );
+  const [domainSizeMs, setDomainSizeMs] = useState(restored?.domainSizeMs ?? level.domainSizeMs);
+  const [initialGraph, setInitialGraph] = useState<{ nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }>(() => restored ?? level);
+  const [graphLoadKey, setGraphLoadKey] = useState(0);
   const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
   // Item #11: raw MXL grain index (epoch-scaled, huge) vs. the small ring-relative
   // index shown by default for readability — see `mxlGrainIndex.ts`'s `grainIndexForDisplay`.
@@ -26,6 +47,8 @@ function App() {
   // inputs currently have a grain parked on canvas waiting for a sync sibling, so the
   // Ring Buffer Telemetry panel can highlight the matching row (the two views of one event).
   const [parkedInputKeys, setParkedInputKeys] = useState<Set<string>>(new Set());
+  // Reader function the player clicked (on the canvas, a ring pointer, or the side panel).
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   // Item #9: single shared simulated clock driving grain-flow animation, ring
   // buffer evaluation, and the stability fail-timer in lockstep.
   const clock = useSimClock();
@@ -65,6 +88,8 @@ function App() {
     return map;
   }, [graph]);
 
+  const writerRings = useMemo(() => groupReadingsByWriter(graph), [graph]);
+
   const lateInputs = useMemo(
     () =>
       Array.from(graph.inputsByNodeId.values())
@@ -83,14 +108,57 @@ function App() {
   }, []);
   const handleSelectLevel = useCallback(
     (id: string) => {
+      const selected = scenarios.find((s) => s.id === id);
+      if (!selected) return;
       setLevelId(id);
-      const selected = LEVELS.find((l) => l.id === id);
-      if (selected) setDomainSizeMs(selected.domainSizeMs);
+      setDomainSizeMs(selected.domainSizeMs);
+      setInitialGraph({ nodes: selected.nodes, edges: selected.edges });
+      setGraphLoadKey((k) => k + 1);
       resetStability();
       handleRestartWave();
+      navigate('canvas');
     },
-    [resetStability, handleRestartWave],
+    [scenarios, resetStability, handleRestartWave, navigate],
   );
+
+  const handleSaveScenario = useCallback(
+    (title: string, description: string) => {
+      const { list, saved } = upsertScenario(savedScenarios, {
+        title,
+        description,
+        domainSizeMs,
+        nodes: graphNodes,
+        edges: graphEdges,
+      });
+      if (!persistSavedScenarios(localStorage, list)) return false;
+      setSavedScenarios(list);
+      setLevelId(saved.id);
+      return true;
+    },
+    [savedScenarios, domainSizeMs, graphNodes, graphEdges],
+  );
+
+  const handleDeleteScenario = useCallback(
+    (id: string) => {
+      const list = savedScenarios.filter((s) => s.id !== id);
+      if (persistSavedScenarios(localStorage, list)) setSavedScenarios(list);
+    },
+    [savedScenarios],
+  );
+
+  // Autosave the working canvas (debounced) so new functions survive a refresh.
+  useEffect(() => {
+    if (graphNodes.length === 0) return;
+    const timer = window.setTimeout(() => {
+      persistWorkingGraph(localStorage, {
+        scenarioId: levelId,
+        domainSizeMs,
+        nodes: graphNodes,
+        edges: graphEdges,
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [graphNodes, graphEdges, levelId, domainSizeMs]);
 
   const handleReset = useCallback(() => {
     resetStability();
@@ -104,7 +172,11 @@ function App() {
         zoneByNodeId={zoneByNodeId}
         statusByInputKey={statusByInputKey}
         inputsByNodeId={graph.inputsByNodeId}
-        levelId={level.id}
+        writerRings={writerRings}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
+        initialGraph={initialGraph}
+        graphLoadKey={graphLoadKey}
         waveResetKey={waveResetKey}
         showOriginTimestamps={showOriginTimestamps}
         showRealGrainIndex={showRealGrainIndex}
@@ -114,10 +186,19 @@ function App() {
         stepClockBy={clock.step}
         onManualStepReady={registerManualStep}
       />
-      <RingBufferPanel nodes={graphNodes} graph={graph} parkedInputKeys={parkedInputKeys} />
+      <RingBufferPanel
+        nodes={graphNodes}
+        graph={graph}
+        domainSizeMs={domainSizeMs}
+        showRealGrainIndex={showRealGrainIndex}
+        parkedInputKeys={parkedInputKeys}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
+      />
       <GameHud
         level={level}
         onSelectLevel={handleSelectLevel}
+        onOpenScenarios={() => navigate('scenarios')}
         domainSizeMs={domainSizeMs}
         onDomainSizeChange={setDomainSizeMs}
         totalWorkloadLatencyMs={graph.totalWorkloadLatencyMs}
@@ -136,6 +217,16 @@ function App() {
         onStep={() => manualStepRef.current()}
       />
       <InfoPanel />
+      {route === 'scenarios' && (
+        <ScenariosPage
+          scenarios={scenarios}
+          activeScenarioId={level.id}
+          onOpen={handleSelectLevel}
+          onSave={handleSaveScenario}
+          onDelete={handleDeleteScenario}
+          onClose={() => navigate('canvas')}
+        />
+      )}
     </div>
   );
 }

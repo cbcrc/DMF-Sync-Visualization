@@ -16,6 +16,46 @@
   text-align: center;
 }
 
+.mf-block {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* One frame around the function and its ring buffers; drawn outside the layout box so node geometry is unchanged. */
+.mf-block::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.03);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.mf-block__rings {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mf-block__handle {
+  background: #1a73e8;
+}
+
+.mf-node__mode {
+  max-width: 100%;
+  font: inherit;
+  font-size: 0.5rem;
+  color: #cfcfcf;
+  background: #1c1d20;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
 .mf-node--selected {
   border-color: #ee0000;
   box-shadow: 0 0 0 1px #ee0000;

@@ -193,7 +193,8 @@ export function LinearBoundaryOverlay({
     const cy = geom.y + geom.size / 2;
 
     if (node.data.kind === 'input' && node.data.outputCount > 0) {
-      const hasAudio = node.data.outputCount > 1;
+      const hasAudio = node.data.audioOnly === true || node.data.outputCount > 1;
+      const hasVideo = node.data.audioOnly !== true;
       // The tick whose arrival triggered the latest MXL write: the grains
       // spawn at `edgeActivity`, snapped to that tick's frame boundary.
       let triggerAt: number | undefined;
@@ -210,16 +211,20 @@ export function LinearBoundaryOverlay({
           style={{ left: geom.x - GAP_PX - LANE_W, top: cy, width: LANE_W }}
         >
           <div className="lb-panel__title">Linear in · synchronous, outside MXL</div>
-          <div className="lb-panel__caption">{TRACK_LABEL.video}</div>
-          <Lane
-            now={now}
-            direction="in"
-            lagMs={0}
-            track="video"
-            domainSizeMs={domainSizeMs}
-            showRealGrainIndex={showRealGrainIndex}
-            triggerAt={triggerAt}
-          />
+          {hasVideo && (
+            <>
+              <div className="lb-panel__caption">{TRACK_LABEL.video}</div>
+              <Lane
+                now={now}
+                direction="in"
+                lagMs={0}
+                track="video"
+                domainSizeMs={domainSizeMs}
+                showRealGrainIndex={showRealGrainIndex}
+                triggerAt={triggerAt}
+              />
+            </>
+          )}
           {hasAudio && (
             <>
               <div className="lb-panel__caption">{TRACK_LABEL.audio}</div>

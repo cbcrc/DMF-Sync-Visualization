@@ -84,6 +84,7 @@ export interface NodeGeom {
   latencyMs: number;
   inputCount: number;
   outputCount: number;
+  audioOnly?: boolean;
 }
 
 /**
@@ -142,6 +143,7 @@ export function buildNodeGeometry(nodes: Node<MediaFunctionNodeData>[]): Map<str
       latencyMs: n.data.latencyMs,
       inputCount: n.data.inputCount,
       outputCount: n.data.outputCount,
+      audioOnly: n.data.audioOnly,
     });
   }
   return map;
@@ -153,7 +155,8 @@ function handlePercent(index: number, count: number): number {
 
 /** Pixel position of a node's Nth output handle (right edge), matching MediaFunctionNode's layout. */
 export function outputAnchor(geom: NodeGeom, index: number): { x: number; y: number } {
-  const pct = handlePercent(index, geom.outputCount);
+  // An audio-only producer's lone output is handle `out-1` but is laid out as the only handle.
+  const pct = handlePercent(geom.audioOnly ? 0 : index, geom.outputCount);
   return { x: geom.x + geom.size, y: geom.y + (geom.size * pct) / 100 };
 }
 

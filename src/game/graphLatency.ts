@@ -79,6 +79,25 @@ export interface NodeLatencyInfo {
   repeaterCount: number;
 }
 
+/**
+ * A flow a node writes into its own ring buffer. Every output of every
+ * producing node has one, whether or not anything is reading it: an MXL writer
+ * commits grains to the shared-memory ring regardless of its readers.
+ */
+export interface WriterFlow {
+  writerNodeId: string;
+  track: Track;
+  /** The writer's output handle this flow leaves from. */
+  handleId: string;
+  grainRate: GrainRate;
+  grainDurationMs: number;
+  grainCount: number;
+  retainedGrains: number;
+  lagMs: number;
+  publishedGrainIndex: number;
+  publishedSlot: number;
+}
+
 export interface GraphBufferState {
   /** Wall-clock timestamp standing in for the domain's TAI/PTP clock. */
   timestampMs: number;
@@ -86,6 +105,8 @@ export interface GraphBufferState {
   grainDurationMs: number;
   /** Physical grain slots in one domain window. */
   grainCount: number;
+  /** Every output flow in the graph, including ones nobody reads. */
+  writerFlows: WriterFlow[];
   /** Every connected reader input, keyed by reader node id. */
   inputsByNodeId: Map<string, InputReading[]>;
   /** Worst input per node — drives node borders, badges, grain drops and the fail timer. */
@@ -365,11 +386,56 @@ export function computeGraphLatency(
   }
   if (!Number.isFinite(stabilityMarginMs)) stabilityMarginMs = domainSizeMs;
 
+  const writerFlows: WriterFlow[] = [];
+  const seenFlows = new Set<string>();
+  for (const node of nodes) {
+    const graphNode = byId.get(node.id);
+    if (!graphNode) continue;
+    // Sinks (no outputs) write no flow, even when flagged audio-only.
+    const handles = node.data.outputCount === 0
+      ? []
+      : node.data.audioOnly
+      ? [1]
+      : Array.from({ length: node.data.outputCount }, (_, i) => i);
+    const firstInbound = (inboundEdgesByTarget.get(node.id) ?? [])
+      .slice()
+      .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
+    const branch = resolveBranch(node.id);
+    for (const index of handles) {
+      const track: Track =
+        graphNode.inputSourceIds.length === 0
+          ? indexToTrack(index)
+          : firstInbound
+            ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo)
+            : 'video';
+      const flowKey = `${node.id}:${track}`;
+      if (seenFlows.has(flowKey)) continue;
+      seenFlows.add(flowKey);
+      const trackRate = grainRateForTrack(track);
+      const trackDurationMs = grainDurationMs(trackRate);
+      const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
+      const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
+      writerFlows.push({
+        writerNodeId: node.id,
+        track,
+        handleId: `out-${index}`,
+        grainRate: trackRate,
+        grainDurationMs: trackDurationMs,
+        grainCount: trackGrainCount,
+        retainedGrains: retainedGrainsFor(trackGrainCount, branch.repeaterCount, trackDurationMs),
+        lagMs: branch.lagMs,
+        publishedGrainIndex,
+        publishedSlot: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),
+      });
+    }
+  }
+
   return {
     timestampMs,
     grainRate,
     grainDurationMs: durationMs,
     grainCount,
+    writerFlows,
     inputsByNodeId,
     evaluations,
     latencyByNodeId,

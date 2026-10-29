@@ -88,3 +88,32 @@ export function slotHoldsGrainIndex(headGrainIndex: number, slotIndex: number, l
   return headGrainIndex - grainIndexToRingBufferIndex(headGrainIndex - slotIndex, length);
 }
 
+
+/**
+ * Teaching stand-in for the TAI epoch offset: the sim clock starts here (ms
+ * since the SMPTE ST 2059-1 epoch) instead of at 0, so grain indices, TAI
+ * nanoseconds and the time of day read like real MXL values. It is a whole
+ * number of 480ms (video tick) and 1000ms periods, so it never shifts the
+ * linear-tick phase. It is a fixed example value, not a real clock reading.
+ */
+export const TAI_EPOCH_OFFSET_MS = 1_792_848_000_000;
+
+/** Nanoseconds since the SMPTE epoch for a sim-clock timestamp, as a BigInt (exceeds 2^53). */
+export function timestampToTaiNs(timestampMs: number): bigint {
+  return BigInt(Math.round(timestampMs * 1e6));
+}
+
+/** Groups digits in threes with an apostrophe, matching the MXL docs style (`1'792'848'000`). */
+export function formatGrouped(value: bigint | number): string {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+}
+
+/** TAI time of day as `HH:MM:SS:FF`, with frames counted in grains of `rate`. */
+export function timestampToTimecode(timestampMs: number, rate: GrainRate = DEFAULT_GRAIN_RATE): string {
+  const framesPerSecond = Math.max(1, Math.round(rate.numerator / rate.denominator));
+  const totalSeconds = Math.floor(timestampMs / 1000);
+  const frame = Math.floor(((timestampMs % 1000) / 1000) * framesPerSecond);
+  const tod = ((totalSeconds % 86400) + 86400) % 86400;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(tod / 3600))}:${pad(Math.floor(tod / 60) % 60)}:${pad(tod % 60)}:${pad(frame)}`;
+}

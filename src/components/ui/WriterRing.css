@@ -1,0 +1,113 @@
+/* Writer ring — one ring per writer flow, many reader markers. Dark chrome. */
+
+.writer-ring {
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 8px 0 6px;
+  color: #ffffff;
+  width: 220px;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.writer-ring__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 10px 2px;
+  font-size: 0.7rem;
+}
+
+.writer-ring__label {
+  font-weight: 700;
+}
+
+.writer-ring__lag {
+  font-size: 0.6rem;
+  color: #efb03a;
+}
+
+.writer-ring__svg {
+  display: block;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.writer-ring__reader--parked circle {
+  animation: writer-ring-blink 1s ease-in-out infinite;
+}
+
+.writer-ring__readers {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.writer-ring__row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.6rem;
+  border-radius: 4px;
+  padding: 1px 2px;
+}
+
+.writer-ring__row--parked {
+  background: rgba(255, 224, 130, 0.12);
+}
+
+.writer-ring__row {
+  cursor: pointer;
+}
+
+.writer-ring__row--focused {
+  background: rgba(238, 0, 0, 0.22);
+  outline: 1px solid #ee0000;
+}
+
+.writer-ring__reader {
+  cursor: pointer;
+}
+
+.writer-ring__dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  color: #111214;
+  font-size: 0.55rem;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+
+.writer-ring__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.writer-ring__detail {
+  color: #cfcfcf;
+}
+
+.writer-ring__status {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+}
+
+@keyframes writer-ring-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

@@ -1,9 +1,14 @@
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { MediaFunctionKind } from '../../types';
 import { nodeSizeForLatency } from './nodeSizing';
-import { LATENCY_RANGE } from './nodeDefaults';
+import { LATENCY_RANGE, outputModeOf } from './nodeDefaults';
 import { grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
+import type { WriterRing } from '../../game/writerRings';
+import { RingBufferStrip } from './RingBufferStrip';
 import './MediaFunctionNode.css';
+
+/** Which flows a producer writes: one ring for each. */
+export type OutputMode = 'video' | 'audio' | 'both';
 
 /** Data payload for a Media Function node on the canvas (subset of `MediaFunction`). */
 export interface MediaFunctionNodeData {
@@ -12,6 +17,13 @@ export interface MediaFunctionNodeData {
   latencyMs: number;
   inputCount: number;
   outputCount: number;
+  /**
+   * Audio-only producer: its one output carries the audio flow, so the handle
+   * is `out-1` (the video/audio-by-handle convention) rather than `out-0`.
+   */
+  audioOnly?: boolean;
+  /** Video-only function: reads video sources only. */
+  videoOnly?: boolean;
   /** Live Ring Buffer zone for this node's input (Task 4), if it's a reader. */
   zone?: 'green' | 'yellow' | 'red';
   /** True while a grain is currently "held" at this node, processing (Task 4 grain-flow viz). */
@@ -42,12 +54,25 @@ export interface MediaFunctionNodeData {
   domainSizeMs?: number;
   /** Set when this node is waiting on a synchronized sibling flow that suffered an overrun drop. */
   syncStalled?: boolean;
+  /** This reader is the focused one: its inbound links and ring pointers are highlighted too. */
+  focused?: boolean;
   /**
    * Set by the canvas so the node can retune its own processing latency —
    * this is the player's "efficiency" control for a Media Function.
    */
   onLatencyChange?: (nodeId: string, latencyMs: number) => void;
+  /** This function's own ring buffers (one per output flow), drawn as part of its block. */
+  rings?: WriterRing[];
+  labelByNodeId?: Map<string, string>;
+  focusedNodeId?: string | null;
+  /** Show wall-clock "now" on each ring, to see how far behind it the writer is. */
+  showNow?: boolean;
+  onFocusNode?: (nodeId: string | null) => void;
+  /** Lets an Input or Output switch between video only, audio only, or both flows. */
+  onOutputModeChange?: (nodeId: string, mode: OutputMode) => void;
 }
+
+const MODE_LABEL: Record<OutputMode, string> = { video: 'Video only', audio: 'Audio only', both: 'Audio + video' };
 
 /** Short glyph + display name per kind, used since this app has no icon library. */
 const KIND_META: Record<MediaFunctionKind, { glyph: string; name: string }> = {
@@ -77,9 +102,20 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
   const range = LATENCY_RANGE[data.kind];
   const adjustable = range !== undefined && data.onLatencyChange !== undefined;
 
+  // Producers (Input) and sinks (Output) choose which flows they carry.
+  const hasFlowMode = (data.inputCount === 0 && data.outputCount > 0) || (data.kind === 'output' && data.outputCount === 0);
+  const outputIds = data.outputCount === 0
+    ? []
+    : data.audioOnly
+    ? ['out-1']
+    : Array.from({ length: data.outputCount }, (_, i) => `out-${i}`);
+  const rings = data.rings ?? [];
+  const ringHandleIds = new Set(rings.map((r) => r.handleId));
+
   return (
+    <div className="mf-block">
     <div
-      className={`mf-node${selected ? ' mf-node--selected' : ''}${zoneClass}${processingClass}${stalledClass}`}
+      className={`mf-node${selected || data.focused ? ' mf-node--selected' : ''}${zoneClass}${processingClass}${stalledClass}`}
       style={{ width: size, height: size }}
     >
       {data.syncStalled && (
@@ -100,7 +136,23 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
 
       <div className="mf-node__glyph">{meta.glyph}</div>
       <div className="mf-node__label">{data.label}</div>
-      <div className="mf-node__kind">{meta.name}</div>
+      {hasFlowMode && data.onOutputModeChange ? (
+        <select
+          className="mf-node__mode nodrag"
+          value={outputModeOf(data)}
+          aria-label={`${data.label} output flows`}
+          onChange={(e) => data.onOutputModeChange?.(id, e.target.value as OutputMode)}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {(Object.keys(MODE_LABEL) as OutputMode[]).map((m) => (
+            <option key={m} value={m}>
+              {MODE_LABEL[m]}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="mf-node__kind">{data.audioOnly ? `Audio ${meta.name}` : data.videoOnly ? `Video ${meta.name}` : meta.name}</div>
+      )}
 
       {/* Internal processing path. The grain only exists while one is actually
           being held here, and crosses the track exactly once over that hold —
@@ -160,16 +212,35 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
         data.latencyMs > 0 && <div className="mf-node__latency">{data.latencyMs}ms</div>
       )}
 
-      {data.outputCount > 0 &&
-        handleOffsets(data.outputCount).map((top, i) => (
+      {/* Outputs without a ring (none expected) keep an unseen anchor on the body. */}
+      {outputIds
+        .filter((hid) => !ringHandleIds.has(hid))
+        .map((hid, i) => (
           <Handle
-            key={`out-${i}`}
-            id={`out-${i}`}
+            key={hid}
+            id={hid}
             type="source"
             position={Position.Right}
-            style={{ top: `${top}%` }}
+            style={{ top: `${handleOffsets(outputIds.length)[i]}%`, opacity: 0, pointerEvents: 'none' }}
           />
         ))}
+    </div>
+    {rings.length > 0 && (
+      <div className="mf-block__rings" style={{ minHeight: size }}>
+        {rings.map((ring) => (
+          <RingBufferStrip
+            key={ring.key}
+            ring={ring}
+            labelByNodeId={data.labelByNodeId ?? new Map()}
+            focusedNodeId={data.focusedNodeId ?? null}
+            showNow={data.showNow}
+            onFocusNode={data.onFocusNode ?? (() => undefined)}
+          >
+            <Handle id={ring.handleId} type="source" position={Position.Right} className="mf-block__handle" />
+          </RingBufferStrip>
+        ))}
+      </div>
+    )}
     </div>
   );
 }

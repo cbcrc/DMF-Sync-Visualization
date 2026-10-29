@@ -45,6 +45,12 @@
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+.rb-panel__group--focused {
+  border-top-color: #ee0000;
+  box-shadow: inset 3px 0 0 #ee0000;
+  padding-left: 4px;
+}
+
 .rb-panel__group-title {
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   font-size: 0.7rem;
@@ -78,4 +84,13 @@
   50% {
     box-shadow: 0 0 0 1px rgba(255, 224, 130, 0.75), 0 0 12px 2px rgba(255, 193, 7, 0.5);
   }
+}
+
+.rb-panel__track {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #757575;
+  margin-left: 4px;
 }

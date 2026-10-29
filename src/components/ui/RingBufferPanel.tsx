@@ -1,8 +1,10 @@
 import type { Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../canvas/MediaFunctionNode';
 import type { GraphBufferState } from '../../game/graphLatency';
+import { groupReadingsByWriter } from '../../game/writerRings';
+import { ClockStrip } from './ClockStrip';
+import { WriterRing } from './WriterRing';
 import { RingBufferGauge } from './RingBufferGauge';
-import { RingBufferRing } from './RingBufferRing';
 import { GrainSlotStrip } from './GrainSlotStrip';
 import { ContinuousBufferTrack } from './ContinuousBufferTrack';
 import './RingBufferPanel.css';
@@ -10,6 +12,9 @@ import './RingBufferPanel.css';
 export interface RingBufferPanelProps {
   nodes: Node<MediaFunctionNodeData>[];
   graph: GraphBufferState;
+  domainSizeMs: number;
+  /** Mirrors the HUD's "Use real MXL index" toggle (item #11). */
+  showRealGrainIndex: boolean;
   /**
    * Reader inputs (keyed `${nodeId}:${inputIndex}`) that currently have a grain
    * parked on canvas waiting for a sync sibling — highlights the matching row so
@@ -17,56 +22,86 @@ export interface RingBufferPanelProps {
    * correlated event rather than two disconnected visuals.
    */
   parkedInputKeys?: Set<string>;
+  /** Reader function currently focused; rings it reads from, and its markers, are highlighted. */
+  focusedNodeId?: string | null;
+  onFocusNode?: (nodeId: string | null) => void;
 }
 
 /**
- * Live ring buffer telemetry, one block per reader *input* rather than per
- * node: at a sync point the inputs disagree, and that disagreement is the
- * whole lesson. Video/data inputs show the discrete MXL grain-slot strip and
- * ring dial; audio inputs show `ContinuousBufferTrack` instead, modelling
- * MXL's Continuous (not Discrete) ring buffer with a slot-free, time-based
- * visualization whose read marker is always visible (see that component's
- * doc comment). All inputs also get the track-agnostic linear gauge.
+ * Live ring buffer telemetry, one block per *writer* flow: a ring is a
+ * property of the writer, and every function reading it is a marker on that
+ * one ring (`WriterRing`), so several readers at different points in time can
+ * be compared against the same head and "now". Each reader keeps its own
+ * detail below: the linear gauge plus, for video/data, the grain-slot strip.
+ * Audio writers are MXL Continuous buffers, so they get only the
+ * now-bar (no slot ring), and each reader's detail is the slot-free
+ * `ContinuousBufferTrack`.
  */
-export function RingBufferPanel({ nodes, graph, parkedInputKeys }: RingBufferPanelProps) {
+export function RingBufferPanel({
+  nodes,
+  graph,
+  domainSizeMs,
+  showRealGrainIndex,
+  parkedInputKeys,
+  focusedNodeId = null,
+  onFocusNode,
+}: RingBufferPanelProps) {
   const labelByNodeId = new Map(nodes.map((n) => [n.id, n.data.label]));
-  const readers = nodes.filter((n) => graph.inputsByNodeId.has(n.id));
+  const writers = groupReadingsByWriter(graph);
 
   return (
     <div className="rb-panel">
       <div className="rb-panel__title">MXL Ring Buffer Telemetry (live)</div>
+      <ClockStrip
+        timestampMs={graph.timestampMs}
+        grainRate={graph.grainRate}
+        grainDurationMs={graph.grainDurationMs}
+        grainCount={graph.grainCount}
+        domainSizeMs={domainSizeMs}
+        showRealGrainIndex={showRealGrainIndex}
+      />
       <div className="rb-panel__clock">
-        Video domain clock g{graph.grainCount > 0 ? Math.floor(graph.timestampMs / graph.grainDurationMs) : 0} ·{' '}
         {graph.grainDurationMs}ms grains · {graph.grainCount} slots/window
-        <span className="rb-panel__clock-note"> (each input below uses its own track's grain rate)</span>
+        <span className="rb-panel__clock-note"> (each flow below uses its own track's grain rate)</span>
       </div>
-      {readers.length === 0 && (
+      {writers.length === 0 && (
         <div className="rb-panel__empty">No reader inputs yet — connect a node's input.</div>
       )}
-      {readers.map((n) => {
-        const readings = graph.inputsByNodeId.get(n.id)!;
+      {writers.map((ring) => {
+        const writerLabel = labelByNodeId.get(ring.writerNodeId) ?? ring.writerNodeId;
+        const holdsFocus = ring.readers.some((r) => r.readerNodeId === focusedNodeId);
         return (
-          <div key={n.id} className="rb-panel__group">
-            <div className="rb-panel__group-title">{n.data.label}</div>
-            {readings.map((reading) => {
-              const source = labelByNodeId.get(reading.sourceNodeId) ?? reading.sourceNodeId;
-              const isParked = parkedInputKeys?.has(`${reading.readerNodeId}:${reading.inputIndex}`) ?? false;
+          <div key={ring.key} className={`rb-panel__group${holdsFocus ? ' rb-panel__group--focused' : ''}`}>
+            <div className="rb-panel__group-title">
+              {writerLabel} <span className="rb-panel__track">{ring.track}</span>
+            </div>
+            <WriterRing
+              ring={ring}
+              writerLabel={writerLabel}
+              labelByNodeId={labelByNodeId}
+              parkedInputKeys={parkedInputKeys}
+              focusedNodeId={focusedNodeId}
+              onFocusNode={onFocusNode}
+              barOnly={ring.track === 'audio'}
+            />
+            {ring.readers.map((reader, i) => {
+              const { reading } = reader;
+              const readerLabel = labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId;
+              const label = `${i + 1} → ${readerLabel}`;
+              const isParked = parkedInputKeys?.has(reader.key) ?? false;
               return (
-                <div key={reading.buffer.id} className={`rb-panel__entry${isParked ? ' rb-panel__entry--parked' : ''}`}>
-                  <RingBufferGauge label={`← ${source}`} buffer={reading.buffer} evaluation={reading.evaluation} />
+                <div key={reader.key} className={`rb-panel__entry${isParked ? ' rb-panel__entry--parked' : ''}`}>
+                  <RingBufferGauge label={label} buffer={reading.buffer} evaluation={reading.evaluation} />
                   {reading.track === 'audio' ? (
                     <ContinuousBufferTrack
-                      label={`← ${source}`}
+                      label={label}
                       buffer={reading.buffer}
                       evaluation={reading.evaluation}
                       alignmentSpanMs={reading.alignmentSpanMs}
                       parked={isParked}
                     />
                   ) : (
-                    <>
-                      <GrainSlotStrip buffer={reading.buffer} evaluation={reading.evaluation} />
-                      <RingBufferRing label={`← ${source}`} buffer={reading.buffer} evaluation={reading.evaluation} />
-                    </>
+                    <GrainSlotStrip buffer={reading.buffer} evaluation={reading.evaluation} />
                   )}
                 </div>
               );
