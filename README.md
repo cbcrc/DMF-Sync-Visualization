@@ -3,7 +3,7 @@
 ## Why this exists
 
 An interactive, browser-based tool for testing and working with latency and
-synchronization in the EBU's Dynamic Media Facility (DMF). 
+synchronization in the EBU's [Dynamic Media Facility (DMF)](https://tech.ebu.ch/dmf/ra). 
 
 A DMF has linear, synchronous boundaries (Ingress and Egress) around an 
 asynchronous domain, and inside that asynchronous domain behaviour follows 
