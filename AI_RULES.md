@@ -552,3 +552,9 @@ An empty 100ms domain to build on from the palette.
 Fonts live in `public/fonts/` (loaded by `src/index.css`). A slide-deck theme
 from another project (`assets/theme.css`) was removed from this repo; do not
 reintroduce it.
+
+- **Copy / paste.** Ctrl+C / Ctrl+V (or the toolbar Copy / Paste) duplicates the
+  selected functions with their settings but no links. The copy keeps the
+  source's name with the next free number (`nextCopyLabel` in
+  `src/game/copyLabel.ts`): an unnumbered source counts as 1, so its first
+  copy is "… 2".

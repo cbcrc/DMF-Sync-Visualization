@@ -18,6 +18,7 @@ import {
   type NodeTypes,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { nextCopyLabel } from '../../game/copyLabel';
 import type { RingBufferStatus } from '../../types';
 import { MediaFunctionNode, type MediaFunctionNodeData } from './MediaFunctionNode';
 import { GrainOverlay } from './GrainOverlay';
@@ -299,6 +300,52 @@ function FlowCanvasInner({
     },
     [setNodes],
   );
+
+  const clipboardRef = useRef<Node<MediaFunctionNodeData>[]>([]);
+  const pasteCount = useRef(0);
+  const [canPaste, setCanPaste] = useState(false);
+
+  const copySelected = useCallback(() => {
+    const picked = graphRef.current.nodes.filter((n) => n.selected);
+    if (picked.length === 0) return;
+    clipboardRef.current = structuredClone(picked.map(({ id, type, position, data }) => ({ id, type, position, data })));
+    pasteCount.current = 0;
+    setCanPaste(true);
+  }, []);
+
+  const pasteCopied = useCallback(() => {
+    if (clipboardRef.current.length === 0) return;
+    const shift = 40 * ++pasteCount.current;
+    const labels = graphRef.current.nodes.map((n) => n.data.label);
+    const copies = clipboardRef.current.map((src, i) => {
+      const label = nextCopyLabel(src.data.label, labels);
+      labels.push(label);
+      return {
+        ...structuredClone(src),
+        id: `${src.id.replace(/-copy-.*$/, '')}-copy-${Date.now()}-${i}`,
+        position: { x: src.position.x + shift, y: src.position.y + shift },
+        selected: true,
+        data: { ...structuredClone(src.data), label },
+      };
+    });
+    pushHistory();
+    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...copies]);
+  }, [pushHistory, setNodes]);
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey) return;
+      const key = ev.key.toLowerCase();
+      if (key !== 'c' && key !== 'v') return;
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      ev.preventDefault();
+      if (key === 'c') copySelected();
+      else pasteCopied();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [copySelected, pasteCopied]);
 
   const hasSelection = nodes.some((n) => n.selected) || edges.some((e) => e.selected);
   const deleteSelected = useCallback(() => {
@@ -589,6 +636,24 @@ function FlowCanvasInner({
         </button>
         <button
           type="button"
+          className="fc-toolbar__btn"
+          onClick={copySelected}
+          disabled={!nodes.some((n) => n.selected)}
+          title="Copy the selected function (Ctrl+C)"
+        >
+          ⧉ Copy
+        </button>
+        <button
+          type="button"
+          className="fc-toolbar__btn"
+          onClick={pasteCopied}
+          disabled={!canPaste}
+          title="Paste the copied function with the next free number (Ctrl+V)"
+        >
+          📋 Paste
+        </button>
+        <button
+          type="button"
           className={`fc-toolbar__btn${showNow ? ' fc-toolbar__btn--on' : ''}`}
           onClick={() => setShowNow((v) => !v)}
           aria-pressed={showNow}
@@ -617,7 +682,7 @@ function FlowCanvasInner({
           </div>
         ))}
         <div className="fc-palette__hint">
-          Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · select + Backspace to delete · drag a media function's slider to
+          Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · Ctrl+C / Ctrl+V copies a function · select + Backspace to delete · drag a media function's slider to
           retune its processing latency · grain indices are kept end to end, so a grain shatters (✕)
           only on the input whose slot was already overwritten (READ TOO LATE), and pales/wobbles
           (?) while an input waits on a not-yet-written grain
