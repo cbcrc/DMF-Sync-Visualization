@@ -276,7 +276,8 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
     simulation tick — both made the feature "move too fast to read." Fixed
     by: (D1) two grain-index modes (HUD "Grain index" control):
     **Simplified** (default), a sequential count starting at 100 when the
-    sim clock starts (`simplifiedGrainIndex`), and **Real MXL**, the true
+    sim clock starts, wrapping from 999 back to 100 so it never exceeds 3
+    digits (`simplifiedGrainIndex`), and **Real MXL**, the true
     epoch-scaled index (`grainIndexForDisplay`); ring slots show only its
     last 3-4 digits (`grainIndexLabel`), tooltips the longer form. Each ring
     slot (side-panel ring wedges and on-canvas strips) shows its fixed slot

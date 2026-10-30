@@ -15,6 +15,8 @@ describe('TAI clock helpers', () => {
     const start = timestampToGrainIndex(TAI_EPOCH_OFFSET_MS);
     expect(grainIndexLabel(start, DEFAULT_GRAIN_RATE, false)).toBe('100');
     expect(grainIndexLabel(start + 7, DEFAULT_GRAIN_RATE, false)).toBe('107');
+    expect(grainIndexLabel(start + 900, DEFAULT_GRAIN_RATE, false)).toBe('100');
+    expect(grainIndexLabel(start + 899, DEFAULT_GRAIN_RATE, false)).toBe('999');
     expect(grainIndexLabel(89_642_401_234, DEFAULT_GRAIN_RATE, true)).toBe('1234');
     expect(grainIndexLabel(89_642_401_234, DEFAULT_GRAIN_RATE, true, 3)).toBe('234');
   });

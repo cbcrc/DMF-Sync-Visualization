@@ -78,15 +78,19 @@ export function grainIndexForDisplay(
 
 /** The simplified index counts up from this number at the start of the simulation. */
 export const SIMPLIFIED_INDEX_START = 100;
+/** Last simplified index before it wraps back to the start, keeping it to 3 digits. */
+export const SIMPLIFIED_INDEX_END = 999;
 
 /**
  * Simplified grain index: a plain sequential count starting at 100 when the
  * sim clock starts, per flow rate (so video and audio each count their own
  * grains). It moves in lock-step with the real MXL index, just without the
- * epoch-sized offset.
+ * epoch-sized offset. It never exceeds 3 digits: after 999 it wraps to 100.
  */
 export function simplifiedGrainIndex(grainIndex: number, rate: GrainRate): number {
-  return SIMPLIFIED_INDEX_START + grainIndex - timestampToGrainIndex(TAI_EPOCH_OFFSET_MS, rate);
+  const span = SIMPLIFIED_INDEX_END - SIMPLIFIED_INDEX_START + 1;
+  const count = grainIndex - timestampToGrainIndex(TAI_EPOCH_OFFSET_MS, rate);
+  return SIMPLIFIED_INDEX_START + (((count % span) + span) % span);
 }
 
 /**
