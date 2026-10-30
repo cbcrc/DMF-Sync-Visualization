@@ -267,10 +267,14 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
     (`Date.now()` / grain duration) and reads as an 11-13 digit number with
     no pedagogical anchor, and the age counter used to repaint every ~40ms
     simulation tick — both made the feature "move too fast to read." Fixed
-    by: (D1) showing the small `RingBufferIndex` (`grainIndex mod
-    ringBufferLength`, `mxlGrainIndex.ts`'s `grainIndexForDisplay`) by
-    default, with a nested HUD toggle ("Use real MXL index") to switch to
-    the raw epoch index once a user understands the small one; (D2)
+    by: (D1) two grain-index modes (HUD "Grain index" control):
+    **Simplified** (default), a sequential count starting at 100 when the
+    sim clock starts (`simplifiedGrainIndex`), and **Real MXL**, the true
+    epoch-scaled index (`grainIndexForDisplay`); ring slots show only its
+    last 3-4 digits (`grainIndexLabel`), tooltips the longer form. Each ring
+    slot (side-panel ring wedges and on-canvas strips) shows its fixed slot
+    number plus the grain index it currently holds, which advances as time
+    flows; (D2)
     rounding the displayed age to 100ms steps so it changes in readable
     increments instead of every tick; (D3) tags now linger, fading out over
     ~220ms at their last known position after their grain leaves the live
@@ -281,7 +285,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   the same origin-derived grain index as the `writing #<idx>` flash that
   follows when it departs — proof the node doesn't re-stamp the grain with
   a new capture time as it "creates" its processed output (item #10.iii).
-  This tag also respects the "Use real MXL index" toggle.
+  This tag also follows the grain-index mode.
 
 ## Playback modes (shared simulated clock) — item #9
 

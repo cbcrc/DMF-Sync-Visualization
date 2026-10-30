@@ -63,20 +63,41 @@ export function grainIndexToRingBufferIndex(grainIndex: number, length: number):
  * Item #11: the raw `GrainIndex` (real MXL index) is a huge, ever-growing
  * epoch-scaled number (`Date.now()` / grain duration — 11-13 digits), which
  * reads as noise rather than teaching anything at a glance. By default we
- * show the much smaller, more legible `RingBufferIndex` (grain index mod the
- * ring's slot count) — small numbers that directly illustrate "GrainIndex
- * mod RingBufferLength" (`docs`'s Timing.md). A HUD toggle
- * ("Use real MXL index") lets a player switch to the raw index once they've
- * built intuition on the small one, to see how MXL actually indexes grains.
+ * show a simplified sequential count starting at 100; a HUD control switches
+ * to the real MXL index to see how MXL actually indexes grains.
  */
 export function grainIndexForDisplay(
   timestampMs: number,
   rate: GrainRate,
-  domainSizeMs: number,
+  _domainSizeMs: number,
   useRealIndex: boolean,
 ): number {
   const idx = timestampToGrainIndex(timestampMs, rate);
-  return useRealIndex ? idx : grainIndexToRingBufferIndex(idx, ringBufferLength(domainSizeMs, rate));
+  return useRealIndex ? idx : simplifiedGrainIndex(idx, rate);
+}
+
+/** The simplified index counts up from this number at the start of the simulation. */
+export const SIMPLIFIED_INDEX_START = 100;
+
+/**
+ * Simplified grain index: a plain sequential count starting at 100 when the
+ * sim clock starts, per flow rate (so video and audio each count their own
+ * grains). It moves in lock-step with the real MXL index, just without the
+ * epoch-sized offset.
+ */
+export function simplifiedGrainIndex(grainIndex: number, rate: GrainRate): number {
+  return SIMPLIFIED_INDEX_START + grainIndex - timestampToGrainIndex(TAI_EPOCH_OFFSET_MS, rate);
+}
+
+/**
+ * Short text for a grain index drawn inside a slot. Real mode shows only the
+ * last `digits` digits of the true MXL index (`GrainIndex = TAI ns * rate`),
+ * which still advance one per grain, to save space.
+ */
+export function grainIndexLabel(grainIndex: number, rate: GrainRate, useRealIndex: boolean, digits = 4): string {
+  if (!useRealIndex) return String(simplifiedGrainIndex(grainIndex, rate));
+  const full = String(grainIndex);
+  return full.length > digits ? full.slice(-digits) : full;
 }
 
 /**

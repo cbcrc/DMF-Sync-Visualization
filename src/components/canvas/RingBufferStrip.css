@@ -57,6 +57,24 @@
   background: #e1f7e1;
 }
 
+.ws__cell {
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.ws__cell-slot {
+  font-size: 0.55rem;
+  font-weight: 700;
+}
+
+.ws__cell-idx {
+  font-size: 0.42rem;
+  font-weight: 500;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
 .ws__cell + .ws__cell {
   border-left: 1px solid rgba(0, 0, 0, 0.25);
 }

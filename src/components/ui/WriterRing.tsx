@@ -1,4 +1,4 @@
-import { slotHoldsGrainIndex } from '../../engine/mxlGrainIndex';
+import { grainIndexLabel, slotHoldsGrainIndex } from '../../engine/mxlGrainIndex';
 import type { RingBufferStatus } from '../../types';
 import { readerTitle, type WriterRing as WriterRingModel } from '../../game/writerRings';
 import './WriterRing.css';
@@ -17,6 +17,8 @@ export interface WriterRingProps {
    * writers: MXL audio is a Continuous buffer with no discrete slots to show.
    */
   barOnly?: boolean;
+  /** Grain index shown in each slot: false = simplified count, true = last digits of the real MXL index. */
+  showRealGrainIndex?: boolean;
 }
 
 const W = 220;
@@ -72,7 +74,7 @@ function Arrow({ angle, color, offset = 0, label }: { angle: number; color: stri
  * fan inward by lane. Under the ring a linear "now bar" shows the same
  * readers on a time axis: oldest retained grain on the left, now on the right.
  */
-export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, focusedNodeId = null, onFocusNode, barOnly = false }: WriterRingProps) {
+export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, focusedNodeId = null, onFocusNode, barOnly = false, showRealGrainIndex = false }: WriterRingProps) {
   const n = ring.grainCount;
   const maxLane = ring.readers.reduce((m, r) => Math.max(m, r.lane), 0);
   const lagSlots = Math.min(Math.max(ring.lagGrains, 0), n - 1);
@@ -117,12 +119,17 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
                 stroke={retained ? 'none' : 'rgba(255,255,255,0.35)'}
                 strokeDasharray={retained ? undefined : '2 2'}
               >
-                <title>{`slot ${s} · grain ${j}${retained ? '' : ' · outside retained history'}`}</title>
+                <title>{`slot ${s} · grain ${grainIndexLabel(j, ring.grainRate, showRealGrainIndex, 12)}${retained ? '' : ' · outside retained history'}`}</title>
               </path>
               {showLabels && (
-                <text x={mid.x} y={mid.y} fill="#0e1822" fontSize="7" fontWeight="600" textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
+                <>
+                <text x={mid.x} y={mid.y - 3.5} fill="#0e1822" fontSize="7" fontWeight="700" textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
                   {s}
                 </text>
+                <text x={mid.x} y={mid.y + 4} fill="#0e1822" fontSize="5.5" textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
+                  {grainIndexLabel(j, ring.grainRate, showRealGrainIndex, n > 10 ? 3 : 4)}
+                </text>
+                </>
               )}
             </g>
           );

@@ -14,7 +14,7 @@ export interface GrainOverlayProps {
    * "writing" flash where a grain departs a node having just been written
    * into that node's output ring buffer. Off by default to avoid clutter. */
   showOriginTimestamps?: boolean;
-  /** Show the raw epoch-scaled MXL grain index instead of the small ring-relative one (item #11). */
+  /** Show the real MXL grain index instead of the simplified count from 100. */
   showRealGrainIndex?: boolean;
   /** Current MXL Domain size, needed to compute the ring-relative grain index (item #11). */
   domainSizeMs: number;

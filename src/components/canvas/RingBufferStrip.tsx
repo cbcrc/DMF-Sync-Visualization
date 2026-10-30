@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { WriterRing } from '../../game/writerRings';
 import { readerTitle } from '../../game/writerRings';
 import { READ_BEHIND_WRITE_GRAINS } from '../../engine/ringBufferEngine';
+import { grainIndexLabel } from '../../engine/mxlGrainIndex';
 import { CELL_H, LANE_H, NOW_W, OVERWRITTEN_W, RING_STRIP_W, STRIP_W } from './ringStripLayout';
 import './RingBufferStrip.css';
 
@@ -14,6 +15,8 @@ export interface RingBufferStripProps {
   focusedNodeId: string | null;
   /** Also draw wall-clock "now" to the right of the write head, to show how far behind it the writer is. */
   showNow?: boolean;
+  /** Grain index in each slot: false = simplified count from 100, true = last digits of the real MXL index. */
+  showRealGrainIndex?: boolean;
   onFocusNode: (nodeId: string | null) => void;
   /** Rendered inside the card; the parent puts this ring's output handle here. */
   children?: ReactNode;
@@ -27,7 +30,7 @@ export interface RingBufferStripProps {
  * its position relative to the head is visible at a glance. Clicking a pointer
  * selects that reader (same focus as clicking the node itself).
  */
-export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = false, onFocusNode, children }: RingBufferStripProps) {
+export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = false, showRealGrainIndex = false, onFocusNode, children }: RingBufferStripProps) {
   const n = ring.grainCount;
   const drawCells = ring.track !== 'audio' && n <= MAX_DRAWN_CELLS;
   const maxLane = ring.readers.reduce((m, r) => Math.max(m, r.lane), 0);
@@ -99,9 +102,12 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
                 <div
                   key={c}
                   className={`ws__cell${age === 0 ? ' ws__cell--head' : readable ? '' : ' ws__cell--unreadable'}`}
-                  title={age === 0 ? 'Being written — cannot be read' : readable ? undefined : 'Outside retained history'}
+                  title={`slot ${slot} · grain ${grainIndexLabel(ring.publishedGrainIndex - age, ring.grainRate, showRealGrainIndex, 12)}${
+                    age === 0 ? ' · being written, cannot be read' : readable ? '' : ' · outside retained history'
+                  }`}
                 >
-                  {slot}
+                  <span className="ws__cell-slot">{slot}</span>
+                  <span className="ws__cell-idx">{grainIndexLabel(ring.publishedGrainIndex - age, ring.grainRate, showRealGrainIndex, n > 8 ? 3 : 4)}</span>
                 </div>
               );
             })

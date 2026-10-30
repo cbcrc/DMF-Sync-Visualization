@@ -105,6 +105,7 @@ export function RingBufferPanel({
               focusedNodeId={focusedNodeId}
               onFocusNode={onFocusNode}
               barOnly={ring.track === 'audio'}
+              showRealGrainIndex={showRealGrainIndex}
             />
             {ring.readers.map((reader, i) => {
               const { reading } = reader;

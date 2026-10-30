@@ -23,7 +23,7 @@ export interface GameHudProps {
   /** Show each grain's MXL origin-timestamp index/offset-from-now + node write flashes. */
   showOriginTimestamps: boolean;
   onToggleOriginTimestamps: (show: boolean) => void;
-  /** Show the raw epoch-scaled MXL grain index instead of the small ring-relative one (item #11). */
+  /** Grain index display: false = simplified count from 100, true = real MXL index (last digits in slots). */
   showRealGrainIndex: boolean;
   onToggleRealGrainIndex: (show: boolean) => void;
   /** Item #9: Normal (real-time) / Stepping (slow auto-advance) / Manual (frozen, step-by-step). */
@@ -102,16 +102,22 @@ export function GameHud({
         Show origin timestamps
       </label>
 
-      {showOriginTimestamps && (
-        <label className="game-hud__checkbox game-hud__checkbox--nested">
-          <input
-            type="checkbox"
-            checked={showRealGrainIndex}
-            onChange={(e) => onToggleRealGrainIndex(e.target.checked)}
-          />
-          Use real MXL index (vs. small ring-relative index)
-        </label>
-      )}
+      <div className="game-hud__playback">
+        <span className="game-hud__playback-label">Grain index:</span>
+        <div className="game-hud__playback-modes">
+          {[false, true].map((real) => (
+            <button
+              key={String(real)}
+              type="button"
+              className={`game-hud__playback-btn${real === showRealGrainIndex ? ' game-hud__playback-btn--active' : ''}`}
+              onClick={() => onToggleRealGrainIndex(real)}
+              title={real ? 'The true MXL grain index (TAI time ÷ grain duration); last digits shown' : 'A simple count starting at 100'}
+            >
+              {real ? 'Real MXL' : 'Simplified'}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="game-hud__playback">
         <span className="game-hud__playback-label">Playback:</span>

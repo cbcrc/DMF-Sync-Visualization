@@ -41,8 +41,8 @@ function App() {
   const [initialGraph, setInitialGraph] = useState<{ nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }>(() => restored ?? level);
   const [graphLoadKey, setGraphLoadKey] = useState(0);
   const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
-  // Item #11: raw MXL grain index (epoch-scaled, huge) vs. the small ring-relative
-  // index shown by default for readability — see `mxlGrainIndex.ts`'s `grainIndexForDisplay`.
+  // Grain index mode: simplified count from 100 (default) vs. the real MXL index —
+  // see `mxlGrainIndex.ts`'s `grainIndexForDisplay`.
   const [showRealGrainIndex, setShowRealGrainIndex] = useState(false);
   // Keyed `${nodeId}:${inputIndex}`, same keying as `statusByInputKey` — which reader
   // inputs currently have a grain parked on canvas waiting for a sync sibling, so the
