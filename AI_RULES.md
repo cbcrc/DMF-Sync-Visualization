@@ -111,17 +111,21 @@ src/
   `<Handle id={ring.handleId}>`, so edges still go writer node to reader node.
   Built-in scenarios have their x positions spread (`spreadForRings`) to leave
   room for the rings.
-- **Reader pointers.** Slots are fixed: slot 1 is leftmost, slot N rightmost
-  (displayed 1-based; N = domain size / grain duration), and the write head
-  moves across them and wraps. Each slot shows the grain index it currently
-  holds (simplified count or last digits of the real index). A reader's pointer
-  sits under its requested slot (`deltaGrains + READ_BEHIND_WRITE_GRAINS`
-  grains behind the head, mod N), so it can never sit on the write slot.
-  Grey slots just ahead of the head are writer-reserved. A TOO_EARLY reader
-  waits hollow; a TOO_LATE reader moves into the hatched "too late" box left of slot 1 (its grain was overwritten), flagged ✕. Audio and video share this logic
-  (audio reserves 40ms, video 2 grains: `WRITER_RESERVED_MS`). Clicking a
-  pointer or a node focuses that reader (highlights its link and pointer).
-  The toolbar's **Now** toggle marks the slot wall-clock now falls in.
+- **Reader pointers.** The strip is a timeline: the write head is always the
+  rightmost box and each box shows the grain index it holds (simplified count
+  or last digits of the real index), so indices flow right to left as time
+  advances. Strips show no static slot numbers; the side-panel ring still does
+  (1-based). A reader's pointer sits `deltaGrains + READ_BEHIND_WRITE_GRAINS`
+  boxes left of the head, so it can never sit on the write box; that distance
+  is the differential latency it needs to stay in sync. This mirrors MXL's
+  `FlowSynchronizationGroup::waitForDataAt(originTime)`, which converts one
+  origin time to each flow's grain index (`timestampToIndex`) and waits until
+  every flow's `headIndex` has reached it. Grey boxes on the left are
+  writer-reserved. A TOO_EARLY reader waits hollow; a TOO_LATE reader moves
+  into the hatched "too late" box (its grain was overwritten), flagged ✕. Audio
+  and video share this logic (audio reserves 40ms, video 2 grains:
+  `WRITER_RESERVED_MS`). Clicking a pointer or a node focuses that reader. The
+  toolbar's **Now** toggle draws wall-clock now to the right of each head.
 - **Flow modes.** Inputs and Outputs have a video only / audio only / both
   select (`outputModeOf`, `handleOutputModeChange`). Track convention: a
   producer's output handle 0 is video, 1 is audio; other nodes inherit their

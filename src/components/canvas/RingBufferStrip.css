@@ -48,6 +48,8 @@
 .ws__cell,
 .ws__bar {
   flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,24 +57,6 @@
   font-weight: 600;
   color: #12301a;
   background: #e1f7e1;
-}
-
-.ws__cell {
-  flex-direction: column;
-  line-height: 1.1;
-  min-width: 0;
-}
-
-.ws__cell-slot {
-  font-size: 0.55rem;
-  font-weight: 700;
-}
-
-.ws__cell-idx {
-  font-size: 0.42rem;
-  font-weight: 500;
-  opacity: 0.8;
-  font-variant-numeric: tabular-nums;
 }
 
 .ws__cell + .ws__cell {
@@ -113,14 +97,6 @@
   flex-basis: 0;
 }
 
-.ws__bar--overlay {
-  position: absolute;
-  top: 0;
-  flex: none;
-  pointer-events: none;
-  opacity: 0.85;
-}
-
 .ws__bar--head {
   background: #9cc4f5;
 }
@@ -151,7 +127,7 @@
   z-index: 1;
 }
 
-/* Too late: the requested grain was overwritten — the pointer stays on its (recycled) slot, as an error. */
+/* Too late: the requested grain was overwritten — moved into the too-late box as an error. */
 .ws__ptr--late {
   background: #7a0010;
   color: #fff;
@@ -186,6 +162,13 @@
 .ws__ptr--waiting.ws__ptr--focused {
   background: rgba(238, 0, 0, 0.4);
   color: #ff6b6b;
+}
+
+.ws__lag {
+  position: absolute;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #f5a623 0 3px, transparent 3px 5px);
+  z-index: 1;
 }
 
 .ws__now {
