@@ -53,9 +53,15 @@ correct.
 ## Getting started after cloning this repo
 
 ```bash
+git submodule update --init   # fetches the MXL reference copy (or clone with --recurse-submodules)
 npm install
 npm run dev
 ```
+
+The MXL repo is included as a git submodule at `reference/mxl`, pinned to the
+commit this tool was last checked against. It is reference material only and is
+not part of the build. To move it forward, run `git -C reference/mxl pull`
+and commit the new pointer.
 
 This starts the Vite dev server. Open the URL it prints — by default:
 

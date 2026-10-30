@@ -10,7 +10,9 @@ _Read this first when resuming work._
   buildups and overruns can happen. It is **not a game** — no scores,
   win/lose states, or "players". Use "user", "scenario", and "alert" in docs
   and UI text.
-- **MXL source of truth: https://github.com/dmf-mxl/mxl.** Before any change
+- **MXL source of truth: https://github.com/dmf-mxl/mxl.** A pinned copy is a
+  git submodule at `reference/mxl` (run `git submodule update --init` if it is
+  empty), so read the code and `docs/` there. Before any change
   that touches timing, grains, ring buffers, flows, readers/writers or sync,
   read the relevant code and `docs/` there (e.g. `docs/Timing.md`,
   `PosixDiscreteFlowWriter.cpp`) and cite what you checked. Never rely on
