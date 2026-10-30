@@ -111,14 +111,17 @@ src/
   `<Handle id={ring.handleId}>`, so edges still go writer node to reader node.
   Built-in scenarios have their x positions spread (`spreadForRings`) to leave
   room for the rings.
-- **Reader pointers.** The strip runs oldest to newest with the write head
-  rightmost. A reader sits `deltaGrains + READ_BEHIND_WRITE_GRAINS` slots left
-  of the head, so it can never sit on the write slot. A TOO_EARLY reader waits
-  hollow at the newest readable slot. A TOO_LATE reader slides into the hatched
-  overwritten zone by its true distance. Audio and video share this logic
+- **Reader pointers.** Slots are fixed: slot 1 is leftmost, slot N rightmost
+  (displayed 1-based; N = domain size / grain duration), and the write head
+  moves across them and wraps. Each slot shows the grain index it currently
+  holds (simplified count or last digits of the real index). A reader's pointer
+  sits under its requested slot (`deltaGrains + READ_BEHIND_WRITE_GRAINS`
+  grains behind the head, mod N), so it can never sit on the write slot.
+  Grey slots just ahead of the head are writer-reserved. A TOO_EARLY reader
+  waits hollow; a TOO_LATE reader keeps its recycled slot, flagged ✕. Audio and video share this logic
   (audio reserves 40ms, video 2 grains: `WRITER_RESERVED_MS`). Clicking a
   pointer or a node focuses that reader (highlights its link and pointer).
-  The toolbar's **Now** toggle draws wall-clock now to the right of each head.
+  The toolbar's **Now** toggle marks the slot wall-clock now falls in.
 - **Flow modes.** Inputs and Outputs have a video only / audio only / both
   select (`outputModeOf`, `handleOutputModeChange`). Track convention: a
   producer's output handle 0 is video, 1 is audio; other nodes inherit their

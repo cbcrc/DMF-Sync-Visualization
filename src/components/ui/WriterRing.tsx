@@ -119,12 +119,12 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
                 stroke={retained ? 'none' : 'rgba(255,255,255,0.35)'}
                 strokeDasharray={retained ? undefined : '2 2'}
               >
-                <title>{`slot ${s} · grain ${grainIndexLabel(j, ring.grainRate, showRealGrainIndex, 12)}${retained ? '' : ' · outside retained history'}`}</title>
+                <title>{`slot ${s + 1} · grain ${grainIndexLabel(j, ring.grainRate, showRealGrainIndex, 12)}${retained ? '' : ' · outside retained history'}`}</title>
               </path>
               {showLabels && (
                 <>
                 <text x={mid.x} y={mid.y - 3.5} fill="#0e1822" fontSize="7" fontWeight="700" textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
-                  {s}
+                  {s + 1}
                 </text>
                 <text x={mid.x} y={mid.y + 4} fill="#0e1822" fontSize="5.5" textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
                   {grainIndexLabel(j, ring.grainRate, showRealGrainIndex, n > 10 ? 3 : 4)}
@@ -175,10 +175,10 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
         {!barOnly && (
           <>
             <text x={CX} y={CY - 4} fill="#ffffff" fontSize="8" textAnchor="middle" fontWeight="700">
-              now slot {ring.nowSlot}
+              now slot {ring.nowSlot + 1}
             </text>
             <text x={CX} y={CY + 7} fill="#cfcfcf" fontSize="7" textAnchor="middle">
-              head slot {ring.publishedSlot}
+              head slot {ring.publishedSlot + 1}
             </text>
           </>
         )}
@@ -230,7 +230,7 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
               </span>
               <span className="writer-ring__name">{labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId}</span>
               <span className="writer-ring__detail">
-                {barOnly ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms` : `slot ${reader.requestedSlot} · −${reader.behindNowGrains} gr`}
+                {barOnly ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms` : `slot ${reader.requestedSlot + 1} · −${reader.behindNowGrains} gr`}
               </span>
               <span className="writer-ring__status" style={{ color: STATUS_COLOR[reader.status] }}>
                 {parked ? 'parked' : STATUS_LABEL[reader.status]}

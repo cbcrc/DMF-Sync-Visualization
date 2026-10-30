@@ -144,5 +144,5 @@ const STATUS_TEXT: Record<RingBufferStatus, string> = { OK: 'OK', TOO_EARLY: 'wa
 /** Tooltip text describing where one reader sits relative to its writer's head and "now". */
 export function readerTitle(reader: WriterReader, labelByNodeId: Map<string, string>): string {
   const name = labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId;
-  return `${name} · input ${reader.inputIndex} · reads grain ${reader.requestedGrainIndex} (slot ${reader.requestedSlot}) · ${reader.behindHeadGrains} behind head, ${reader.behindNowGrains} behind now · ${STATUS_TEXT[reader.status]}`;
+  return `${name} · input ${reader.inputIndex} · reads grain ${reader.requestedGrainIndex} (slot ${reader.requestedSlot + 1}) · ${reader.behindHeadGrains} behind head, ${reader.behindNowGrains} behind now · ${STATUS_TEXT[reader.status]}`;
 }

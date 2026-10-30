@@ -116,9 +116,9 @@ export function GrainSlotStrip({ buffer, evaluation, compact = false }: GrainSlo
             ]
               .filter(Boolean)
               .join(' ')}
-            title={`grain #${cell.grainIndex} · slot ${cell.slot}`}
+            title={`grain #${cell.grainIndex} · slot ${cell.slot + 1}`}
           >
-            {!compact && <span className="gs-cell__slot">{cell.slot}</span>}
+            {!compact && <span className="gs-cell__slot">{cell.slot + 1}</span>}
             <span className="gs-cell__marks">
               {cell.isRead && <span className="gs-cell__mark gs-cell__mark--read">R</span>}
               {cell.isHead && <span className="gs-cell__mark gs-cell__mark--head">W</span>}

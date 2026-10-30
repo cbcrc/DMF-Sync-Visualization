@@ -84,16 +84,6 @@
   color: #0b2a52;
 }
 
-.ws__overwritten {
-  position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-  border: 1px dashed rgba(255, 82, 82, 0.6);
-  border-radius: 3px 0 0 3px;
-  background: repeating-linear-gradient(135deg, #3a1015, #3a1015 3px, #240a0d 3px, #240a0d 6px);
-}
-
 .ws__cell--unreadable,
 .ws__bar--unreadable {
   background: repeating-linear-gradient(135deg, #3a3d42, #3a3d42 3px, #2a2c30 3px, #2a2c30 6px);
@@ -102,6 +92,14 @@
 
 .ws__bar {
   flex-basis: 0;
+}
+
+.ws__bar--overlay {
+  position: absolute;
+  top: 0;
+  flex: none;
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .ws__bar--head {
@@ -134,7 +132,7 @@
   z-index: 1;
 }
 
-/* Too late: the requested grain was overwritten — pinned to the oldest end as an error. */
+/* Too late: the requested grain was overwritten — the pointer stays on its (recycled) slot, as an error. */
 .ws__ptr--late {
   background: #7a0010;
   color: #fff;
@@ -169,13 +167,6 @@
 .ws__ptr--waiting.ws__ptr--focused {
   background: rgba(238, 0, 0, 0.4);
   color: #ff6b6b;
-}
-
-.ws__lag {
-  position: absolute;
-  height: 2px;
-  background: repeating-linear-gradient(90deg, #f5a623 0 3px, transparent 3px 5px);
-  z-index: 1;
 }
 
 .ws__now {
