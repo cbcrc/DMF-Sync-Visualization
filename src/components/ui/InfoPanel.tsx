@@ -58,7 +58,7 @@ export function InfoPanel() {
             A sync point reads the <em>same</em> index from every input, aligned to its slowest
             branch. A faster branch's grain can age past the retained window before that index is
             read — unrecoverable loss, shown as a "✕". Fix by shortening the slow branch (drag its
-            latency slider), growing the MXL Domain, or adding a Grain Repeater after the slow branch.
+            latency slider), growing the MXL Domain, or adding a Grain Repeater.
           </div>
         </div>
       </div>

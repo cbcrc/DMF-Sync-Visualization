@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import { computeGraphLatency } from './graphLatency';
+import { timestampToGrainIndex } from '../engine/mxlGrainIndex';
 
 const node = (id: string, kind: MediaFunctionNodeData['kind'], latencyMs: number, inputCount: number, outputCount: number): Node<MediaFunctionNodeData> => ({
   id,
@@ -18,7 +19,7 @@ const edge = (id: string, source: string, target: string): Edge => ({
 });
 
 describe('grain repeater', () => {
-  it('re-writes into a fresh ring: lag resets, workload keeps counting', () => {
+  it('writes the oldest grain it read, with the same index, at its new head', () => {
     const nodes = [
       node('in', 'input', 0, 0, 1),
       node('slow', 'editorial', 60, 1, 1),
@@ -29,12 +30,16 @@ describe('grain repeater', () => {
     const g = computeGraphLatency(nodes, edges, 100, 0);
     const repFlow = g.writerFlows.filter((f) => f.writerNodeId === 'rep');
     expect(repFlow.length).toBeGreaterThan(0);
-    expect(repFlow.every((f) => f.lagMs === 0)).toBe(true);
-    // The repeater reads the oldest retained grain, so that history counts as latency.
     const read = g.inputsByNodeId.get('rep')![0];
+    // The grain it consumed is the one at its new write head.
+    for (const f of repFlow) {
+      expect(timestampToGrainIndex(0 - f.lagMs)).toBe(read.buffer.requestedGrainIndex);
+    }
+    // The age it read (retained history + the grain being written) counts as latency.
     expect(read.buffer.readsTail).toBe(true);
     expect(read.evaluation.status).toBe('OK');
     expect(read.buffer.stalenessMs).toBe(read.buffer.retainedMs);
-    expect(g.totalWorkloadLatencyMs).toBe(60 + read.buffer.retainedMs);
+    expect(g.totalWorkloadLatencyMs).toBe(60 + read.buffer.retainedMs + read.buffer.grainDurationMs);
+    expect(g.inputsByNodeId.get('out')![0].evaluation.status).toBe('OK');
   });
 });

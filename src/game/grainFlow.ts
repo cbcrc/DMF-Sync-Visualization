@@ -370,12 +370,12 @@ export function stepGrains(
       continue;
     }
     const outs = outgoingByNode.get(g.fromId) ?? [];
-    // A Profanity Delay or Grain Repeater is a new source on the way out, each
-    // grain stamped afresh instead of keeping the capture time it arrived with.
-    // A delay's video (in-0) leaves on out-0 and audio (in-1) on out-1.
+    // A Profanity Delay is a new source on the way out: each grain is stamped
+    // afresh, and video (in-0) leaves on out-0 and audio (in-1) on out-1. A
+    // Grain Repeater keeps the grain's index (origin time).
     const fromKind = nodes.find((n) => n.id === g.fromId)?.data.kind;
-    const isDelay = fromKind === 'delay';
-    const restamps = fromKind !== undefined && rewritesAsNewSource(fromKind);
+    const isDelay = fromKind !== undefined && rewritesAsNewSource(fromKind);
+    const restamps = isDelay;
     for (const e of outs) {
       if (!geometry.has(e.target)) continue;
       const srcIdx = parseHandleIndex(e.sourceHandle, 'out-');

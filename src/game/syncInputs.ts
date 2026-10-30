@@ -3,7 +3,7 @@
  * current time, instead of passing the upstream grain index through.
  */
 export function rewritesAsNewSource(kind: string): boolean {
-  return kind === 'delay' || kind === 'repeater';
+  return kind === 'delay';
 }
 
 /** Mixers (multi-input Editorial functions) can read individual inputs free of the sync point. */

@@ -41,10 +41,14 @@ export const RING_BUFFER_ZONES = {
   tooLateWarningRatio: 0.8,
 } as const;
 
-/** Retained history (ms) of a video-rate flow in a domain window of `domainSizeMs`. */
-export function retainedMsAtTail(domainSizeMs: number): number {
+/**
+ * How far behind the head (ms) the oldest readable grain of a video-rate flow
+ * sits in a domain window of `domainSizeMs`: the retained history plus the
+ * grain being written.
+ */
+export function oldestReadableAgeMs(domainSizeMs: number): number {
   const dur = grainDurationMs(DEFAULT_GRAIN_RATE);
-  return retainedGrainsFor(ringBufferLength(domainSizeMs, DEFAULT_GRAIN_RATE), dur) * dur;
+  return (retainedGrainsFor(ringBufferLength(domainSizeMs, DEFAULT_GRAIN_RATE), dur) + READ_BEHIND_WRITE_GRAINS) * dur;
 }
 
 /**

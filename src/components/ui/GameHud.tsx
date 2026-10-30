@@ -176,7 +176,7 @@ export function GameHud({
           ))}
           <div className="game-hud__late-hint">
             That branch is waiting on a slower one. Shorten the slow path, grow the MXL Domain, or add a Grain
-            Repeater after the slow branch.
+            Repeater to the fast branch.
           </div>
         </div>
       )}

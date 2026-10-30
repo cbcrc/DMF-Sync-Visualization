@@ -141,7 +141,7 @@ src/
 - **Palette.** "Add media function" lists presets in groups (`PALETTE_GROUPS`
   in `nodeDefaults.ts`): Sources, Synthetic, Technical, Editorial, Outputs.
   Each group has a Generic entry. Colour Corrector and Multiview are video
-  only. The Grain Repeater is fixed at 0ms and re-writes into a fresh ring (no slider; `sanitizeNode` forces 0
+  only. The Grain Repeater is fixed at 0ms and re-writes into a fresh ring keeping the grain index (no slider; `sanitizeNode` forces 0
   on load).
 - **Profanity Delay** (`kind: 'delay'`, editorial group). One video and one
   audio input, parks media in its own buffer for up to 3s (`DELAY_MAX_MS`),
@@ -434,7 +434,7 @@ fixed *time* budget, re-derived into each track's own grain count, so the
 reserved margin stays worth the same real time for fine-grained audio as for
 video — see Known Simplifications), so the audio input goes TOO_LATE while
 video stays OK. Verified fixes: grow the domain to 110ms, delete the Slow
-Video Function and reconnect, insert a Grain Repeater after the Slow Video Function (it re-writes video fresh, so its lag resets), or drag
+Video Function and reconnect, insert a Grain Repeater in the audio branch (it delays audio by the history it reads), or drag
 the Slow Video Function's latency slider down.
 
 ## Scenarios page and persistence
@@ -483,12 +483,13 @@ An empty 100ms domain to build on from the palette.
   needs one timestamp to decide which grain index it writes. The pills still
   show "live" for those inputs.
 - Reads are evaluated instantaneously, not via deadline-based blocking/retry.
-- **Grain Repeater** reads the last available grain and re-writes it into a
-  fresh ring at the current time (`rewritesAsNewSource` in `syncInputs.ts`):
-  head lag resets to 0, ring is standard size, `originTs` is re-stamped, and
-  `workloadLatencyMs` keeps counting. It adds no extra capacity. Its input
-  reads the **oldest retained grain** (far end of the ring, `readsTail`), so the
-  retained history counts as latency and its gauge stays green.
+- **Grain Repeater** reads the **oldest retained grain** (far end of the ring,
+  `readsTail`) and writes it into a fresh ring with the **same grain index**
+  (`originTs` is kept): the index it consumed is the one at its new write head.
+  Its output head therefore lags by the age it read (`oldestReadableAgeMs`),
+  which also counts as workload latency. Used on a fast branch it delays that
+  branch toward the slow one, so a synced reader needs less history. The ring
+  is standard size, no extra capacity, and the repeater's gauge stays green.
 - Invalid-grain publication, per-slice validity are not modelled. Audio is
   approximated as a very fine-grained Discrete ring buffer (1ms grains,
   AES67's default packet time) rather than MXL's true Continuous ring buffer

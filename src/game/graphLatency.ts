@@ -31,7 +31,7 @@ import type {
   RingBuffer,
   RingBufferEvaluation,
 } from '../types';
-import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, retainedMsAtTail, statusSeverity } from '../engine/ringBufferEngine';
+import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, oldestReadableAgeMs, statusSeverity } from '../engine/ringBufferEngine';
 import {
   DEFAULT_GRAIN_RATE,
   grainDurationMs,
@@ -230,10 +230,10 @@ function trackForEdge(
  *
  * - A node's output flow lags real time by its aligned input lag plus its own
  *   processing latency.
- * - A Grain Repeater (like a Profanity Delay) reads the last available grain
- *   and writes it into a fresh ring buffer of its own at the current time, so
- *   its output head does not lag; the media it repeats is still that old, which
- *   `workloadLatencyMs` keeps counting.
+ * - A Grain Repeater reads the oldest retained grain and writes it, with the
+ *   same grain index, into a fresh ring buffer at its head. Its output head
+ *   therefore lags by the extra age it read, which also counts as workload.
+ * - A Profanity Delay instead re-stamps its output as a new source (lag 0).
  */
 export function computeGraphLatency(
   nodes: Node<MediaFunctionNodeData>[],
@@ -290,14 +290,15 @@ export function computeGraphLatency(
 
     const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
     // A Grain Repeater reads the oldest grain still retained (the far end of
-    // the ring from the write head), so the media it repeats is that much older.
-    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? retainedMsAtTail(domainSizeMs) : 0;
+    // the ring from the write head) and writes it into a fresh ring with the
+    // same grain index, so its output head sits that far behind its input's.
+    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? oldestReadableAgeMs(domainSizeMs) : 0;
     const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs;
 
-    // A Profanity Delay and a Grain Repeater both write into a fresh ring of
-    // their own, stamped at the current time, like a synthetic source: the head
-    // restarts with no upstream lag. The workload latency still keeps counting.
-    const lagMs = rewritesAsNewSource(node.kind) ? 0 : alignedLagMs + node.latencyMs;
+    // A Profanity Delay writes into a fresh ring of its own, stamped at the
+    // current time, like a synthetic source: the head restarts with no upstream
+    // lag. The workload latency still keeps counting.
+    const lagMs = rewritesAsNewSource(node.kind) ? 0 : alignedLagMs + node.latencyMs + tailReadMs;
 
     latencyByNodeId.set(id, {
       nodeId: id,
