@@ -10,6 +10,7 @@ import {
   updateEdge,
   useEdgesState,
   useNodesState,
+  useStoreApi,
   type Connection,
   type Edge,
   type Node,
@@ -111,6 +112,7 @@ function FlowCanvasInner({
   onSaveScenario,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
+  const storeApi = useStoreApi();
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
   const addedCount = useRef(0);
 
@@ -238,6 +240,21 @@ function FlowCanvasInner({
     [setEdges, pushHistory],
   );
 
+  // New nodes land in the middle of what the user is looking at (pan/zoom
+  // aware), nudged diagonally so consecutive adds don't stack exactly.
+  const viewCenterPosition = useCallback(
+    (n: number) => {
+      const { width, height, transform } = storeApi.getState();
+      const [tx, ty, zoom] = transform;
+      const nudge = ((n - 1) % 6) * 28;
+      return {
+        x: (width / 2 - tx) / zoom - 100 + nudge,
+        y: (height / 2 - ty) / zoom - 50 + nudge,
+      };
+    },
+    [storeApi],
+  );
+
   const addNode = useCallback(
     (preset: PalettePreset) => {
       const { kind, defaults } = preset;
@@ -246,7 +263,7 @@ function FlowCanvasInner({
       const newNode: Node<MediaFunctionNodeData> = {
         id,
         type: 'mediaFunction',
-        position: { x: 120 + ((n * 60) % 480), y: 60 + ((n * 90) % 420) },
+        position: viewCenterPosition(n),
         data: {
           ...defaults,
           kind,
@@ -258,7 +275,7 @@ function FlowCanvasInner({
       pushHistory();
       setNodes((nds) => [...nds, newNode]);
     },
-    [setNodes, pushHistory],
+    [setNodes, pushHistory, viewCenterPosition],
   );
 
   /**
