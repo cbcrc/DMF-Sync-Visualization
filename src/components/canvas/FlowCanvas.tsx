@@ -77,15 +77,13 @@ export interface FlowCanvasProps {
    * reader row — the same "waiting" event shown as two correlated views.
    */
   onParkedInputsChange?: (keys: Set<string>) => void;
-  /** Advances the shared simulated clock by a delta (item #9's `SimClock.step`) —
-   *  forwarded into `useGrainFlow` so Manual mode's "Step ▶" can move the clock in
-   *  lockstep with exactly the grain event it resolves (item #9 follow-up). */
+  /** Advances the shared simulated clock by a delta (`SimClock.step`) —
+   *  forwarded into `useGrainFlow` so Manual mode's Step / Back move the clock in
+   *  lockstep with the grains they simulate. */
   stepClockBy?: (incrementMs: number) => void;
   /**
-   * Hands the parent a function that advances the simulation to the next
-   * "read" event (item #9 follow-up) — called once whenever that function's
-   * identity changes (it's stable across renders), since this component owns
-   * the grain-flow state the HUD's Step button needs to act on.
+   * Hands the parent the Step ▶ and ◀ Back functions (one grain forward, or
+   * undo the last step) — this component owns the grain-flow state they act on.
    */
   onManualStepReady?: (stepToNextRead: () => void, stepBack: () => void) => void;
   /** Saves the current canvas under the given name; returns false if storage failed. */

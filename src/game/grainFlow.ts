@@ -524,39 +524,9 @@ export function stepGrains(
   return released.length > MAX_GRAINS ? released.slice(released.length - MAX_GRAINS) : released;
 }
 
-/** Edge travel duration (ms), exported for callers that need to schedule
- *  exactly past a hop (see `nextReadEventAt`'s doc comment below). */
+/** Edge travel duration (ms), exported so manual stepping can advance in hop-sized sub-steps. */
 export function edgeTravelDurationMs(): number {
   return EDGE_TRAVEL_MS;
-}
-
-/**
- * Item #9 follow-up: the simulated-clock time of the next "read" event — the
- * moment some downstream Media Function next receives a grain into its
- * input ring buffer. Considers two sources, both resolving through one
- * remaining `EDGE_TRAVEL_MS` hop:
- *  - a currently-holding (actively aging, not parked-waiting-on-a-sibling)
- *    grain finishing its hold and fanning out across the edge, or
- *  - a grain already mid-hop (`'traveling'`) — relevant because Manual
- *    mode's frozen clock can leave one sitting mid-travel between clicks
- *    (its own single remaining `EDGE_TRAVEL_MS` hop hasn't happened yet).
- * Returns `null` if nothing is currently counting down (e.g. the pipeline is
- * fully parked waiting on a stalled sibling, or fully drained between waves).
- */
-export function nextReadEventAt(grains: Grain[]): number | null {
-  let min: number | null = null;
-  for (const g of grains) {
-    let endTime: number;
-    if (g.phase === 'holding' && !g.parked && Number.isFinite(g.durationMs)) {
-      endTime = g.startTime + g.durationMs + EDGE_TRAVEL_MS;
-    } else if (g.phase === 'traveling') {
-      endTime = g.startTime + g.durationMs; // already in flight — this *is* its arrival time
-    } else {
-      continue;
-    }
-    if (min === null || endTime < min) min = endTime;
-  }
-  return min;
 }
 
 function easeOutQuad(t: number): number {

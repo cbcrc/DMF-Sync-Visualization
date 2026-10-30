@@ -47,6 +47,9 @@ correct.
 - Every media function carries its own ring buffers, drawn as part of its block. The function writes into them whether or not anything reads. Each reader appears as a pointer showing how far behind the write head it reads; click a pointer or a function to highlight that reader's link.
 - Inputs and Outputs can be video only, audio only or both. Audio readers read only audio and video readers only video. An input takes one link (drop a new one on it to replace it).
 - The toolbar has **Undo** (also Ctrl/Cmd+Z) and **Now**, which shows how far behind real time each writer is.
+- Select a function and use **Copy** / **Paste** (Ctrl/Cmd+C, Ctrl/Cmd+V) to duplicate it; the copy takes the next free number in its name.
+- In **Manual** playback, **Step ▶** moves one grain forward and **◀ Back** undoes the last step.
+- New functions are added at the centre of the current view.
 - The **End-to-end timeline** along the bottom has one lane per output, running from the input to the output. Each block is a media function whose width is the latency it adds, and its caret marks where it reads from (how far behind now). Hatched gaps are time spent waiting for sync. Close it with ×. It doesn't use the Origin Time Stamp (OTS) carried on the linear side yet. Its model already has an OTS lead-in field (`leadInMs` in `src/game/endToEndTimeline.ts`) for when that is added.
 - Scenario 6, "Blank Canvas", starts empty. The Scenarios page (`#/scenarios`) saves and reopens your own.
 

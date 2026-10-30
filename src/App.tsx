@@ -53,10 +53,8 @@ function App() {
   // Item #9: single shared simulated clock driving grain-flow animation, ring
   // buffer evaluation, and the stability fail-timer in lockstep.
   const clock = useSimClock();
-  // Item #9 follow-up: FlowCanvas owns the grain-flow state Manual mode's
-  // "Step ▶" needs to inspect (what's about to be read next), so it hands
-  // this component the actual stepping function rather than App computing a
-  // fixed clock increment blind to what's currently in flight.
+  // FlowCanvas owns the grain-flow state that Manual mode's Step ▶ / ◀ Back
+  // act on, so it hands this component those functions.
   const manualStepRef = useRef<() => void>(() => {});
   const manualBackRef = useRef<() => void>(() => {});
   const registerManualStep = useCallback((fn: () => void, back: () => void) => {
