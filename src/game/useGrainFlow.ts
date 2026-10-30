@@ -28,7 +28,19 @@ export interface GrainFlowResult {
    * the inter-wave gap with nothing yet due to respawn).
    */
   stepToNextRead: () => void;
+  /** Manual mode's "◀ Back": restores the state (grains, clock) from before the last Step. */
+  stepBack: () => void;
 }
+
+interface StepSnapshot {
+  now: number;
+  grains: Grain[];
+  lastSpawn: Map<string, number>;
+  dropped: Map<string, Set<number>>;
+  edgeActivity: Map<string, number>;
+}
+
+const MAX_STEP_HISTORY = 200;
 
 export function useGrainFlow(
   nodes: Node<MediaFunctionNodeData>[],
@@ -54,6 +66,7 @@ export function useGrainFlow(
   const droppedHandlesByNode = useRef(new Map<string, Set<number>>());
   const prevWaveResetKey = useRef(waveResetKey);
   const edgeActivityRef = useRef(new Map<string, number>());
+  const historyRef = useRef<StepSnapshot[]>([]);
 
   nodesRef.current = nodes;
   edgesRef.current = edges;
@@ -63,6 +76,7 @@ export function useGrainFlow(
 
   const restartWave = useCallback(() => {
     grainsRef.current = [];
+    historyRef.current = [];
     droppedHandlesByNode.current.clear();
     lastSpawnByNode.current.clear();
     edgeActivityRef.current.clear();
@@ -160,6 +174,15 @@ export function useGrainFlow(
     // nothing to step to.
     if (startAt === null || startAt <= now) return;
 
+    historyRef.current.push({
+      now,
+      grains: structuredClone(current),
+      lastSpawn: new Map(lastSpawnByNode.current),
+      dropped: new Map([...droppedHandlesByNode.current].map(([k, v]) => [k, new Set(v)])),
+      edgeActivity: new Map(edgeActivityRef.current),
+    });
+    if (historyRef.current.length > MAX_STEP_HISTORY) historyRef.current.shift();
+
     // Resolve in a small settle loop rather than one `stepGrains` call: each
     // phase transition stamps `startTime = now`, so the newly-created
     // 'traveling' grain needs its *own* later `now` to in turn resolve into
@@ -191,6 +214,21 @@ export function useGrainFlow(
     stepClockByRef.current?.(t - now);
   }, []);
 
-  return { grains, edgeActivity: edgeActivityRef.current, stepToNextRead };
+  const stepBack = useCallback(() => {
+    const snap = historyRef.current.pop();
+    if (!snap) return;
+    const now = getNowRef.current();
+    grainsRef.current = snap.grains;
+    lastSpawnByNode.current.clear();
+    snap.lastSpawn.forEach((v, k) => lastSpawnByNode.current.set(k, v));
+    droppedHandlesByNode.current.clear();
+    snap.dropped.forEach((v, k) => droppedHandlesByNode.current.set(k, v));
+    edgeActivityRef.current.clear();
+    snap.edgeActivity.forEach((v, k) => edgeActivityRef.current.set(k, v));
+    setGrains(snap.grains);
+    stepClockByRef.current?.(snap.now - now);
+  }, []);
+
+  return { grains, edgeActivity: edgeActivityRef.current, stepToNextRead, stepBack };
 }
 

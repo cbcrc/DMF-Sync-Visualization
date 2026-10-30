@@ -85,7 +85,7 @@ export interface FlowCanvasProps {
    * identity changes (it's stable across renders), since this component owns
    * the grain-flow state the HUD's Step button needs to act on.
    */
-  onManualStepReady?: (stepToNextRead: () => void) => void;
+  onManualStepReady?: (stepToNextRead: () => void, stepBack: () => void) => void;
   /** Saves the current canvas under the given name; returns false if storage failed. */
   onSaveScenario?: (title: string) => boolean;
 }
@@ -381,7 +381,7 @@ function FlowCanvasInner({
     onGraphChange(nodes, edges);
   }, [nodes, edges, onGraphChange]);
 
-  const { grains, edgeActivity, stepToNextRead } = useGrainFlow(
+  const { grains, edgeActivity, stepToNextRead, stepBack } = useGrainFlow(
     nodes,
     edges,
     statusByInputKey,
@@ -391,8 +391,8 @@ function FlowCanvasInner({
   );
 
   useEffect(() => {
-    onManualStepReady?.(stepToNextRead);
-  }, [stepToNextRead, onManualStepReady]);
+    onManualStepReady?.(stepToNextRead, stepBack);
+  }, [stepToNextRead, stepBack, onManualStepReady]);
 
   // Same keying (`${nodeId}:${inputIndex}`) as `statusByInputKey` — lets App correlate a
   // grain parked on canvas with its matching reader row in the Ring Buffer Telemetry panel.

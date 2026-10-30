@@ -329,6 +329,9 @@ Three modes, switched via a HUD button row:
   mode) moves the clock, by exactly one video grain's duration
   (`MANUAL_STEP_MS`) per click — ties the control directly to "advance one
   grain index," reinforcing the grain-index concepts from items #10/#11.
+  "◀ Back" undoes the last Step by restoring a snapshot of the grains, spawn
+  state and clock (`useGrainFlow` keeps up to 200 snapshots; a wave restart
+  clears them).
 
 Implementation notes:
 

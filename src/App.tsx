@@ -58,8 +58,10 @@ function App() {
   // this component the actual stepping function rather than App computing a
   // fixed clock increment blind to what's currently in flight.
   const manualStepRef = useRef<() => void>(() => {});
-  const registerManualStep = useCallback((fn: () => void) => {
+  const manualBackRef = useRef<() => void>(() => {});
+  const registerManualStep = useCallback((fn: () => void, back: () => void) => {
     manualStepRef.current = fn;
+    manualBackRef.current = back;
   }, []);
 
   const onGraphChange = useCallback((nodes: Node<MediaFunctionNodeData>[], edges: Edge[]) => {
@@ -217,6 +219,7 @@ function App() {
         playbackMode={clock.mode}
         onSetPlaybackMode={clock.setMode}
         onStep={() => manualStepRef.current()}
+        onStepBack={() => manualBackRef.current()}
       />
       <EndToEndTimeline
         graph={graph}

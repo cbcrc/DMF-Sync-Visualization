@@ -31,6 +31,8 @@ export interface GameHudProps {
   onSetPlaybackMode: (mode: PlaybackMode) => void;
   /** Manual-mode only: advance the shared sim clock by one grain quantum. */
   onStep: () => void;
+  /** Manual-mode only: undo the last step. */
+  onStepBack: () => void;
 }
 
 /**
@@ -58,6 +60,7 @@ export function GameHud({
   playbackMode,
   onSetPlaybackMode,
   onStep,
+  onStepBack,
 }: GameHudProps) {
   const marginClass = stabilityMarginMs < 0 ? 'game-hud__stat-value--bad' : '';
 
@@ -134,9 +137,14 @@ export function GameHud({
           ))}
         </div>
         {playbackMode === 'manual' && (
-          <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
-            Step ▶
-          </button>
+          <>
+            <button type="button" className="game-hud__step-btn" onClick={onStepBack} title="Go back one step">
+              ◀ Back
+            </button>
+            <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
+              Step ▶
+            </button>
+          </>
         )}
       </div>
 
