@@ -84,6 +84,25 @@
   color: #0b2a52;
 }
 
+.ws__overwritten {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(255, 82, 82, 0.6);
+  border-radius: 3px 0 0 3px;
+  background: repeating-linear-gradient(135deg, #3a1015, #3a1015 3px, #240a0d 3px, #240a0d 6px);
+  font-size: 0.4rem;
+  font-weight: 700;
+  color: #ff8a8a;
+  text-transform: uppercase;
+  line-height: 1;
+  text-align: center;
+}
+
 .ws__cell--unreadable,
 .ws__bar--unreadable {
   background: repeating-linear-gradient(135deg, #3a3d42, #3a3d42 3px, #2a2c30 3px, #2a2c30 6px);

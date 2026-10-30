@@ -3,7 +3,7 @@ import type { WriterRing } from '../../game/writerRings';
 import { readerTitle } from '../../game/writerRings';
 import { READ_BEHIND_WRITE_GRAINS } from '../../engine/ringBufferEngine';
 import { grainIndexLabel } from '../../engine/mxlGrainIndex';
-import { CELL_H, LANE_H, RING_STRIP_W, STRIP_W } from './ringStripLayout';
+import { CELL_H, LANE_H, OVERWRITTEN_W, RING_STRIP_W, STRIP_W } from './ringStripLayout';
 import './RingBufferStrip.css';
 
 /** Beyond this many slots, cells are too narrow to draw individually, so the strip is one continuous bar. */
@@ -38,7 +38,11 @@ export interface RingBufferStripProps {
 export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = false, showRealGrainIndex = false, onFocusNode, children }: RingBufferStripProps) {
   const n = ring.grainCount;
   const drawCells = ring.track !== 'audio' && n <= MAX_DRAWN_CELLS;
-  const maxLane = ring.readers.reduce((m, r) => Math.max(m, r.lane), 0);
+  // Readers that are too late sit in the box left of the slots, stacked by order.
+  const lateKeys = ring.readers.filter((r) => r.status === 'TOO_LATE').map((r) => r.key);
+  const laneOf = (r: WriterRing['readers'][number]) => (r.status === 'TOO_LATE' ? lateKeys.indexOf(r.key) : r.lane);
+  const pointerX = (r: WriterRing['readers'][number]) => (r.status === 'TOO_LATE' ? OVERWRITTEN_W / 2 : slotX(r.requestedSlot));
+  const maxLane = ring.readers.reduce((m, r) => Math.max(m, laneOf(r)), 0);
   const holdsFocus = ring.readers.some((r) => r.readerNodeId === focusedNodeId);
 
   // A slot's age is how many grains ago it was written: 0 is the head (being
@@ -47,7 +51,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
   const readableOldestAge = Math.min(maxAge, ring.retainedGrains + READ_BEHIND_WRITE_GRAINS);
   const unreadableCount = maxAge - readableOldestAge;
   const slotPx = STRIP_W / n;
-  const slotX = (slot: number) => (slot + 0.5) * slotPx;
+  const slotX = (slot: number) => OVERWRITTEN_W + (slot + 0.5) * slotPx;
   const ageOf = (slot: number) => (((ring.publishedSlot - slot) % n) + n) % n;
   const overwritten = ring.readers.filter((r) => r.status === 'TOO_LATE').length;
   const nowIsHead = ring.nowSlot === ring.publishedSlot;
@@ -69,7 +73,14 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
         {ring.track} ring · {n} slots
         {overwritten > 0 && <span className="ws__alert"> ✕ {overwritten} too late</span>}
       </div>
-      <div className="ws__track" style={{ width: STRIP_W, height: CELL_H + (maxLane + 1) * LANE_H }}>
+      <div className="ws__track" style={{ width: STRIP_W + OVERWRITTEN_W, height: CELL_H + (maxLane + 1) * LANE_H }}>
+        <div
+          className="ws__overwritten"
+          style={{ width: OVERWRITTEN_W, height: CELL_H }}
+          title="Too late — the grain a reader asked for has been overwritten by the writer"
+        >
+          too late
+        </div>
         {showNow && !nowIsHead && (
           <div className="ws__now" style={{ left: slotX(ring.nowSlot), height: CELL_H + 4 }} title={`Now — the writer is ${ring.lagMs.toFixed(0)}ms (${ring.lagGrains} grain${ring.lagGrains === 1 ? '' : 's'}) behind`}>
             <span>Now</span>
@@ -78,7 +89,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
         <div className="ws__write" style={{ left: slotX(ring.publishedSlot) }} title="Write head">
           {showNow && nowIsHead ? 'Write · Now' : 'Write'}
         </div>
-        <div className="ws__cells" style={{ height: CELL_H, width: STRIP_W }}>
+        <div className="ws__cells" style={{ height: CELL_H, width: STRIP_W, marginLeft: OVERWRITTEN_W }}>
           {drawCells ? (
             Array.from({ length: n }, (_, slot) => {
               const age = ageOf(slot);
@@ -107,13 +118,13 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
               <div
                 key={a}
                 className="ws__bar ws__bar--unreadable ws__bar--overlay"
-                style={{ left: a * slotPx, width: (b - a) * slotPx, height: CELL_H }}
+                style={{ left: OVERWRITTEN_W + a * slotPx, width: (b - a) * slotPx, height: CELL_H }}
                 title="Writer-reserved / outside retained history — a read here is too late"
               />
             ))}
             <div
               className="ws__bar ws__bar--head ws__bar--overlay"
-              style={{ left: ring.publishedSlot * slotPx, width: Math.max(2, slotPx), height: CELL_H }}
+              style={{ left: OVERWRITTEN_W + ring.publishedSlot * slotPx, width: Math.max(2, slotPx), height: CELL_H }}
               title="Being written — cannot be read"
             />
           </>
@@ -127,7 +138,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
             <div
               key={`bubble-${reader.key}`}
               className="ws__bubble"
-              style={{ left: slotX(reader.requestedSlot), top: CELL_H + reader.lane * LANE_H + LANE_H + 2 }}
+              style={{ left: pointerX(reader), top: CELL_H + laneOf(reader) * LANE_H + LANE_H + 2 }}
               role="tooltip"
             >
               <div>{labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId} is behind</div>
@@ -149,7 +160,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
               key={reader.key}
               type="button"
               className={`ws__ptr${focused ? ' ws__ptr--focused' : ''}${waiting ? ' ws__ptr--waiting' : ''}${late ? ' ws__ptr--late' : ''}`}
-              style={{ left: slotX(reader.requestedSlot), top: CELL_H + reader.lane * LANE_H }}
+              style={{ left: pointerX(reader), top: CELL_H + laneOf(reader) * LANE_H }}
               title={readerTitle(reader, labelByNodeId)}
               onClick={(e) => {
                 e.stopPropagation();

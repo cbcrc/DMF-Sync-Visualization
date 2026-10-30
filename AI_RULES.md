@@ -118,7 +118,7 @@ src/
   sits under its requested slot (`deltaGrains + READ_BEHIND_WRITE_GRAINS`
   grains behind the head, mod N), so it can never sit on the write slot.
   Grey slots just ahead of the head are writer-reserved. A TOO_EARLY reader
-  waits hollow; a TOO_LATE reader keeps its recycled slot, flagged ✕. Audio and video share this logic
+  waits hollow; a TOO_LATE reader moves into the hatched "too late" box left of slot 1 (its grain was overwritten), flagged ✕. Audio and video share this logic
   (audio reserves 40ms, video 2 grains: `WRITER_RESERVED_MS`). Clicking a
   pointer or a node focuses that reader (highlights its link and pointer).
   The toolbar's **Now** toggle marks the slot wall-clock now falls in.
