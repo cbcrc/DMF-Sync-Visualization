@@ -111,6 +111,9 @@ src/
   `<Handle id={ring.handleId}>`, so edges still go writer node to reader node.
   Built-in scenarios have their x positions spread (`spreadForRings`) to leave
   room for the rings.
+- **Index preservation.** A function writes the grain index it read, so each
+  non-source function adds one read-behind grain (`READ_BEHIND_WRITE_GRAINS`)
+  to its lag; delays and repeaters handle this themselves.
 - **Reader pointers.** The strip is a timeline: the write head is always the
   rightmost box and each box shows the grain index it holds (simplified count
   or last digits of the real index), so indices flow right to left as time

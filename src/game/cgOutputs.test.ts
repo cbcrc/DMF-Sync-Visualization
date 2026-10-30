@@ -29,4 +29,16 @@ describe('CG with two video outputs', () => {
     expect(flows[0].lagMs).toBe(flows[1].lagMs);
     expect(groupReadingsByWriter(g).filter((r) => r.writerNodeId === 'cg').map((r) => r.handleId).sort()).toEqual(['out-0', 'out-1']);
   });
+
+  it('has a 0ms function write the index it read', () => {
+    const nodes = [node('cg', 'synthetic', 0, 1, true), node('cc', 'technical', 1, 1), node('a', 'output', 1, 0)];
+    const edges: Edge[] = [
+      { id: 'e0', source: 'cg', target: 'cc', sourceHandle: 'out-0', targetHandle: 'in-0' },
+      { id: 'e1', source: 'cc', target: 'a', sourceHandle: 'out-0', targetHandle: 'in-0' },
+    ];
+    const g = computeGraphLatency(nodes, edges, 100, 123_456);
+    const read = g.inputsByNodeId.get('cc')![0];
+    const wrote = g.writerFlows.find((f) => f.writerNodeId === 'cc')!;
+    expect(wrote.publishedGrainIndex).toBe(read.buffer.requestedGrainIndex);
+  });
 });

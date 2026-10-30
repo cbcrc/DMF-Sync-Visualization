@@ -37,15 +37,16 @@ describe('mixer ignore sync', () => {
       const readings = computeGraphLatency(nodes, edges, 100, 0).inputsByNodeId.get('mix')!;
       return readings.map((r) => r.buffer.alignedLagMs);
     };
-    expect(lagOf()).toEqual([60, 60]);
-    expect(lagOf([0])).toEqual([0, 60]); // input 0 reads its own head; input 1 is the only sync point
+    // A 60ms function also reads one grain (20ms) behind its input's head.
+    expect(lagOf()).toEqual([80, 80]);
+    expect(lagOf([0])).toEqual([0, 80]); // input 0 reads its own head; input 1 is the only sync point
     const { nodes, edges } = build([1]);
     const g = computeGraphLatency(nodes, edges, 100, 0);
     const [fast, slow] = g.inputsByNodeId.get('mix')!;
     expect(fast.buffer.alignedLagMs).toBe(0);
     expect(fast.buffer.stalenessMs).toBe(0);
     expect(slow.buffer.stalenessMs).toBe(0);
-    expect(g.latencyByNodeId.get('mix')!.outputLatencyMs).toBe(0);
+    expect(g.latencyByNodeId.get('mix')!.outputLatencyMs).toBe(20); // only the grain it reads behind
   });
 
   it('does not park a grain at an ignored input', () => {

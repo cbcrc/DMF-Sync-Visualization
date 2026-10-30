@@ -28,11 +28,12 @@ describe('end-to-end timeline', () => {
     const [row] = timeline(nodes, [edge('in', 'a'), edge('a', 'b'), edge('b', 'out')]);
     expect(row.steps.map((s) => [s.nodeId, s.startMs, s.endMs, s.readAtMs])).toEqual([
       ['in', 0, 0, 0],
-      ['a', 0, 30, 0],
-      ['b', 30, 50, 30],
-      ['out', 50, 50, 50],
+      ['a', 0, 50, 0],
+      ['b', 50, 90, 50],
+      ['out', 90, 90, 90],
     ]);
-    expect(row.totalMs).toBe(50);
+    // Each function also reads one 20ms grain behind its input's write head.
+    expect(row.totalMs).toBe(90);
     expect(row.leadInMs).toBe(0);
   });
 
@@ -45,7 +46,7 @@ describe('end-to-end timeline', () => {
     ];
     const [row] = timeline(nodes, [edge('in', 'mix', 0), edge('in', 'slow'), edge('slow', 'mix', 1), edge('mix', 'out')]);
     expect(row.steps.map((s) => s.nodeId)).toEqual(['in', 'slow', 'mix', 'out']);
-    expect(row.totalMs).toBe(70);
+    expect(row.totalMs).toBe(110);
   });
 
   it('keeps counting through a Profanity Delay, which resets the MXL read lag', () => {
@@ -60,7 +61,7 @@ describe('end-to-end timeline', () => {
     const edges = [edge('in', 'a'), edge('a', 'out')];
     const [row] = timeline(nodes, edges, { leadInMsBySourceId: new Map([['in', 25]]) });
     expect(row.leadInMs).toBe(25);
-    expect(row.steps[1]).toMatchObject({ startMs: 25, endMs: 55 });
-    expect(row.totalMs).toBe(55);
+    expect(row.steps[1]).toMatchObject({ startMs: 25, endMs: 75 });
+    expect(row.totalMs).toBe(75);
   });
 });

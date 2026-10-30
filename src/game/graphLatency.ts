@@ -74,6 +74,8 @@ export interface NodeLatencyInfo {
   inputLatencyMs: number;
   /** Lag (ms) of this node's own published output flow head. */
   outputLatencyMs: number;
+  /** What this node itself adds to the end-to-end latency: its own latency, a repeater's tail read, and the grain it reads behind its input's head. */
+  ownLatencyMs: number;
   /**
    * End-to-end latency from capture to this node's output. Equals
    * `outputLatencyMs` except downstream of a Profanity Delay, which re-writes
@@ -311,17 +313,30 @@ export function computeGraphLatency(
     // the ring from the write head) and writes it into a fresh ring with the
     // same grain index, so its output head sits that far behind its input's.
     const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? oldestReadableAgeMs(domainSizeMs) : 0;
-    const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs;
+    // A reader can only consume the grain behind its input's write head, so a
+    // function (other than a repeater, which already counts it in `tailReadMs`,
+    // or a delay, which restarts; sinks write nothing) writes that same grain index one grain
+    // later: its head carries the index it read.
+    let readBehindMs = 0;
+    if (wired.length > 0 && node.kind !== 'repeater' && node.kind !== 'delay' && node.kind !== 'output' && node.kind !== 'recording') {
+      const firstInbound = (inboundEdgesByTarget.get(node.id) ?? [])
+        .slice()
+        .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
+      const track: Track = node.fixedTrack ?? (firstInbound ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo) : 'video');
+      readBehindMs = READ_BEHIND_WRITE_GRAINS * grainDurationMs(grainRateForTrack(track));
+    }
+    const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs + readBehindMs;
 
     // A Profanity Delay writes into a fresh ring of its own, stamped at the
     // current time, like a synthetic source: the head restarts with no upstream
     // lag. The workload latency still keeps counting.
-    const lagMs = rewritesAsNewSource(node.kind) ? 0 : alignedLagMs + node.latencyMs + tailReadMs;
+    const lagMs = rewritesAsNewSource(node.kind) ? 0 : alignedLagMs + node.latencyMs + tailReadMs + readBehindMs;
 
     latencyByNodeId.set(id, {
       nodeId: id,
       inputLatencyMs: alignedLagMs,
       outputLatencyMs: lagMs,
+      ownLatencyMs: node.latencyMs + tailReadMs + readBehindMs,
       workloadLatencyMs: workloadMs,
       wasSynced,
       maxStalenessMs,

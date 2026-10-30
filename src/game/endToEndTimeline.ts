@@ -99,14 +99,15 @@ export function buildEndToEndTimeline(
     const steps: TimelineStep[] = chain.map((n) => {
       const info = graph.latencyByNodeId.get(n.id);
       const endMs = leadInMs + (info?.workloadLatencyMs ?? 0);
-      const startMs = Math.max(leadInMs, endMs - n.data.latencyMs);
+      const ownMs = info?.ownLatencyMs ?? n.data.latencyMs;
+      const startMs = Math.max(leadInMs, endMs - ownMs);
       const step: TimelineStep = {
         nodeId: n.id,
         label: n.data.label,
         kind: n.data.kind,
         startMs,
         endMs,
-        latencyMs: n.data.latencyMs,
+        latencyMs: ownMs,
         syncWaitMs: Math.max(0, startMs - previousEndMs),
         readAtMs: info?.inputLatencyMs ?? 0,
       };

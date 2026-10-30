@@ -39,7 +39,7 @@ describe('grain repeater', () => {
     expect(read.buffer.readsTail).toBe(true);
     expect(read.evaluation.status).toBe('OK');
     expect(read.buffer.stalenessMs).toBe(read.buffer.retainedMs);
-    expect(g.totalWorkloadLatencyMs).toBe(60 + read.buffer.retainedMs + read.buffer.grainDurationMs);
+    expect(g.totalWorkloadLatencyMs).toBe(60 + 20 + read.buffer.retainedMs + read.buffer.grainDurationMs);
     expect(g.inputsByNodeId.get('out')![0].evaluation.status).toBe('OK');
   });
 });

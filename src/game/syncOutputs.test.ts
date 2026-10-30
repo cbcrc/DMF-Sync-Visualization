@@ -30,7 +30,7 @@ describe('synced outputs', () => {
       return computeGraphLatency(nodes, edges, 100, 0).inputsByNodeId.get('out-fast')![0].buffer.alignedLagMs;
     };
     expect(lag(false)).toBe(0);
-    expect(lag(true)).toBe(60);
+    expect(lag(true)).toBe(80); // 60ms plus the grain it reads behind
   });
 
   it('holds a fast output parked until the synced slow output has arrived', () => {
