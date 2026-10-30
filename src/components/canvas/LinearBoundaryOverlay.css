@@ -86,22 +86,7 @@
   box-shadow: 0 0 6px 1px var(--lb-color);
 }
 
-.lb-tick__label {
-  position: absolute;
-  top: -1px;
-  left: 4px;
-  font-size: 9px;
-  line-height: 1;
-  color: #e8eaed;
-  white-space: nowrap;
-}
-
-.lb-lane--in .lb-tick__label {
-  left: auto;
-  right: 4px;
-}
-
-/* Audio's fine 1ms grains, drawn as one continuous band (see TRACK_LABEL). */
+.lb-lane--in /* Audio's fine 1ms grains, drawn as one continuous band (see TRACK_LABEL). */
 .lb-lane__band {
   position: absolute;
   inset: 5px 0;

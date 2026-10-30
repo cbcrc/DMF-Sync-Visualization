@@ -4,10 +4,6 @@ import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from './MediaFunctionNode';
 import type { InputReading } from '../../game/graphLatency';
 import { LINEAR_TICK_MS, buildNodeGeometry, type Grain } from '../../game/grainFlow';
-import {
-  DEFAULT_GRAIN_RATE,
-  grainIndexForDisplay,
-} from '../../engine/mxlGrainIndex';
 import './LinearBoundaryOverlay.css';
 
 /**
@@ -45,8 +41,6 @@ export interface LinearBoundaryOverlayProps {
   edgeActivity: Map<string, number>;
   /** Live grains, used to show which Egress inputs are parked waiting on a sibling. */
   grains: Grain[];
-  domainSizeMs: number;
-  showRealGrainIndex?: boolean;
   getNow?: () => number;
 }
 
@@ -102,8 +96,6 @@ interface LaneProps {
   lagMs: number;
   track: 'video' | 'audio';
   status?: 'OK' | 'TOO_EARLY' | 'TOO_LATE';
-  domainSizeMs: number;
-  showRealGrainIndex: boolean;
   /** Ingress only: simulated time of the most recent tick that triggered an MXL write. */
   triggerAt?: number;
   /** Egress only: this track's grain has arrived and is waiting on these sibling tracks (e.g. "V"). */
@@ -116,8 +108,6 @@ function Lane({
   lagMs,
   track,
   status = 'OK',
-  domainSizeMs,
-  showRealGrainIndex,
   triggerAt,
   waitingFor,
 }: LaneProps) {
@@ -154,11 +144,6 @@ function Lane({
             }`}
             style={{ left: t.x }}
           >
-            {isLeading && (
-              <span className="lb-tick__label">
-                #{grainIndexForDisplay(t.originTs, DEFAULT_GRAIN_RATE, domainSizeMs, showRealGrainIndex)}
-              </span>
-            )}
           </div>
         );
       })}
@@ -178,8 +163,6 @@ export function LinearBoundaryOverlay({
   inputsByNodeId,
   edgeActivity,
   grains,
-  domainSizeMs,
-  showRealGrainIndex = false,
   getNow = () => performance.now(),
 }: LinearBoundaryOverlayProps) {
   useFrameTick(getNow);
@@ -221,8 +204,6 @@ export function LinearBoundaryOverlay({
                 direction="in"
                 lagMs={0}
                 track="video"
-                domainSizeMs={domainSizeMs}
-                showRealGrainIndex={showRealGrainIndex}
                 triggerAt={triggerAt}
               />
             </>
@@ -235,8 +216,6 @@ export function LinearBoundaryOverlay({
                 direction="in"
                 lagMs={0}
                 track="audio"
-                domainSizeMs={domainSizeMs}
-                showRealGrainIndex={showRealGrainIndex}
                 triggerAt={triggerAt}
               />
             </>
@@ -293,8 +272,6 @@ export function LinearBoundaryOverlay({
                   lagMs={lagMs}
                   track={track}
                   status={r.evaluation.status}
-                  domainSizeMs={domainSizeMs}
-                  showRealGrainIndex={showRealGrainIndex}
                   waitingFor={
                     parkedInputs.has(r.inputIndex) && waitingFor.length > 0
                       ? waitingFor.map((w) => letterOf(w.track)).join(' + ')

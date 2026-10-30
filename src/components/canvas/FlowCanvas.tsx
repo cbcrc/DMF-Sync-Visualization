@@ -549,8 +549,6 @@ function FlowCanvasInner({
         inputsByNodeId={inputsByNodeId}
         edgeActivity={edgeActivity}
         grains={grains}
-        domainSizeMs={domainSizeMs}
-        showRealGrainIndex={showRealGrainIndex}
         getNow={getNow}
       />
       <Panel position="top-center" className="fc-toolbar" aria-label="Canvas toolbar">
