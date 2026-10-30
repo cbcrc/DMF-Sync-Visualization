@@ -143,6 +143,11 @@ src/
   Each group has a Generic entry. Colour Corrector and Multiview are video
   only. The Grain Repeater is fixed at 0ms and re-writes into a fresh ring keeping the grain index (no slider; `sanitizeNode` forces 0
   on load).
+- **CG** (synthetic group, `videoOnly`) has two video outputs (e.g. fill and
+  key). A source with several same-track outputs writes one flow per output
+  handle (`flowKeyOf` in `graphLatency.ts`, `multiOutput`), so each gets its own
+  ring. Both are spawned in the same tick with the same `originTs`, so they carry
+  the same grain index at the same time.
 - **Profanity Delay** (`kind: 'delay'`, editorial group). One video and one
   audio input, parks media in its own buffer for up to 3s (`DELAY_MAX_MS`),
   then re-writes it into MXL as a new source: its output head lag

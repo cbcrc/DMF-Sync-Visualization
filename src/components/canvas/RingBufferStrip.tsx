@@ -72,7 +72,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
     <div className={`ws${holdsFocus ? ' ws--focused' : ''}${overwritten > 0 ? ' ws--error' : ''}`} style={{ width: RING_STRIP_W + extra }}>
       {children}
       <div className="ws__title">
-        {ring.track} ring · {n} grains
+        {ring.track} ring{ring.key.split(':').length > 2 ? ` ${Number(ring.handleId.replace('out-', '')) + 1}` : ''} · {n} grains
         {overwritten > 0 && <span className="ws__alert"> ✕ {overwritten} too late</span>}
       </div>
       <div className="ws__track" style={{ width: STRIP_W + OVERWRITTEN_W + extra, height: CELL_H + (maxLane + 1) * LANE_H }}>

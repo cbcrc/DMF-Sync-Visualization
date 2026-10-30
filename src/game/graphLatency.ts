@@ -50,6 +50,8 @@ export type Track = 'video' | 'audio' | 'data';
 export interface InputReading {
   readerNodeId: string;
   sourceNodeId: string;
+  /** The flow this input reads; see `flowKeyOf`. */
+  flowKey: string;
   inputIndex: number;
   buffer: RingBuffer;
   evaluation: RingBufferEvaluation;
@@ -89,8 +91,19 @@ export interface NodeLatencyInfo {
  * producing node has one, whether or not anything is reading it: an MXL writer
  * commits grains to the shared-memory ring regardless of its readers.
  */
+/**
+ * Identifies one published flow. Normally a node writes one flow per track, so
+ * the key is node + track; a source with several outputs of the same track
+ * (the CG's two video outputs) writes one flow per output handle.
+ */
+export function flowKeyOf(nodeId: string, track: Track, handleId: string, multiOutput: boolean): string {
+  return multiOutput ? `${nodeId}:${track}:${handleId}` : `${nodeId}:${track}`;
+}
+
 export interface WriterFlow {
   writerNodeId: string;
+  /** See `flowKeyOf`. */
+  flowKey: string;
   track: Track;
   /** The writer's output handle this flow leaves from. */
   handleId: string;
@@ -133,6 +146,8 @@ interface GraphNodeLike {
   /** Mixer inputs set to read free of the sync point (see `freeRunningInputs`). */
   ignoreSyncInputs?: number[];
   inputCount: number;
+  /** A source whose outputs are all the same track, each its own flow (e.g. the CG's two video outputs). */
+  multiOutput: boolean;
 }
 
 /** A published flow: how far its head lags real time, and its end-to-end latency. */
@@ -154,6 +169,7 @@ function buildGraphNodes(
       kind: n.data.kind,
       latencyMs: n.data.latencyMs,
       inputCount: n.data.inputCount,
+      multiOutput: n.data.inputCount === 0 && n.data.outputCount > 1 && (n.data.videoOnly ?? false),
       ...(n.data.ignoreSyncInputs ? { ignoreSyncInputs: n.data.ignoreSyncInputs } : {}),
       inputSourceIds: new Array(n.data.inputCount).fill(null),
       ...(n.data.audioOnly ? { fixedTrack: 'audio' as const } : n.data.videoOnly ? { fixedTrack: 'video' as const } : {}),
@@ -207,6 +223,8 @@ function trackForEdge(
   const srcNode = byId.get(edge.source);
   let track: Track;
   if (srcNode?.fixedTrack && srcNode.inputSourceIds.length > 0) {
+    track = srcNode.fixedTrack;
+  } else if (srcNode && srcNode.inputSourceIds.length === 0 && srcNode.fixedTrack) {
     track = srcNode.fixedTrack;
   } else if (srcNode?.kind === 'delay') {
     // A Profanity Delay re-writes video on out-0 and audio on out-1.
@@ -405,7 +423,9 @@ export function computeGraphLatency(
       };
 
       const evaluation = evaluateRingBuffer(buffer);
-      readings.push({ readerNodeId: node.id, sourceNodeId: sourceId, inputIndex, buffer, evaluation, track });
+      const sourceHandleId = inputEdge?.sourceHandle ?? 'out-0';
+      const flowKey = flowKeyOf(sourceId, track, sourceHandleId, byId.get(sourceId)?.multiOutput ?? false);
+      readings.push({ readerNodeId: node.id, sourceNodeId: sourceId, flowKey, inputIndex, buffer, evaluation, track });
       // Measured in whole grains so the margin flips negative exactly when a
       // read flips to TOO_LATE, instead of disagreeing with the status.
       if (!readsTail) {
@@ -468,13 +488,13 @@ export function computeGraphLatency(
     for (const index of handles) {
       const track: Track =
         graphNode.inputSourceIds.length === 0 || graphNode.kind === 'delay'
-          ? indexToTrack(index)
+          ? graphNode.fixedTrack ?? indexToTrack(index)
           : graphNode.fixedTrack
             ? graphNode.fixedTrack
             : firstInbound
             ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo)
             : 'video';
-      const flowKey = `${node.id}:${track}`;
+      const flowKey = flowKeyOf(node.id, track, `out-${index}`, graphNode.multiOutput);
       if (seenFlows.has(flowKey)) continue;
       seenFlows.add(flowKey);
       const trackRate = grainRateForTrack(track);
@@ -483,6 +503,7 @@ export function computeGraphLatency(
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
       writerFlows.push({
         writerNodeId: node.id,
+        flowKey,
         track,
         handleId: `out-${index}`,
         grainRate: trackRate,

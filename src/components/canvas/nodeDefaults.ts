@@ -111,7 +111,9 @@ export const PALETTE_PRESETS: PalettePreset[] = [
     group: 'synthetic',
     button: 'CG',
     kind: 'synthetic',
-    defaults: { label: 'CG', latencyMs: 0, inputCount: 0, outputCount: 1 },
+    // Two video outputs (e.g. fill and key) written with the same grain index at the same time.
+    defaults: { label: 'CG', latencyMs: 0, inputCount: 0, outputCount: 2 },
+    videoOnly: true,
   },
   {
     id: 'clip-player',

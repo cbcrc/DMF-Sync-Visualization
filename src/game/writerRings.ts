@@ -25,7 +25,7 @@ export interface WriterReader {
 
 /** One writer flow's ring, with every reader that consumes it. */
 export interface WriterRing {
-  /** `${writerNodeId}:${track}`. */
+  /** See `flowKeyOf` in graphLatency. */
   key: string;
   writerNodeId: string;
   track: Track;
@@ -54,7 +54,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
   const byWriter = new Map<string, InputReading[]>();
   for (const readings of graph.inputsByNodeId.values()) {
     for (const reading of readings) {
-      const key = `${reading.sourceNodeId}:${reading.track}`;
+      const key = reading.flowKey;
       const list = byWriter.get(key);
       if (list) list.push(reading);
       else byWriter.set(key, [reading]);
@@ -91,7 +91,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
       key,
       writerNodeId: buffer.sourceNodeId,
       track: readings[0].track,
-      handleId: graph.writerFlows.find((f) => `${f.writerNodeId}:${f.track}` === key)?.handleId ?? 'out-0',
+      handleId: graph.writerFlows.find((f) => f.flowKey === key)?.handleId ?? 'out-0',
       grainRate: buffer.grainRate,
       grainDurationMs: buffer.grainDurationMs,
       grainCount: buffer.grainCount,
@@ -108,7 +108,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
 
   // Every flow has a ring, even with no readers: the writer fills it regardless.
   for (const flow of graph.writerFlows) {
-    const key = `${flow.writerNodeId}:${flow.track}`;
+    const key = flow.flowKey;
     if (byWriter.has(key)) continue;
     const nowGrainIndex = timestampToGrainIndex(graph.timestampMs, flow.grainRate);
     rings.push({
@@ -131,7 +131,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
   }
 
   // Keep each writer's rings in output order (video, then audio), not reader-first.
-  const order = new Map(graph.writerFlows.map((f, i) => [`${f.writerNodeId}:${f.track}`, i]));
+  const order = new Map(graph.writerFlows.map((f, i) => [f.flowKey, i]));
   return rings.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
 }
 

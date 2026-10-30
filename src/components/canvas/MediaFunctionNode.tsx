@@ -157,7 +157,7 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
   const adjustable = range !== undefined && data.onLatencyChange !== undefined;
 
   // Producers (Input) and sinks (Output) choose which flows they carry.
-  const hasFlowMode = (data.inputCount === 0 && data.outputCount > 0) || (data.kind === 'output' && data.outputCount === 0);
+  const hasFlowMode = (data.inputCount === 0 && data.outputCount > 0 && !data.videoOnly) || (data.kind === 'output' && data.outputCount === 0);
   const outputIds = data.outputCount === 0
     ? []
     : data.audioOnly

@@ -512,7 +512,7 @@ export function stepGrains(
           edgeId: e.id,
           sourceHandleIndex: srcIdx,
           targetHandleIndex: tgtIdx,
-          streamIndex: srcIdx,
+          streamIndex: n.data.videoOnly ? 0 : srcIdx,
           startTime: now,
           durationMs: travelDuration(),
           originTs: wallNow,
