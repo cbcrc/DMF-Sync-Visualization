@@ -61,9 +61,7 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
    * *Role:* Pure consumers/readers. Records signals to disk.
 5. **Grain Repeaters (Artificial Buffer Nodes):**
    * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Modelled with no latency of its own (0ms), resets the boundary limit.
-   * *Implementation note:* a repeater cannot un-delay a signal, so it adds its
-     latency like any other node. What it "resets" is **capacity**: its sub-ring
-     buffer adds another domain window of retained history to that branch.
+   * *Implementation note:* a repeater reads the last available grain and re-writes it into a fresh ring buffer at the current time. Its output head lag resets to 0 (like a new source) while the end-to-end workload latency keeps counting. It adds no extra capacity.
 
 ### C. Multi-Input & Multi-Output Behaviors
 * **Multi-Input Nodes (e.g., Video Switcher, Audio Mixer):** Multiple read heads ($R_1, R_2$). Must align incoming streams before processing.
@@ -136,5 +134,5 @@ the original game framing.
   workload: one Ingress writes flows V1 and A1; video is processed twice and
   audio once; the Egress must re-pair them at a common grain index, so the
   *audio* input reads too late while it waits for video. Guidance to grow the
-  domain, cut the slow branch's latency, or add a Grain Repeater to the fast
-  branch.
+  domain, cut the slow branch's latency, or add a Grain Repeater after the slow branch
+  to reset its lag.

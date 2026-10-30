@@ -45,21 +45,18 @@ export const RING_BUFFER_ZONES = {
  * Usable history (in whole grains, at `trackDurationMs` per grain) for a
  * branch.
  *
- * Every Grain Repeater on the branch republishes into its own sub-ring buffer
- * and holds a window's worth of grains there, so it adds another domain
- * window of absorbable differential latency (spec §2.B.5, "resets the
- * boundary limit"). The writer-reserved margin (see `WRITER_RESERVED_MS`) is
+ * A Grain Repeater re-writes into a fresh ring, so it needs no special
+ * capacity here; it resets lag instead (see `graphLatency.ts`). The writer-reserved margin (see `WRITER_RESERVED_MS`) is
  * deducted once, at the buffer the reader actually reads from, converted to
  * this track's own grain size so the *time* margin stays constant across
  * tracks of differing rates.
  */
 export function retainedGrainsFor(
   grainCount: number,
-  repeaterCount: number,
   trackDurationMs: number = grainDurationMs(DEFAULT_GRAIN_RATE),
 ): number {
   const reservedGrains = Math.max(1, Math.round(WRITER_RESERVED_MS / trackDurationMs));
-  return Math.max(0, grainCount * (1 + repeaterCount) - reservedGrains);
+  return Math.max(0, grainCount - reservedGrains);
 }
 
 /**

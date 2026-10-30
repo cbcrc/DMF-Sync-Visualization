@@ -41,7 +41,7 @@ import {
   timestampToGrainIndex,
 } from '../engine/mxlGrainIndex';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
-import { freeRunningInputs } from './syncInputs';
+import { freeRunningInputs, rewritesAsNewSource } from './syncInputs';
 
 /** MXL data-format track a flow carries — determines its grain rate (item #10.i). */
 export type Track = 'video' | 'audio' | 'data';
@@ -82,8 +82,6 @@ export interface NodeLatencyInfo {
   wasSynced: boolean;
   /** Worst differential this node has to absorb across its inputs (ms). */
   maxStalenessMs: number;
-  /** Grain Repeaters upstream of this node's output flow. */
-  repeaterCount: number;
 }
 
 /**
@@ -137,12 +135,11 @@ interface GraphNodeLike {
   inputCount: number;
 }
 
-/** A published flow: how far its head lags real time, and its re-buffering history. */
+/** A published flow: how far its head lags real time, and its end-to-end latency. */
 interface BranchInfo {
   lagMs: number;
-  /** End-to-end latency; differs from `lagMs` once a Profanity Delay has reset the head lag. */
+  /** End-to-end latency; differs from `lagMs` once a Profanity Delay or Grain Repeater has reset the head lag. */
   workloadMs: number;
-  repeaterCount: number;
 }
 
 /** Build node lookups with resolved upstream source ids from React Flow edges. */
@@ -232,12 +229,11 @@ function trackForEdge(
  * Compute every flow's head lag and every reader input's ring buffer state.
  *
  * - A node's output flow lags real time by its aligned input lag plus its own
- *   processing latency. Grain Repeaters are no exception: they cannot un-delay
- *   a signal, so they add latency like any other node.
- * - What a Grain Repeater *does* add is storage: it republishes into its own
- *   sub-ring buffer and holds a window's worth of grains there (§2.B.5,
- *   "resets the boundary limit"), so each repeater on a branch lets that
- *   branch absorb another domain window of differential latency.
+ *   processing latency.
+ * - A Grain Repeater (like a Profanity Delay) reads the last available grain
+ *   and writes it into a fresh ring buffer of its own at the current time, so
+ *   its output head does not lag; the media it repeats is still that old, which
+ *   `workloadLatencyMs` keeps counting.
  */
 export function computeGraphLatency(
   nodes: Node<MediaFunctionNodeData>[],
@@ -272,7 +268,7 @@ export function computeGraphLatency(
     const cached = branchByNodeId.get(id);
     if (cached) return cached;
     const node = byId.get(id);
-    if (!node || visiting.has(id)) return { lagMs: 0, workloadMs: 0, repeaterCount: 0 }; // missing node or cycle guard
+    if (!node || visiting.has(id)) return { lagMs: 0, workloadMs: 0 }; // missing node or cycle guard
 
     visiting.add(id);
     const wired = node.inputSourceIds
@@ -295,13 +291,10 @@ export function computeGraphLatency(
     const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
     const workloadMs = alignedWorkloadMs + node.latencyMs;
 
-    // A Profanity Delay parks media in its own buffer, then writes it into the
-    // MXL domain fresh, like a synthetic source: the flows start at the head
-    // with no upstream lag or re-buffering history.
-    const isDelay = node.kind === 'delay';
-    const upstreamRepeaters = parents.reduce((most, p) => Math.max(most, p.repeaterCount), 0);
-    const repeaterCount = isDelay ? 0 : upstreamRepeaters + (node.kind === 'repeater' ? 1 : 0);
-    const lagMs = isDelay ? 0 : alignedLagMs + node.latencyMs;
+    // A Profanity Delay and a Grain Repeater both write into a fresh ring of
+    // their own, stamped at the current time, like a synthetic source: the head
+    // restarts with no upstream lag. The workload latency still keeps counting.
+    const lagMs = rewritesAsNewSource(node.kind) ? 0 : alignedLagMs + node.latencyMs;
 
     latencyByNodeId.set(id, {
       nodeId: id,
@@ -310,9 +303,8 @@ export function computeGraphLatency(
       workloadLatencyMs: workloadMs,
       wasSynced,
       maxStalenessMs,
-      repeaterCount,
     });
-    const branch: BranchInfo = { lagMs, workloadMs, repeaterCount };
+    const branch: BranchInfo = { lagMs, workloadMs };
     branchByNodeId.set(id, branch);
     return branch;
   }
@@ -381,7 +373,7 @@ export function computeGraphLatency(
       // MXL readers can't read the grain being written, so a zero-lag read
       // lands one grain behind the write head.
       const requestedGrainIndex = publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - deltaGrains;
-      const retainedGrains = retainedGrainsFor(trackGrainCount, branch.repeaterCount, trackDurationMs);
+      const retainedGrains = retainedGrainsFor(trackGrainCount, trackDurationMs);
 
       const buffer: RingBuffer = {
         id: `${node.id}:${inputIndex}`,
@@ -392,7 +384,6 @@ export function computeGraphLatency(
         grainRate: trackRate,
         grainDurationMs: trackDurationMs,
         grainCount: trackGrainCount,
-        repeaterCount: branch.repeaterCount,
         retainedGrains,
         retainedMs: retainedGrains * trackDurationMs,
         branchLagMs: branch.lagMs,
@@ -489,7 +480,7 @@ export function computeGraphLatency(
         grainRate: trackRate,
         grainDurationMs: trackDurationMs,
         grainCount: trackGrainCount,
-        retainedGrains: retainedGrainsFor(trackGrainCount, branch.repeaterCount, trackDurationMs),
+        retainedGrains: retainedGrainsFor(trackGrainCount, trackDurationMs),
         lagMs: branch.lagMs,
         publishedGrainIndex,
         publishedSlot: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),

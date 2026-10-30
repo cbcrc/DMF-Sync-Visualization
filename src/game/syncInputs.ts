@@ -1,3 +1,11 @@
+/**
+ * Functions that write their media into a fresh ring buffer of their own, at the
+ * current time, instead of passing the upstream grain index through.
+ */
+export function rewritesAsNewSource(kind: string): boolean {
+  return kind === 'delay' || kind === 'repeater';
+}
+
 /** Mixers (multi-input Editorial functions) can read individual inputs free of the sync point. */
 export function hasSyncChoice(data: { kind: string; inputCount: number }): boolean {
   return data.kind === 'editorial' && data.inputCount > 1;

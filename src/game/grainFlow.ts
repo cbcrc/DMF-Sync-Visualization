@@ -12,7 +12,7 @@
 
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
-import { freeRunningInputs } from './syncInputs';
+import { freeRunningInputs, rewritesAsNewSource } from './syncInputs';
 import { nodeSizeForLatency } from '../components/canvas/nodeSizing';
 import type { RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs } from '../engine/mxlGrainIndex';
@@ -370,10 +370,12 @@ export function stepGrains(
       continue;
     }
     const outs = outgoingByNode.get(g.fromId) ?? [];
-    // A Profanity Delay is a new source on the way out: video (in-0) leaves on
-    // out-0 and audio (in-1) on out-1, each stamped afresh instead of keeping
-    // the capture time it arrived with.
-    const isDelay = nodes.find((n) => n.id === g.fromId)?.data.kind === 'delay';
+    // A Profanity Delay or Grain Repeater is a new source on the way out, each
+    // grain stamped afresh instead of keeping the capture time it arrived with.
+    // A delay's video (in-0) leaves on out-0 and audio (in-1) on out-1.
+    const fromKind = nodes.find((n) => n.id === g.fromId)?.data.kind;
+    const isDelay = fromKind === 'delay';
+    const restamps = fromKind !== undefined && rewritesAsNewSource(fromKind);
     for (const e of outs) {
       if (!geometry.has(e.target)) continue;
       const srcIdx = parseHandleIndex(e.sourceHandle, 'out-');
@@ -390,7 +392,7 @@ export function stepGrains(
         streamIndex: g.streamIndex,
         startTime: now,
         durationMs: travelDuration(),
-        originTs: isDelay ? tickBoundaryAtOrBefore(now) : g.originTs,
+        originTs: restamps ? tickBoundaryAtOrBefore(now) : g.originTs,
       });
     }
     // Grains with no outgoing edges (Recording/Output nodes) are simply consumed here.

@@ -81,8 +81,6 @@ export interface RingBuffer {
   grainDurationMs: number;
   /** Physical grain slots in one domain window (`sizeMs / grainDurationMs`). */
   grainCount: number;
-  /** Grain Repeaters upstream on this branch, each contributing another sub-ring buffer. */
-  repeaterCount: number;
   /** Usable history in grains after the writer-reserved slots. */
   retainedGrains: number;
   retainedMs: number;
