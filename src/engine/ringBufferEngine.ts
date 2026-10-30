@@ -2,7 +2,7 @@
 // See SPEC.md §2.A and §3 for the MXL too-early/too-late rules.
 
 import type { RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
-import { DEFAULT_GRAIN_RATE, grainDurationMs } from './mxlGrainIndex';
+import { DEFAULT_GRAIN_RATE, grainDurationMs, ringBufferLength } from './mxlGrainIndex';
 
 /**
  * MXL's discrete reader keeps the head slot plus its alias out of reach so a
@@ -40,6 +40,12 @@ export const RING_BUFFER_ZONES = {
    */
   tooLateWarningRatio: 0.8,
 } as const;
+
+/** Retained history (ms) of a video-rate flow in a domain window of `domainSizeMs`. */
+export function retainedMsAtTail(domainSizeMs: number): number {
+  const dur = grainDurationMs(DEFAULT_GRAIN_RATE);
+  return retainedGrainsFor(ringBufferLength(domainSizeMs, DEFAULT_GRAIN_RATE), dur) * dur;
+}
 
 /**
  * Usable history (in whole grains, at `trackDurationMs` per grain) for a
@@ -85,8 +91,9 @@ export function evaluateRingBuffer(buffer: RingBuffer): RingBufferEvaluation {
     status = 'OK';
   }
 
-  const occupancyRatio =
-    buffer.retainedMs > 0 ? buffer.stalenessMs / buffer.retainedMs : buffer.stalenessMs > 0 ? 1 : 0;
+  const occupancyRatio = buffer.readsTail
+    ? 0
+    : buffer.retainedMs > 0 ? buffer.stalenessMs / buffer.retainedMs : buffer.stalenessMs > 0 ? 1 : 0;
 
   return {
     status,

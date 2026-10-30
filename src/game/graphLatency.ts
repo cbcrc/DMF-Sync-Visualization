@@ -31,7 +31,7 @@ import type {
   RingBuffer,
   RingBufferEvaluation,
 } from '../types';
-import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, statusSeverity } from '../engine/ringBufferEngine';
+import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, retainedMsAtTail, statusSeverity } from '../engine/ringBufferEngine';
 import {
   DEFAULT_GRAIN_RATE,
   grainDurationMs,
@@ -289,7 +289,10 @@ export function computeGraphLatency(
     const wasSynced = parents.length > 1 && new Set(parents.map((p) => p.lagMs)).size > 1;
 
     const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
-    const workloadMs = alignedWorkloadMs + node.latencyMs;
+    // A Grain Repeater reads the oldest grain still retained (the far end of
+    // the ring from the write head), so the media it repeats is that much older.
+    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? retainedMsAtTail(domainSizeMs) : 0;
+    const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs;
 
     // A Profanity Delay and a Grain Repeater both write into a fresh ring of
     // their own, stamped at the current time, like a synthetic source: the head
@@ -368,12 +371,13 @@ export function computeGraphLatency(
       const trackDurationMs = grainDurationMs(trackRate);
       const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
 
-      const deltaGrains = Math.round(stalenessMs / trackDurationMs);
+      const readsTail = graphNode.kind === 'repeater';
+      const retainedGrains = retainedGrainsFor(trackGrainCount, trackDurationMs);
+      const deltaGrains = readsTail ? retainedGrains : Math.round(stalenessMs / trackDurationMs);
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
       // MXL readers can't read the grain being written, so a zero-lag read
       // lands one grain behind the write head.
       const requestedGrainIndex = publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - deltaGrains;
-      const retainedGrains = retainedGrainsFor(trackGrainCount, trackDurationMs);
 
       const buffer: RingBuffer = {
         id: `${node.id}:${inputIndex}`,
@@ -388,9 +392,10 @@ export function computeGraphLatency(
         retainedMs: retainedGrains * trackDurationMs,
         branchLagMs: branch.lagMs,
         alignedLagMs,
-        stalenessMs,
+        stalenessMs: readsTail ? retainedGrains * trackDurationMs : stalenessMs,
+        readsTail,
         publishedTimestampMs: timestampMs - branch.lagMs,
-        requestedTimestampMs: timestampMs - alignedLagMs,
+        requestedTimestampMs: readsTail ? timestampMs - branch.lagMs - (retainedGrains + READ_BEHIND_WRITE_GRAINS) * trackDurationMs : timestampMs - alignedLagMs,
         publishedGrainIndex,
         requestedGrainIndex,
         publishedRingBufferIndex: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),
@@ -402,10 +407,12 @@ export function computeGraphLatency(
       readings.push({ readerNodeId: node.id, sourceNodeId: sourceId, inputIndex, buffer, evaluation, track });
       // Measured in whole grains so the margin flips negative exactly when a
       // read flips to TOO_LATE, instead of disagreeing with the status.
-      stabilityMarginMs = Math.min(
-        stabilityMarginMs,
-        (retainedGrains - evaluation.deltaGrains) * trackDurationMs,
-      );
+      if (!readsTail) {
+        stabilityMarginMs = Math.min(
+          stabilityMarginMs,
+          (retainedGrains - evaluation.deltaGrains) * trackDurationMs,
+        );
+      }
     });
 
     if (readings.length > 0) {

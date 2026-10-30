@@ -474,7 +474,9 @@ An empty 100ms domain to build on from the palette.
 - **Grain Repeater** reads the last available grain and re-writes it into a
   fresh ring at the current time (`rewritesAsNewSource` in `syncInputs.ts`):
   head lag resets to 0, ring is standard size, `originTs` is re-stamped, and
-  `workloadLatencyMs` keeps counting. It adds no extra capacity.
+  `workloadLatencyMs` keeps counting. It adds no extra capacity. Its input
+  reads the **oldest retained grain** (far end of the ring, `readsTail`), so the
+  retained history counts as latency and its gauge stays green.
 - Invalid-grain publication, per-slice validity are not modelled. Audio is
   approximated as a very fine-grained Discrete ring buffer (1ms grains,
   AES67's default packet time) rather than MXL's true Continuous ring buffer

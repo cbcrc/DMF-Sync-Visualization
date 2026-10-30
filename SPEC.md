@@ -61,7 +61,7 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
    * *Role:* Pure consumers/readers. Records signals to disk.
 5. **Grain Repeaters (Artificial Buffer Nodes):**
    * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Modelled with no latency of its own (0ms), resets the boundary limit.
-   * *Implementation note:* a repeater reads the last available grain and re-writes it into a fresh ring buffer at the current time. Its output head lag resets to 0 (like a new source) while the end-to-end workload latency keeps counting. It adds no extra capacity.
+   * *Implementation note:* a repeater reads the last available (oldest retained) grain, at the far end of the ring from the write head, and re-writes it into a fresh ring buffer at the current time. Its output head lag resets to 0 (like a new source) while the end-to-end workload latency keeps counting. It adds no extra capacity.
 
 ### C. Multi-Input & Multi-Output Behaviors
 * **Multi-Input Nodes (e.g., Video Switcher, Audio Mixer):** Multiple read heads ($R_1, R_2$). Must align incoming streams before processing.

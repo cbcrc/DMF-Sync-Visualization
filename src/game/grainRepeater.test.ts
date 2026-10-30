@@ -30,6 +30,11 @@ describe('grain repeater', () => {
     const repFlow = g.writerFlows.filter((f) => f.writerNodeId === 'rep');
     expect(repFlow.length).toBeGreaterThan(0);
     expect(repFlow.every((f) => f.lagMs === 0)).toBe(true);
-    expect(g.totalWorkloadLatencyMs).toBe(60);
+    // The repeater reads the oldest retained grain, so that history counts as latency.
+    const read = g.inputsByNodeId.get('rep')![0];
+    expect(read.buffer.readsTail).toBe(true);
+    expect(read.evaluation.status).toBe('OK');
+    expect(read.buffer.stalenessMs).toBe(read.buffer.retainedMs);
+    expect(g.totalWorkloadLatencyMs).toBe(60 + read.buffer.retainedMs);
   });
 });

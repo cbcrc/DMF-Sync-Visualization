@@ -81,6 +81,8 @@ export interface RingBuffer {
   grainDurationMs: number;
   /** Physical grain slots in one domain window (`sizeMs / grainDurationMs`). */
   grainCount: number;
+  /** The reader sits at the oldest retained grain by design (Grain Repeater). */
+  readsTail?: boolean;
   /** Usable history in grains after the writer-reserved slots. */
   retainedGrains: number;
   retainedMs: number;
