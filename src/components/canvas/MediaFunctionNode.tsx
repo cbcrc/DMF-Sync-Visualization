@@ -163,7 +163,8 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
     : data.audioOnly
     ? ['out-1']
     : Array.from({ length: data.outputCount }, (_, i) => `out-${i}`);
-  const rings = data.rings ?? [];
+  // Top to bottom follows output order (a CG's first output is Fill, its second Key).
+  const rings = [...(data.rings ?? [])].sort((a, b) => a.handleId.localeCompare(b.handleId));
   const ringHandleIds = new Set(rings.map((r) => r.handleId));
 
   // React Flow caches handle positions. Handles move when the connector count

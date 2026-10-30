@@ -9,6 +9,9 @@ import './RingBufferStrip.css';
 /** Beyond this many slots, cells are too narrow to draw individually, so the strip is one continuous bar. */
 const MAX_DRAWN_CELLS = 16;
 
+/** A CG's two video outputs: the first carries the fill, the second the key. */
+const CG_OUTPUT_NAMES = ['Fill', 'Key'];
+
 export interface RingBufferStripProps {
   ring: WriterRing;
   labelByNodeId: Map<string, string>;
@@ -72,7 +75,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
     <div className={`ws${holdsFocus ? ' ws--focused' : ''}${overwritten > 0 ? ' ws--error' : ''}`} style={{ width: RING_STRIP_W + extra }}>
       {children}
       <div className="ws__title">
-        {ring.track} ring{ring.key.split(':').length > 2 ? ` ${Number(ring.handleId.replace('out-', '')) + 1}` : ''} · {n} grains
+        {ring.key.split(':').length > 2 ? (CG_OUTPUT_NAMES[Number(ring.handleId.replace('out-', ''))] ?? `${ring.track} ring`) : `${ring.track} ring`} · {n} grains
         {overwritten > 0 && <span className="ws__alert"> ✕ {overwritten} too late</span>}
       </div>
       <div className="ws__track" style={{ width: STRIP_W + OVERWRITTEN_W + extra, height: CELL_H + (maxLane + 1) * LANE_H }}>
