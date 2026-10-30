@@ -27,6 +27,8 @@ import './LinearBoundaryOverlay.css';
 
 const LANE_W = 260;
 const GAP_PX = 16;
+/** Rendered height of a `.lb-lane` (18px + borders). */
+const LANE_HEIGHT = 20;
 /** Ticks are spaced 24px apart, and slow enough that each moves only a few px per screen refresh. */
 const PX_PER_MS = 24 / LINEAR_TICK_MS;
 const WINDOW_MS = LANE_W / PX_PER_MS;
@@ -267,18 +269,24 @@ export function LinearBoundaryOverlay({
       const waitingFor = parkedInputs.size > 0 && missing.length > 0 ? missing : [];
       const letterOf = (t: string) => (t === 'audio' ? 'A' : 'V');
 
+      // Each lane sits level with the input connector it reads, so the links
+      // and the paced-out ticks line up (the panel is anchored at the node top).
+      const laneTop = (inputIndex: number) =>
+        (geom.size * (inputIndex + 1)) / (node.data.inputCount + 1) - LANE_HEIGHT / 2;
+      const tops = readings.map((r) => laneTop(r.inputIndex));
       panels.push(
         <div
           key={`out-${node.id}`}
-          className="lb-panel lb-panel--out"
-          style={{ left: geom.x + geom.size + GAP_PX, top: cy, width: LANE_W }}
+          className="lb-panel lb-panel--out lb-panel--aligned"
+          style={{ left: geom.x + geom.size + GAP_PX, top: geom.y, width: LANE_W }}
         >
-          <div className="lb-panel__title">Linear out · synchronous, outside MXL</div>
-          {readings.map((r) => {
+          <div className="lb-panel__title lb-panel__title--floating" style={{ top: Math.min(...tops) - 16 }}>
+            Linear out · synchronous, outside MXL
+          </div>
+          {readings.map((r, i) => {
             const track = r.track as 'video' | 'audio';
             return (
-              <div key={r.inputIndex}>
-                <div className="lb-panel__caption">{TRACK_LABEL[track]} · paced out</div>
+              <div key={r.inputIndex} className="lb-aligned-lane" style={{ top: tops[i] }}>
                 <Lane
                   now={now}
                   direction="out"
@@ -293,10 +301,13 @@ export function LinearBoundaryOverlay({
                       : undefined
                   }
                 />
+                <span className="lb-aligned-lane__caption" title={`${TRACK_LABEL[track]} · paced out`}>
+                  {track === 'audio' ? 'A · audio' : 'V · video'}
+                </span>
               </div>
             );
           })}
-          <div className="lb-panel__readout">
+          <div className="lb-panel__readout lb-panel__readout--floating" style={{ top: Math.max(...tops) + LANE_HEIGHT + 4 }}>
             <div>evenly paced · jitter 0.0ms — the read position moves so every output tick is on time</div>
           </div>
         </div>,

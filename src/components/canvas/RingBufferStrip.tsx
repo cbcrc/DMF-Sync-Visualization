@@ -119,6 +119,28 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
             </>
           )}
         </div>
+        {ring.readers.map((reader) => {
+          if (reader.readerNodeId !== focusedNodeId) return null;
+          const nowMs = reader.behindNowGrains * ring.grainDurationMs;
+          const headMs = reader.behindHeadGrains * ring.grainDurationMs;
+          const fmt = (ms: number) => `${Math.round(ms)}ms`;
+          return (
+            <div
+              key={`bubble-${reader.key}`}
+              className="ws__bubble"
+              style={{ left: pointerX(reader), top: CELL_H + reader.lane * LANE_H + LANE_H + 2 }}
+              role="tooltip"
+            >
+              <div>{labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId} is behind</div>
+              <div>
+                <span>now</span> by {fmt(nowMs)}
+              </div>
+              <div>
+                <span>write head</span> by {fmt(headMs)}
+              </div>
+            </div>
+          );
+        })}
         {ring.readers.map((reader, i) => {
           const focused = reader.readerNodeId === focusedNodeId;
           const waiting = reader.status === 'TOO_EARLY';

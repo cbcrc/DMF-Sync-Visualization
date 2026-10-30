@@ -1,6 +1,5 @@
-// Preset scenarios (SPEC.md §4 / Task 4). Each scenario sets the MXL
-// Domain buffer size and a short description; overrun alerts are evaluated
-// live against the current graph by `useGameLoop`.
+// The built-in level list. Only the blank canvas ships with the app; everything
+// else is a user-saved scenario (see `scenarioStorage.ts`).
 
 export interface Level {
   id: string;
@@ -12,51 +11,10 @@ export interface Level {
 
 export const LEVELS: Level[] = [
   {
-    id: 'basics',
-    title: '1. Warm-Up',
-    description:
-      'The minimal MXL workload: an Ingress Function writes flows V1 (video) and A1 (audio) from one paced stream, and an Egress Function re-pairs them for output. Everything is green — explore the grain indices on each input, then start adding Media Functions to the video path.',
-    domainSizeMs: 100,
-    guidance:
-      'Watch the Egress inputs: both request the SAME point in time, because grain indices are preserved through processing — video and audio just express that instant in their own grain rate (video ~20ms grains, audio ~1ms grains), so the index numbers differ even though the timestamp matches. The video branch lags 30ms and audio 2ms, so audio is asked for a grain 28ms old. Add Media Functions to the video path to grow that differential until audio goes red.',
-  },
-  {
-    id: 'align-4k-audio',
-    title: '2. Align 4K Video & 8-ch Audio',
-    description:
-      'Same workload, but the MXL Domain is only 50ms. Keep the Egress Function reading both flows cleanly — build out the video path and find where the audio input starts to overrun.',
-    domainSizeMs: 50,
-  },
-  {
-    id: 'tight-margin',
-    title: '3. Tight Margin',
-    description:
-      'A 30ms MXL Buffer retains almost no history. Insert Grain Repeaters to re-buffer the fast branch before it falls outside the retained window.',
-    domainSizeMs: 30,
-  },
-  {
-    id: 'av-sync-overrun',
-    title: '4. A/V Sync Overrun',
-    description:
-      'One Ingress Function writes flows V1 (video) and A1 (audio) from the same paced stream. Video is processed twice (V1→V1a→V1b, 82ms), audio once (A1→A1a, 2ms). Grain indices are preserved per-track, so the Egress Function must read the SAME point in time from both — it waits on the slow video branch, by which time the audio grain it needs sits 80ms behind the audio head and its slot has been recycled.',
-    domainSizeMs: 100,
-    guidance:
-      'The audio flow only retains 3 grains (60ms) of history but is asked for a grain 4 grains old. Three fixes: (1) grow the MXL Domain to 110ms so the audio flow retains 4 grains, (2) delete the Slow Video Function and reconnect V1a straight to the Egress to shrink the differential, or (3) drop a Grain Repeater into the audio branch so A1a is re-buffered into a second sub-ring buffer.',
-  },
-  {
-    id: 'many-readers',
-    title: '5. Many Readers, One Writer',
-    description:
-      'One Ingress Function writes a single video flow (V1) that five functions read. Each reader asks for a grain at its own point in time: the recorder reads near the head, while each mixer has to wait for a slower branch and so reads V1 further back.',
-    domainSizeMs: 120,
-    guidance:
-      'Look at the single V1 ring in the telemetry panel: the numbered markers show where each reader is on it, relative to the head and now. Raise the Slow Function latency and watch Mix B\'s marker slide toward the oldest retained slot until it turns red.',
-  },
-  {
     id: 'blank-canvas',
-    title: '6. Blank Canvas',
+    title: 'Blank Canvas',
     description:
-      'An empty canvas. Use the Add node palette to build your own pipeline, connect the nodes, and watch the ring buffers respond.',
+      'An empty canvas. Use the Add media function palette to build your own pipeline, connect the media functions, and watch the ring buffers respond.',
     domainSizeMs: 100,
   },
 ];

@@ -7,6 +7,7 @@ import { gaugeZone } from './engine/ringBufferEngine';
 import { RingBufferPanel } from './components/ui/RingBufferPanel';
 import { GameHud } from './components/ui/GameHud';
 import { InfoPanel } from './components/ui/InfoPanel';
+import { EndToEndTimeline } from './components/ui/EndToEndTimeline';
 import { useGameLoop } from './game/useGameLoop';
 import { useSimClock } from './game/useSimClock';
 import { ScenariosPage } from './components/ui/ScenariosPage';
@@ -185,6 +186,7 @@ function App() {
         onParkedInputsChange={setParkedInputKeys}
         stepClockBy={clock.step}
         onManualStepReady={registerManualStep}
+        onSaveScenario={(title) => handleSaveScenario(title, '')}
       />
       <RingBufferPanel
         nodes={graphNodes}
@@ -215,6 +217,13 @@ function App() {
         playbackMode={clock.mode}
         onSetPlaybackMode={clock.setMode}
         onStep={() => manualStepRef.current()}
+      />
+      <EndToEndTimeline
+        graph={graph}
+        nodes={graphNodes}
+        edges={graphEdges}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
       />
       <InfoPanel />
       {route === 'scenarios' && (

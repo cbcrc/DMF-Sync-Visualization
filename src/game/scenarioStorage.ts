@@ -25,7 +25,7 @@ export interface WorkingGraph {
   edges: Edge[];
 }
 
-const KINDS: MediaFunctionKind[] = ['input', 'synthetic', 'editorial', 'technical', 'recording', 'repeater', 'output'];
+const KINDS: MediaFunctionKind[] = ['input', 'synthetic', 'editorial', 'technical', 'recording', 'repeater', 'delay', 'output'];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -44,11 +44,16 @@ export function sanitizeNode(raw: unknown): Node<MediaFunctionNodeData> | null {
     data: {
       kind: d.kind as MediaFunctionKind,
       label: d.label,
-      latencyMs: d.latencyMs,
+      // Grain Repeaters are fixed at 0ms, including in scenarios saved earlier.
+      latencyMs: d.kind === 'repeater' ? 0 : d.latencyMs,
       inputCount: d.inputCount,
       outputCount: d.outputCount,
       ...(d.audioOnly === true ? { audioOnly: true } : {}),
       ...(d.videoOnly === true ? { videoOnly: true } : {}),
+      ...(d.syncOutputs === true ? { syncOutputs: true } : {}),
+      ...(Array.isArray(d.ignoreSyncInputs) && d.ignoreSyncInputs.some((i) => Number.isInteger(i))
+        ? { ignoreSyncInputs: d.ignoreSyncInputs.filter((i): i is number => Number.isInteger(i)) }
+        : {}),
     },
   };
 }

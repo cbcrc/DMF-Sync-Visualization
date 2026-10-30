@@ -30,17 +30,19 @@ _Read this first when resuming work._
 
 ## Status
 
-Verified by `npx tsc -b`, `npx eslint src` and `npx vitest run` (13 tests).
-Nothing is committed from the current working session, so check `git status`.
+Verified by `npx tsc -b`, `npx eslint src` and `npx vitest run` (24 tests).
 
 Done and described below: grain-flow visualization (TO-DO #1, #8-#14),
-playback modes, the writer-centric side panel, the Scenarios page and
-persistence, and the canvas editing and ring-buffer blocks ("Canvas editing
-and ring buffer blocks").
+playback modes, the side panel (MXL clock, plus ring telemetry for the
+selected function), the Scenarios page and persistence, the canvas editing and
+ring-buffer blocks, the grouped "Add media function" palette, the Profanity
+Delay, per-input sync/live on mixers, and the end-to-end timeline.
 
-Open work lives in `TO-DO.md` (#2, #3, #4, #7, #15 and the one open bug).
-Check any changes in a browser (`npm run dev`) as well as with the checks
-above.
+Open work lives in `TO-DO.md`. Check any changes in a browser (`npm run dev`)
+as well as with the checks above. The recent canvas layout work (node layouts,
+aligned Linear out lanes, reader bubbles, palette, timeline) has only been
+checked by typecheck, lint and tests, not looked at in a browser yet.
+
 ## Core model — read this before touching timing logic
 
 The app models MXL timing with **preserved grain indices**: a Media Function
@@ -75,16 +77,20 @@ src/
                              MediaFunctionNode (the block: function body, mode select, ring
                              column), RingBufferStrip + ringStripLayout (a writer's linear ring
                              with reader pointers), nodeDefaults (palette presets, latency
-                             ranges, outputModeOf), nodeSizing, GrainOverlay (grain dots, tags),
+                             ranges, palette groups, outputModeOf), nodeSizing, GrainOverlay (grain dots, tags),
                              LinearBoundaryOverlay (Ingress/Egress linear tick trains)
-    ui/                      RingBufferPanel (per-writer inspector), WriterRing (circular ring
-                             per writer flow), ClockStrip (domain TAI clock), GrainSlotStrip and
+    ui/                      RingBufferPanel (closable TAI clock, plus a WriterRing per ring the
+                             selected function writes or reads), WriterRing (circular ring
+                             per writer flow), ClockStrip (domain TAI clock), EndToEndTimeline
+                             (bottom timeline, one lane per output), GrainSlotStrip and
                              ContinuousBufferTrack (per-reader slot/continuous views),
                              RingBufferGauge, GameHud, InfoPanel, ScenariosPage
   game/                      graphLatency (per-input evaluation + writerFlows), writerRings
                              (readings grouped per writer, one ring per output flow),
                              connectionRules (which track an input may read), levels and
                              scenarios (6 built-in scenarios), scenarioStorage, stabilityMonitor,
+                             endToEndTimeline (input-to-output path per output), syncInputs
+                             (which mixer inputs read free of sync),
                              useGameLoop, grainFlow/useGrainFlow, useSimClock, useHashRoute
 ```
 
@@ -117,12 +123,42 @@ src/
   first input's track (`trackForEdge`).
 - **Connection rules** (`connectionRules.ts`, `isValidConnection`): an input
   takes one link; dropping a link on an occupied input replaces it. Audio-only
-  functions read audio only, video-only functions (Video Mixer) video only,
+  functions read audio only, video-only functions (Colour Corrector, Video Mixer,
+  Multiview) video only,
   an Output's first input is video and its second audio, and other
   multi-input nodes need all inputs on the same track. Rewiring an existing
   link that now breaks a rule is refused; links that already exist are kept.
   Palette flags `audioOnly` and `videoOnly` are persisted in `scenarioStorage`.
-- **Toolbar and undo.** Top-centre toolbar: Undo and Now. Undo (button or
+- **Palette.** "Add media function" lists presets in groups (`PALETTE_GROUPS`
+  in `nodeDefaults.ts`): Sources, Synthetic, Technical, Editorial, Outputs.
+  Each group has a Generic entry. Colour Corrector and Multiview are video
+  only. The Grain Repeater is fixed at 0ms (no slider; `sanitizeNode` forces 0
+  on load).
+- **Profanity Delay** (`kind: 'delay'`, editorial group). One video and one
+  audio input, parks media in its own buffer for up to 3s (`DELAY_MAX_MS`),
+  then re-writes it into MXL as a new source: its output head lag and
+  repeater count restart at 0, but `workloadLatencyMs` keeps counting the
+  delay so total workload and the timeline stay end to end. In `grainFlow.ts`
+  in-N fans out to out-N only and `originTs` is re-stamped on output. This is
+  a deliberate departure from preserved grain indices, because the delay is a
+  new source.
+- **Mixer sync / live.** Editorial functions with more than one input get a
+  per-input toggle (`ignoreSyncInputs`, `syncInputs.ts`). A "live" input is
+  read as close to its write head as possible (one grain behind) and no longer
+  holds the function back; a "sync" input reads at the aligned index. If every
+  wired input is live they all stay synced. Checked against dmf-mxl/mxl
+  (`6e654e2`): "sync" is a Flow Synchronization Group
+  (`FlowSynchronizationGroup::waitForDataAt`, waits for every reader's head
+  to reach the grain for one timestamp) and "live" is a reader outside the
+  group reading `runtime.headIndex`, so it is never waited on.
+- **End-to-end timeline.** `endToEndTimeline.ts` walks back from each
+  Output/Recording along the branch with the largest end-to-end latency. Each
+  step has `startMs`/`endMs` (the latency it adds), `readAtMs` (how far behind
+  now it reads) and `syncWaitMs`. The axis is ms since the MXL write at the
+  input. The Origin Time Stamp (OTS) carried on the linear side is not
+  implemented: rows have a `leadInMs` (always 0) that shifts the axis, so OTS
+  can be supplied later via `TimelineOptions.leadInMsBySourceId`.
+- **Toolbar and undo.** Top-centre toolbar: Undo, Now and Save scenario. Undo (button or
   Ctrl/Cmd+Z) uses snapshot history in `FlowCanvas` (100 steps; connect, link
   move, add, node drag, delete). It is cleared when a scenario loads. Latency
   slider changes are not undoable and there is no redo.
@@ -419,6 +455,19 @@ An empty 100ms domain to build on from the palette.
   (Manual) for teaching purposes — a deliberate departure from MXL's true
   wall-clock-derived grain indexing, which is always derived from real
   elapsed PTP/TAI time and never slowed or paused.
+- A Profanity Delay re-writes its media as a new source (see "Canvas editing
+  and ring buffer blocks"); this is the only place a flow's grain index is
+  not preserved.
+- A mixer input set to "live" is modelled as reading one grain behind the write
+  head with no wait. In MXL a reader may ask for any index up to
+  `runtime.headIndex` (`PosixDiscreteFlowReader::getGrainImpl`), and the head
+  grain is readable once its slices are committed, so one grain behind is
+  conservative for whole-grain writes (it is exact while a grain is still being
+  written in slices).
+- In MXL every input of a function can be live (no sync group at all). Here at
+  least one input stays synced when all are set to live, because the function
+  needs one timestamp to decide which grain index it writes. The pills still
+  show "live" for those inputs.
 - Reads are evaluated instantaneously, not via deadline-based blocking/retry.
 - Grain Repeater capacity is simplified to "one extra domain window per
   repeater on the branch."

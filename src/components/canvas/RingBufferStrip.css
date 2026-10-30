@@ -181,3 +181,36 @@
   border-radius: 2px;
   line-height: 1.5;
 }
+
+/* Offset bubble under a focused reader's pointer. */
+.ws__bubble {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid #f5a623;
+  border-radius: 6px;
+  padding: 3px 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.ws__bubble::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top: 0;
+  border-bottom: 5px solid #f5a623;
+}
+
+.ws__bubble span {
+  color: #f5a623;
+  font-weight: 600;
+}

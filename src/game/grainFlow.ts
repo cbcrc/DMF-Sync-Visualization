@@ -12,6 +12,7 @@
 
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
+import { freeRunningInputs } from './syncInputs';
 import { nodeSizeForLatency } from '../components/canvas/nodeSizing';
 import type { RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs } from '../engine/mxlGrainIndex';
@@ -292,6 +293,15 @@ export function stepGrains(
     outgoingByNode.get(e.source)!.push(e);
   }
 
+  // Mixer inputs set to ignore sync are read at the write head: the grain is
+  // taken on arrival and the mixer does not wait for it.
+  const freeHandlesByNode = new Map<string, Set<number>>();
+  for (const n of nodes) {
+    const wired = edges.filter((e) => e.target === n.id).map((e) => parseHandleIndex(e.targetHandle, 'in-'));
+    const free = freeRunningInputs(n.data, wired);
+    if (free.size > 0) freeHandlesByNode.set(n.id, free);
+  }
+
   const next: Grain[] = [];
   // Use persistent dropped-handle tracking for the active wave if provided
   const droppedHandles = droppedHandlesByWave ?? new Map<string, Set<number>>();
@@ -327,6 +337,7 @@ export function stepGrains(
         droppedHandles.get(g.toId)!.add(g.targetHandleIndex ?? 0);
         continue;
       }
+      if (freeHandlesByNode.get(g.toId)?.has(g.targetHandleIndex ?? 0)) continue;
       next.push({
         id: `${g.toId}-hold-${now}-${randomSuffix()}`,
         phase: 'holding',
@@ -359,10 +370,15 @@ export function stepGrains(
       continue;
     }
     const outs = outgoingByNode.get(g.fromId) ?? [];
+    // A Profanity Delay is a new source on the way out: video (in-0) leaves on
+    // out-0 and audio (in-1) on out-1, each stamped afresh instead of keeping
+    // the capture time it arrived with.
+    const isDelay = nodes.find((n) => n.id === g.fromId)?.data.kind === 'delay';
     for (const e of outs) {
       if (!geometry.has(e.target)) continue;
       const srcIdx = parseHandleIndex(e.sourceHandle, 'out-');
       const tgtIdx = parseHandleIndex(e.targetHandle, 'in-');
+      if (isDelay && srcIdx !== (g.targetHandleIndex ?? 0)) continue;
       next.push({
         id: `${e.id}-travel-${now}-${randomSuffix()}`,
         phase: 'traveling',
@@ -374,7 +390,7 @@ export function stepGrains(
         streamIndex: g.streamIndex,
         startTime: now,
         durationMs: travelDuration(),
-        originTs: g.originTs,
+        originTs: isDelay ? tickBoundaryAtOrBefore(now) : g.originTs,
       });
     }
     // Grains with no outgoing edges (Recording/Output nodes) are simply consumed here.
@@ -387,6 +403,7 @@ export function stepGrains(
   const requiredHandlesByNode = new Map<string, Set<number>>();
   for (const e of edges) {
     const tgtIdx = parseHandleIndex(e.targetHandle, 'in-');
+    if (freeHandlesByNode.get(e.target)?.has(tgtIdx)) continue;
     if (!requiredHandlesByNode.has(e.target)) requiredHandlesByNode.set(e.target, new Set());
     requiredHandlesByNode.get(e.target)!.add(tgtIdx);
   }
@@ -401,25 +418,39 @@ export function stepGrains(
   const releaseDurationById = new Map<string, number>();
   const stalledNodeIds = new Set<string>();
 
-  for (const [nodeId, parked] of parkedByNode) {
-    const required = requiredHandlesByNode.get(nodeId);
-    if (!required) continue;
-    const presentHandles = new Set(parked.map((g) => g.targetHandleIndex ?? 0));
-    const nodeDropped = droppedHandles.get(nodeId);
+  // Nodes release independently, except Output functions flagged `syncOutputs`,
+  // which form one group released together once every member has all its inputs.
+  const groups = new Map<string, string[]>();
+  for (const nodeId of requiredHandlesByNode.keys()) {
+    const data = nodes.find((n) => n.id === nodeId)?.data;
+    const key = data?.kind === 'output' && data.syncOutputs ? '__synced_outputs__' : nodeId;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(nodeId);
+  }
 
+  for (const members of groups.values()) {
+    if (!members.some((id) => parkedByNode.has(id))) continue;
     // If any required sibling input was dropped, synchronization failed for this wave.
     // The surviving sibling stays parked in an alert state until restart or tuning fix.
-    const hasDroppedSibling = [...required].some((h) => nodeDropped?.has(h));
+    const hasDroppedSibling = members.some((id) =>
+      [...requiredHandlesByNode.get(id)!].some((h) => droppedHandles.get(id)?.has(h)),
+    );
     if (hasDroppedSibling) {
-      stalledNodeIds.add(nodeId);
+      for (const id of members) if (parkedByNode.has(id)) stalledNodeIds.add(id);
       continue;
     }
 
-    const allPresent = [...required].every((h) => presentHandles.has(h));
+    const allPresent = members.every((id) => {
+      const present = new Set((parkedByNode.get(id) ?? []).map((g) => g.targetHandleIndex ?? 0));
+      return [...requiredHandlesByNode.get(id)!].every((h) => present.has(h));
+    });
     if (!allPresent) continue;
-    const toGeom = geometry.get(nodeId)!;
-    const duration = holdDuration(toGeom.latencyMs);
-    for (const g of parked) releaseDurationById.set(g.id, duration);
+    for (const id of members) {
+      const duration = nodes.find((n) => n.id === id)?.data.kind === 'delay'
+        ? HOLD_BASE_MS + Math.max(0, geometry.get(id)!.latencyMs) // parked in real time, past the usual hold cap
+        : holdDuration(geometry.get(id)!.latencyMs);
+      for (const g of parkedByNode.get(id) ?? []) releaseDurationById.set(g.id, duration);
+    }
   }
 
   const released = next.map((g) => {

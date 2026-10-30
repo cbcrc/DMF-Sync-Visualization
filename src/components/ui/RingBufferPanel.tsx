@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../canvas/MediaFunctionNode';
 import type { GraphBufferState } from '../../game/graphLatency';
@@ -28,7 +29,8 @@ export interface RingBufferPanelProps {
 }
 
 /**
- * Live ring buffer telemetry, one block per *writer* flow: a ring is a
+ * Live MXL clock (the operator can close it) plus ring buffer telemetry for the
+ * selected function only, one block per *writer* flow: a ring is a
  * property of the writer, and every function reading it is a marker on that
  * one ring (`WriterRing`), so several readers at different points in time can
  * be compared against the same head and "now". Each reader keeps its own
@@ -47,25 +49,45 @@ export function RingBufferPanel({
   onFocusNode,
 }: RingBufferPanelProps) {
   const labelByNodeId = new Map(nodes.map((n) => [n.id, n.data.label]));
-  const writers = groupReadingsByWriter(graph);
+  const [clockOpen, setClockOpen] = useState(true);
+  // Ring buffers appear only for the selected function: the ones it writes and the ones it reads.
+  const writers =
+    focusedNodeId === null
+      ? []
+      : groupReadingsByWriter(graph).filter(
+          (ring) => ring.writerNodeId === focusedNodeId || ring.readers.some((r) => r.readerNodeId === focusedNodeId),
+        );
 
   return (
     <div className="rb-panel">
-      <div className="rb-panel__title">MXL Ring Buffer Telemetry (live)</div>
-      <ClockStrip
-        timestampMs={graph.timestampMs}
-        grainRate={graph.grainRate}
-        grainDurationMs={graph.grainDurationMs}
-        grainCount={graph.grainCount}
-        domainSizeMs={domainSizeMs}
-        showRealGrainIndex={showRealGrainIndex}
-      />
-      <div className="rb-panel__clock">
-        {graph.grainDurationMs}ms grains · {graph.grainCount} slots/window
-        <span className="rb-panel__clock-note"> (each flow below uses its own track's grain rate)</span>
-      </div>
-      {writers.length === 0 && (
-        <div className="rb-panel__empty">No reader inputs yet — connect a node's input.</div>
+      {clockOpen ? (
+        <>
+          <div className="rb-panel__header">
+            <div className="rb-panel__title">MXL Clock · TAI (live)</div>
+            <button type="button" className="rb-panel__close" onClick={() => setClockOpen(false)} aria-label="Close clock">
+              ×
+            </button>
+          </div>
+          <ClockStrip
+            timestampMs={graph.timestampMs}
+            grainRate={graph.grainRate}
+            grainDurationMs={graph.grainDurationMs}
+            grainCount={graph.grainCount}
+            domainSizeMs={domainSizeMs}
+            showRealGrainIndex={showRealGrainIndex}
+          />
+          <div className="rb-panel__clock">
+            {graph.grainDurationMs}ms grains · {graph.grainCount} slots/window
+            <span className="rb-panel__clock-note"> (each flow's ring buffer uses its own track's grain rate)</span>
+          </div>
+        </>
+      ) : (
+        <button type="button" className="rb-panel-toggle" onClick={() => setClockOpen(true)}>
+          MXL clock
+        </button>
+      )}
+      {focusedNodeId !== null && writers.length === 0 && (
+        <div className="rb-panel__empty">This function has no ring buffers to show yet — connect an input or an output.</div>
       )}
       {writers.map((ring) => {
         const writerLabel = labelByNodeId.get(ring.writerNodeId) ?? ring.writerNodeId;

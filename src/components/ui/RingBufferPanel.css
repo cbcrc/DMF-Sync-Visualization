@@ -94,3 +94,44 @@
   color: #757575;
   margin-left: 4px;
 }
+
+.rb-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rb-panel__close {
+  pointer-events: auto;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: #757575;
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.rb-panel__close:hover {
+  color: #ffffff;
+}
+
+.rb-panel-toggle {
+  pointer-events: auto;
+  align-self: flex-end;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  font-size: 0.65rem;
+  color: #ffffff;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.rb-panel-toggle:hover {
+  border-color: #ee0000;
+  color: #ee0000;
+}

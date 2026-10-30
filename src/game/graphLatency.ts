@@ -41,6 +41,7 @@ import {
   timestampToGrainIndex,
 } from '../engine/mxlGrainIndex';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
+import { freeRunningInputs } from './syncInputs';
 
 /** MXL data-format track a flow carries — determines its grain rate (item #10.i). */
 export type Track = 'video' | 'audio' | 'data';
@@ -71,6 +72,12 @@ export interface NodeLatencyInfo {
   inputLatencyMs: number;
   /** Lag (ms) of this node's own published output flow head. */
   outputLatencyMs: number;
+  /**
+   * End-to-end latency from capture to this node's output. Equals
+   * `outputLatencyMs` except downstream of a Profanity Delay, which re-writes
+   * its flows as a new source (head lag back to 0) but still delayed the show.
+   */
+  workloadLatencyMs: number;
   /** True if this node's inputs arrive with different lags and had to be aligned (§2.D). */
   wasSynced: boolean;
   /** Worst differential this node has to absorb across its inputs (ms). */
@@ -123,11 +130,18 @@ interface GraphNodeLike {
   kind: MediaFunctionKind;
   latencyMs: number;
   inputSourceIds: (string | null)[];
+  /** Audio-only / video-only functions read and write that track regardless of wiring. */
+  fixedTrack?: Track;
+  /** Mixer inputs set to read free of the sync point (see `freeRunningInputs`). */
+  ignoreSyncInputs?: number[];
+  inputCount: number;
 }
 
 /** A published flow: how far its head lags real time, and its re-buffering history. */
 interface BranchInfo {
   lagMs: number;
+  /** End-to-end latency; differs from `lagMs` once a Profanity Delay has reset the head lag. */
+  workloadMs: number;
   repeaterCount: number;
 }
 
@@ -142,7 +156,10 @@ function buildGraphNodes(
       id: n.id,
       kind: n.data.kind,
       latencyMs: n.data.latencyMs,
+      inputCount: n.data.inputCount,
+      ...(n.data.ignoreSyncInputs ? { ignoreSyncInputs: n.data.ignoreSyncInputs } : {}),
       inputSourceIds: new Array(n.data.inputCount).fill(null),
+      ...(n.data.audioOnly ? { fixedTrack: 'audio' as const } : n.data.videoOnly ? { fixedTrack: 'video' as const } : {}),
     });
   }
   for (const e of edges) {
@@ -192,7 +209,12 @@ function trackForEdge(
 
   const srcNode = byId.get(edge.source);
   let track: Track;
-  if (!srcNode || srcNode.inputSourceIds.length === 0) {
+  if (srcNode?.fixedTrack && srcNode.inputSourceIds.length > 0) {
+    track = srcNode.fixedTrack;
+  } else if (srcNode?.kind === 'delay') {
+    // A Profanity Delay re-writes video on out-0 and audio on out-1.
+    track = indexToTrack(parseHandleIndex(edge.sourceHandle, 'out-'));
+  } else if (!srcNode || srcNode.inputSourceIds.length === 0) {
     // Producer (Input/Synthetic): the track originates here, keyed by which
     // output handle this specific edge left from.
     track = indexToTrack(parseHandleIndex(edge.sourceHandle, 'out-'));
@@ -250,13 +272,19 @@ export function computeGraphLatency(
     const cached = branchByNodeId.get(id);
     if (cached) return cached;
     const node = byId.get(id);
-    if (!node || visiting.has(id)) return { lagMs: 0, repeaterCount: 0 }; // missing node or cycle guard
+    if (!node || visiting.has(id)) return { lagMs: 0, workloadMs: 0, repeaterCount: 0 }; // missing node or cycle guard
 
     visiting.add(id);
-    const parents = node.inputSourceIds
-      .filter((p): p is string => p !== null)
-      .map(resolveBranch);
+    const wired = node.inputSourceIds
+      .map((p, index) => ({ p, index }))
+      .filter((w): w is { p: string; index: number } => w.p !== null);
+    const allParents = wired.map((w) => resolveBranch(w.p));
     visiting.delete(id);
+
+    // Inputs set to ignore sync are read at their own write head, so they
+    // neither set the aligned index nor hold this node back.
+    const free = freeRunningInputs(node, wired.map((w) => w.index));
+    const parents = allParents.filter((_, i) => !free.has(wired[i].index));
 
     // Sync Group alignment (§2.D): all inputs are read at the slowest branch's
     // grain index, so this node's own output inherits that lag.
@@ -264,24 +292,55 @@ export function computeGraphLatency(
     const maxStalenessMs = parents.reduce((worst, p) => Math.max(worst, alignedLagMs - p.lagMs), 0);
     const wasSynced = parents.length > 1 && new Set(parents.map((p) => p.lagMs)).size > 1;
 
+    const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
+    const workloadMs = alignedWorkloadMs + node.latencyMs;
+
+    // A Profanity Delay parks media in its own buffer, then writes it into the
+    // MXL domain fresh, like a synthetic source: the flows start at the head
+    // with no upstream lag or re-buffering history.
+    const isDelay = node.kind === 'delay';
     const upstreamRepeaters = parents.reduce((most, p) => Math.max(most, p.repeaterCount), 0);
-    const repeaterCount = upstreamRepeaters + (node.kind === 'repeater' ? 1 : 0);
-    const lagMs = alignedLagMs + node.latencyMs;
+    const repeaterCount = isDelay ? 0 : upstreamRepeaters + (node.kind === 'repeater' ? 1 : 0);
+    const lagMs = isDelay ? 0 : alignedLagMs + node.latencyMs;
 
     latencyByNodeId.set(id, {
       nodeId: id,
       inputLatencyMs: alignedLagMs,
       outputLatencyMs: lagMs,
+      workloadLatencyMs: workloadMs,
       wasSynced,
       maxStalenessMs,
       repeaterCount,
     });
-    const branch: BranchInfo = { lagMs, repeaterCount };
+    const branch: BranchInfo = { lagMs, workloadMs, repeaterCount };
     branchByNodeId.set(id, branch);
     return branch;
   }
 
   for (const node of nodes) resolveBranch(node.id);
+
+  // Synced outputs (several Output functions released together): every one of
+  // them reads at the slowest of their aligned indices, like inputs of a single
+  // sync node. Outputs are sinks, so nothing downstream depends on the change.
+  const syncedOutputs = nodes.filter(
+    (n) => n.data.kind === 'output' && n.data.syncOutputs && (byId.get(n.id)?.inputSourceIds.some((p) => p !== null) ?? false),
+  );
+  if (syncedOutputs.length > 1) {
+    const groupLagMs = Math.max(...syncedOutputs.map((n) => latencyByNodeId.get(n.id)?.inputLatencyMs ?? 0));
+    for (const n of syncedOutputs) {
+      const info = latencyByNodeId.get(n.id);
+      if (!info) continue;
+      const parentLags = byId.get(n.id)!.inputSourceIds.filter((p): p is string => p !== null).map((p) => resolveBranch(p).lagMs);
+      latencyByNodeId.set(n.id, {
+        ...info,
+        inputLatencyMs: groupLagMs,
+        outputLatencyMs: groupLagMs + n.data.latencyMs,
+        workloadLatencyMs: info.workloadLatencyMs + (groupLagMs - info.inputLatencyMs),
+        maxStalenessMs: Math.max(...parentLags.map((l) => groupLagMs - l)),
+        wasSynced: info.wasSynced || parentLags.some((l) => l !== groupLagMs),
+      });
+    }
+  }
 
   const inputsByNodeId = new Map<string, InputReading[]>();
   const evaluations = new Map<string, { buffer: RingBuffer; evaluation: RingBufferEvaluation }>();
@@ -294,19 +353,25 @@ export function computeGraphLatency(
     if (!graphNode || !info) continue;
 
     const readings: InputReading[] = [];
+    const freeInputs = freeRunningInputs(
+      graphNode,
+      graphNode.inputSourceIds.flatMap((p, i) => (p ? [i] : [])),
+    );
     graphNode.inputSourceIds.forEach((sourceId, inputIndex) => {
       if (!sourceId) return;
       const branch = resolveBranch(sourceId);
 
       // The flow's published head carries the newest grain index it has
       // written; this reader asks for the aligned (slowest-branch) index.
-      const stalenessMs = info.inputLatencyMs - branch.lagMs;
+      const isFree = freeInputs.has(inputIndex);
+      const alignedLagMs = isFree ? branch.lagMs : info.inputLatencyMs;
+      const stalenessMs = alignedLagMs - branch.lagMs;
 
       // This input's own track/grain rate (item #10.i): audio gets a much
       // finer grain duration than video, derived from the same timing math
       // (`mxlGrainIndex.ts`) but with its own geometry.
       const inputEdge = edgeByTargetIndex.get(`${node.id}:${inputIndex}`);
-      const track: Track = inputEdge ? trackForEdge(inputEdge, byId, inboundEdgesByTarget, trackMemo) : 'video';
+      const track: Track = graphNode.fixedTrack ?? (inputEdge ? trackForEdge(inputEdge, byId, inboundEdgesByTarget, trackMemo) : 'video');
       const trackRate = grainRateForTrack(track);
       const trackDurationMs = grainDurationMs(trackRate);
       const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
@@ -331,10 +396,10 @@ export function computeGraphLatency(
         retainedGrains,
         retainedMs: retainedGrains * trackDurationMs,
         branchLagMs: branch.lagMs,
-        alignedLagMs: info.inputLatencyMs,
+        alignedLagMs,
         stalenessMs,
         publishedTimestampMs: timestampMs - branch.lagMs,
-        requestedTimestampMs: timestampMs - info.inputLatencyMs,
+        requestedTimestampMs: timestampMs - alignedLagMs,
         publishedGrainIndex,
         requestedGrainIndex,
         publishedRingBufferIndex: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),
@@ -363,7 +428,7 @@ export function computeGraphLatency(
         const alignedInstantMs = videoSibling.buffer.requestedTimestampMs;
         const startMs = Math.floor(alignedInstantMs / videoGrainMs) * videoGrainMs;
         readings.forEach((r) => {
-          if (r.track === 'audio') {
+          if (r.track === 'audio' && !freeInputs.has(r.inputIndex)) {
             r.alignmentSpanMs = { startMs, endMs: startMs + videoGrainMs };
           }
         });
@@ -381,7 +446,7 @@ export function computeGraphLatency(
     }
 
     if (node.data.kind === 'output' || node.data.kind === 'recording') {
-      totalWorkloadLatencyMs = Math.max(totalWorkloadLatencyMs, info.outputLatencyMs);
+      totalWorkloadLatencyMs = Math.max(totalWorkloadLatencyMs, info.workloadLatencyMs);
     }
   }
   if (!Number.isFinite(stabilityMarginMs)) stabilityMarginMs = domainSizeMs;
@@ -403,9 +468,11 @@ export function computeGraphLatency(
     const branch = resolveBranch(node.id);
     for (const index of handles) {
       const track: Track =
-        graphNode.inputSourceIds.length === 0
+        graphNode.inputSourceIds.length === 0 || graphNode.kind === 'delay'
           ? indexToTrack(index)
-          : firstInbound
+          : graphNode.fixedTrack
+            ? graphNode.fixedTrack
+            : firstInbound
             ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo)
             : 'video';
       const flowKey = `${node.id}:${track}`;

@@ -151,3 +151,30 @@
     opacity: 0.6;
   }
 }
+
+/* Output panel: lanes are placed individually so each is level with its input connector. */
+.lb-panel--aligned {
+  transform: none;
+  height: 0;
+}
+
+.lb-aligned-lane {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.lb-aligned-lane__caption {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.lb-panel__title--floating,
+.lb-panel__readout--floating {
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+}

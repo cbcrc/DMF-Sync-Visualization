@@ -54,12 +54,13 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
    * *Role:* Multi-source/complex processors (e.g., Video Switchers, Mixers, AI Super-res).
    * *Latency:* High ($\Delta t_{proc} = 20\text{ms} - 50\text{ms}$). Outputs create a new source in the domain.
 3. **Technical Media Functions:**
-   * *Role:* Single-input minor processors (e.g., Color Correctors, EQ, Format Converters).
+   * *Role:* Single-input minor processors (e.g., Colour Correctors, EQ, Format Converters). Multiview takes up to four video inputs into one output.
    * *Latency:* Low ($\Delta t_{proc} = 2\text{ms} - 10\text{ms}$).
+   * *Profanity Delay (Editorial):* parks one video and one audio flow in its own buffer for up to 3s, then re-writes them into MXL as a new source.
 4. **Recording Media Functions:**
    * *Role:* Pure consumers/readers. Records signals to disk.
 5. **Grain Repeaters (Artificial Buffer Nodes):**
-   * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Low latency penalty, resets the boundary limit.
+   * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Modelled with no latency of its own (0ms), resets the boundary limit.
    * *Implementation note:* a repeater cannot un-delay a signal, so it adds its
      latency like any other node. What it "resets" is **capacity**: its sub-ring
      buffer adds another domain window of retained history to that branch.
@@ -73,6 +74,7 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
 ### D. Synchronization Groups (Sync Groups)
 * **Definition:** A grouping mechanism for multiple signals (e.g., Audio + Video) that must arrive aligned at a common node or output.
 * **Alignment Constraint:** Low-latency signals (e.g., Audio: 2ms) inside a Sync Group with high-latency signals (e.g., Video: 33ms) MUST be artificially delayed to match the highest-latency signal in the group.
+* **Ignoring sync:** a mixer input can be set to "live", which reads as close to its write head as possible and does not hold the function back. The default ("sync") reads at the aligned index.
 * **Risk:** Artificially delaying a stream to maintain sync pushes its Read Head ($R$) closer to the back edge of the Ring Buffer ($W - T_{domain}$), risking an overrun (Red state).
 
 ---
@@ -87,6 +89,7 @@ For every active consumer node/reader, render an interactive **Circular Gauge** 
 
 ### Telemetry Readouts
 * **Total Workload Latency:** End-to-end time from input capture to output presentation.
+* **End-to-end timeline:** one lane per output, from the input to the output, showing where each media function reads from and the latency it adds. Not yet anchored to the Origin Time Stamp (OTS) carried on the linear side.
 * **Absorbed Latency / Stability Margin:** How much buffer margin remains across all Sync Groups before an overrun occurs.
 * **MXL timing telemetry:** Published timestamp/head grain index,
   requested timestamp/read grain index, and each request's physical ring slot.

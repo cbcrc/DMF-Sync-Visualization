@@ -93,6 +93,28 @@
   line-height: 1.2;
 }
 
+.mf-node__label--editable {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+}
+
+.mf-node__label--editable:hover {
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+}
+
+.mf-node__label-input {
+  width: 90%;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid #f5a623;
+  border-radius: 4px;
+  padding: 1px 2px;
+}
+
 .mf-node__kind {
   font-size: 0.65rem;
   color: #757575;
@@ -294,3 +316,57 @@
   }
 }
 
+
+.mf-node__sync {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  color: #cfcfcf;
+  cursor: pointer;
+}
+
+/* Profanity Delay's own long buffer — separate from the MXL ring buffers. */
+.mf-node__delay {
+  width: 80%;
+  margin-top: 2px;
+}
+
+.mf-node__delay-label {
+  font-size: 0.55rem;
+  color: #cfcfcf;
+}
+
+.mf-node__delay-bar {
+  height: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mf-node__delay-fill {
+  height: 100%;
+  background: #4cc9f0;
+}
+
+/* Per-input sync / ignore-sync toggle on mixers, level with each input connector. */
+.mf-node__input-sync {
+  position: absolute;
+  left: 4px;
+  transform: translateY(-50%);
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.5rem;
+  line-height: 1.5;
+  color: #cfcfcf;
+  background: #1c1d20;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.mf-node__input-sync--free {
+  color: #1a1b1e;
+  background: #ffc107;
+  border-color: #ffc107;
+}

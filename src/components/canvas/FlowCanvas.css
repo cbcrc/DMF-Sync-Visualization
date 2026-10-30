@@ -28,6 +28,16 @@
   gap: 6px;
 }
 
+.fc-palette__group + .fc-palette__group {
+  margin-top: 8px;
+}
+
+.fc-palette__group-title {
+  font-size: 0.6rem;
+  color: #9aa0a6;
+  margin-bottom: 3px;
+}
+
 .fc-palette__btn {
   font-family: inherit;
   font-size: 0.7rem;

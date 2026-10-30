@@ -24,7 +24,7 @@ import { LinearBoundaryOverlay } from './LinearBoundaryOverlay';
 import type { WriterRing } from '../../game/writerRings';
 import { type OutputMode } from './MediaFunctionNode';
 import { requiredTrack } from '../../game/connectionRules';
-import { LATENCY_RANGE, PALETTE_PRESETS, type PalettePreset } from './nodeDefaults';
+import { LATENCY_RANGE, PALETTE_GROUPS, PALETTE_PRESETS, type PalettePreset } from './nodeDefaults';
 import { useGrainFlow } from '../../game/useGrainFlow';
 import type { InputReading } from '../../game/graphLatency';
 import './FlowCanvas.css';
@@ -86,6 +86,8 @@ export interface FlowCanvasProps {
    * the grain-flow state the HUD's Step button needs to act on.
    */
   onManualStepReady?: (stepToNextRead: () => void) => void;
+  /** Saves the current canvas under the given name; returns false if storage failed. */
+  onSaveScenario?: (title: string) => boolean;
 }
 
 function FlowCanvasInner({
@@ -106,6 +108,7 @@ function FlowCanvasInner({
   onParkedInputsChange,
   stepClockBy,
   onManualStepReady,
+  onSaveScenario,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
@@ -280,6 +283,56 @@ function FlowCanvasInner({
     [setNodes],
   );
 
+  const hasSelection = nodes.some((n) => n.selected) || edges.some((e) => e.selected);
+  const deleteSelected = useCallback(() => {
+    const { nodes: ns, edges: es } = graphRef.current;
+    const gone = new Set(ns.filter((n) => n.selected).map((n) => n.id));
+    if (gone.size === 0 && !es.some((e) => e.selected)) return;
+    pushHistory();
+    setNodes(ns.filter((n) => !gone.has(n.id)));
+    setEdges(es.filter((e) => !e.selected && !gone.has(e.source) && !gone.has(e.target)));
+    if (focusedNodeId !== null && gone.has(focusedNodeId)) onFocusNode(null);
+  }, [setNodes, setEdges, pushHistory, focusedNodeId, onFocusNode]);
+
+  const handleLabelChange = useCallback(
+    (nodeId: string, label: string) => {
+      pushHistory();
+      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, label } } : n)));
+    },
+    [setNodes, pushHistory],
+  );
+
+  const handleSyncOutputsChange = useCallback(
+    (nodeId: string, synced: boolean) => {
+      pushHistory();
+      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, syncOutputs: synced || undefined } } : n)));
+    },
+    [setNodes, pushHistory],
+  );
+
+  const handleSyncInputChange = useCallback(
+    (nodeId: string, inputIndex: number, ignoreSync: boolean) => {
+      pushHistory();
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== nodeId) return n;
+          const rest = (n.data.ignoreSyncInputs ?? []).filter((i) => i !== inputIndex);
+          const next = ignoreSync ? [...rest, inputIndex].sort((a, b) => a - b) : rest;
+          return { ...n, data: { ...n.data, ignoreSyncInputs: next.length > 0 ? next : undefined } };
+        }),
+      );
+    },
+    [setNodes, pushHistory],
+  );
+
+  const handleSaveScenario = useCallback(() => {
+    if (!onSaveScenario) return;
+    const title = window.prompt('Save scenario as (an existing name replaces it):');
+    if (title === null) return;
+    if (!title.trim()) return window.alert('Please enter a name.');
+    if (!onSaveScenario(title)) window.alert('Could not save: browser storage is full or unavailable.');
+  }, [onSaveScenario]);
+
   /** Switch a producer between video only, audio only, or both flows. */
   const handleOutputModeChange = useCallback(
     (nodeId: string, mode: OutputMode) => {
@@ -427,6 +480,9 @@ function FlowCanvasInner({
             syncStalled: stalledNodeIds.has(n.id),
             focused: n.id === focusedNodeId,
             onLatencyChange: handleLatencyChange,
+            onLabelChange: handleLabelChange,
+            onSyncOutputsChange: handleSyncOutputsChange,
+            onSyncInputChange: handleSyncInputChange,
             onOutputModeChange: handleOutputModeChange,
             rings: ringsByWriter.get(n.id),
             labelByNodeId,
@@ -436,7 +492,7 @@ function FlowCanvasInner({
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, onFocusNode, showNow],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, handleLabelChange, handleSyncOutputsChange, handleSyncInputChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, onFocusNode, showNow],
   );
 
   // Item #9 follow-up: briefly highlight an edge's drawn path the moment a
@@ -509,6 +565,15 @@ function FlowCanvasInner({
         </button>
         <button
           type="button"
+          className="fc-toolbar__btn"
+          onClick={deleteSelected}
+          disabled={!hasSelection}
+          title="Delete the selected function (select one first; or press Delete/Backspace)"
+        >
+          🗑 Delete
+        </button>
+        <button
+          type="button"
           className={`fc-toolbar__btn${showNow ? ' fc-toolbar__btn--on' : ''}`}
           onClick={() => setShowNow((v) => !v)}
           aria-pressed={showNow}
@@ -516,18 +581,28 @@ function FlowCanvasInner({
         >
           ◔ Now
         </button>
+        {onSaveScenario && (
+          <button type="button" className="fc-toolbar__btn" onClick={handleSaveScenario} title="Save this canvas as a scenario">
+            💾 Save scenario
+          </button>
+        )}
       </Panel>
       <Panel position="top-left" className="fc-palette">
-        <div className="fc-palette__title">Add node</div>
-        <div className="fc-palette__buttons">
-          {PALETTE_PRESETS.map((preset) => (
-            <button key={preset.id} type="button" className="fc-palette__btn" onClick={() => addNode(preset)}>
-              {preset.button}
-            </button>
-          ))}
-        </div>
+        <div className="fc-palette__title">Add media function</div>
+        {PALETTE_GROUPS.map((group) => (
+          <div key={group.id} className="fc-palette__group">
+            <div className="fc-palette__group-title">{group.title}</div>
+            <div className="fc-palette__buttons">
+              {PALETTE_PRESETS.filter((preset) => preset.group === group.id).map((preset) => (
+                <button key={preset.id} type="button" className="fc-palette__btn" onClick={() => addNode(preset)}>
+                  {preset.button}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         <div className="fc-palette__hint">
-          Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · select + Backspace to delete · drag a node's slider to
+          Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · select + Backspace to delete · drag a media function's slider to
           retune its processing latency · grain indices are kept end to end, so a grain shatters (✕)
           only on the input whose slot was already overwritten (READ TOO LATE), and pales/wobbles
           (?) while an input waits on a not-yet-written grain

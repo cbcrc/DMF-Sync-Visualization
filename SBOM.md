@@ -14,7 +14,7 @@ extraction script described at the bottom of this file after any
   state/zoom/drag handling). `@types/*` entries below are TypeScript type
   declarations only — no runtime code is shipped for them.
 - **Development-only dependencies** (build/lint tooling, never shipped):
-  167 total (Vite, esbuild, Rollup, TypeScript, ESLint and their
+  197 total (Vite, esbuild, Rollup, TypeScript, ESLint, Vitest and their
   transitive dependencies).
 - **Licenses observed:** MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause,
   BlueOak-1.0.0, Python-2.0, CC-BY-4.0. All are permissive open-source
@@ -32,6 +32,7 @@ extraction script described at the bottom of this file after any
 | eslint | 9.39.5 | MIT | Dev — linter |
 | @vitejs/plugin-react | 4.7.0 | MIT | Dev — Vite React plugin |
 | esbuild | 0.21.5 (pinned) | MIT | Dev — bundler used internally by Vite |
+| vitest | 2.1.9 | MIT | Dev — unit test runner |
 
 ## Runtime dependencies (full, incl. transitive)
 
@@ -102,7 +103,7 @@ this is what actually ships to the browser.
 
 ## Development dependencies (full, incl. transitive)
 
-Build, type-check, and lint tooling only — never shipped to the browser.
+Build, type-check, lint, and test tooling only — never shipped to the browser.
 
 | Package | Version | License |
 |---|---|---|
@@ -166,28 +167,41 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | @typescript-eslint/utils | 8.70.0 | MIT |
 | @typescript-eslint/visitor-keys | 8.70.0 | MIT |
 | @vitejs/plugin-react | 4.7.0 | MIT |
+| @vitest/expect | 2.1.9 | MIT |
+| @vitest/mocker | 2.1.9 | MIT |
+| @vitest/pretty-format | 2.1.9 | MIT |
+| @vitest/runner | 2.1.9 | MIT |
+| @vitest/snapshot | 2.1.9 | MIT |
+| @vitest/spy | 2.1.9 | MIT |
+| @vitest/utils | 2.1.9 | MIT |
 | acorn | 8.18.0 | MIT |
 | acorn-jsx | 5.3.2 | MIT |
 | ajv | 6.15.0 | MIT |
 | ansi-styles | 4.3.0 | MIT |
 | argparse | 2.0.1 | Python-2.0 |
+| assertion-error | 2.0.1 | MIT |
 | balanced-match | 4.0.4 | MIT |
 | balanced-match | 1.0.2 | MIT |
 | baseline-browser-mapping | 2.11.22 | Apache-2.0 |
 | brace-expansion | 5.0.9 | MIT |
 | brace-expansion | 1.1.18 | MIT |
 | browserslist | 4.28.9 | MIT |
+| cac | 6.7.14 | MIT |
 | callsites | 3.1.0 | MIT |
 | caniuse-lite | 1.0.30001810 | CC-BY-4.0 |
+| chai | 5.3.3 | MIT |
 | chalk | 4.1.2 | MIT |
+| check-error | 2.1.3 | MIT |
 | color-convert | 2.0.1 | MIT |
 | color-name | 1.1.4 | MIT |
 | concat-map | 0.0.1 | MIT |
 | convert-source-map | 2.0.0 | MIT |
 | cross-spawn | 7.0.6 | MIT |
 | debug | 4.4.3 | MIT |
+| deep-eql | 5.0.2 | MIT |
 | deep-is | 0.1.4 | MIT |
 | electron-to-chromium | 1.5.426 | ISC |
+| es-module-lexer | 1.7.0 | MIT |
 | esbuild | 0.21.5 | MIT |
 | escalade | 3.2.0 | MIT |
 | escape-string-regexp | 4.0.0 | MIT |
@@ -202,7 +216,9 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | esquery | 1.7.0 | BSD-3-Clause |
 | esrecurse | 4.3.0 | BSD-2-Clause |
 | estraverse | 5.3.0 | BSD-2-Clause |
+| estree-walker | 3.0.3 | MIT |
 | esutils | 2.0.3 | BSD-2-Clause |
+| expect-type | 1.4.0 | Apache-2.0 |
 | fast-deep-equal | 3.1.3 | MIT |
 | fast-json-stable-stringify | 2.1.0 | MIT |
 | fast-levenshtein | 2.0.6 | MIT |
@@ -233,7 +249,9 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | levn | 0.4.1 | MIT |
 | locate-path | 6.0.0 | MIT |
 | lodash.merge | 4.6.2 | MIT |
+| loupe | 3.2.1 | MIT |
 | lru-cache | 5.1.1 | ISC |
+| magic-string | 0.30.21 | MIT |
 | minimatch | 10.2.6 | BlueOak-1.0.0 |
 | minimatch | 3.1.5 | ISC |
 | ms | 2.1.3 | MIT |
@@ -246,6 +264,8 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | parent-module | 1.0.1 | MIT |
 | path-exists | 4.0.0 | MIT |
 | path-key | 3.1.1 | MIT |
+| pathe | 1.1.2 | MIT |
+| pathval | 2.0.1 | MIT |
 | picocolors | 1.1.1 | ISC |
 | picomatch | 4.0.7 | MIT |
 | postcss | 8.5.28 | MIT |
@@ -258,10 +278,18 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | semver | 6.3.1 | ISC |
 | shebang-command | 2.0.0 | MIT |
 | shebang-regex | 3.0.0 | MIT |
+| siginfo | 2.0.0 | ISC |
 | source-map-js | 1.2.1 | BSD-3-Clause |
+| stackback | 0.0.2 | MIT |
+| std-env | 3.10.0 | MIT |
 | strip-json-comments | 3.1.1 | MIT |
 | supports-color | 7.2.0 | MIT |
+| tinybench | 2.9.0 | MIT |
+| tinyexec | 0.3.2 | MIT |
 | tinyglobby | 0.2.17 | MIT |
+| tinypool | 1.1.1 | MIT |
+| tinyrainbow | 1.2.0 | MIT |
+| tinyspy | 3.0.2 | MIT |
 | ts-api-utils | 2.5.0 | MIT |
 | type-check | 0.4.0 | MIT |
 | typescript | 5.6.3 | Apache-2.0 |
@@ -269,7 +297,10 @@ Build, type-check, and lint tooling only — never shipped to the browser.
 | update-browserslist-db | 1.3.3 | MIT |
 | uri-js | 4.4.1 | BSD-2-Clause |
 | vite | 5.4.21 | MIT |
+| vite-node | 2.1.9 | MIT |
+| vitest | 2.1.9 | MIT |
 | which | 2.0.2 | ISC |
+| why-is-node-running | 2.3.0 | MIT |
 | word-wrap | 1.2.5 | MIT |
 | yallist | 3.1.1 | ISC |
 | yocto-queue | 0.1.0 | MIT |

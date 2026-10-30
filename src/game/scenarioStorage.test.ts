@@ -7,7 +7,14 @@ import {
   upsertScenario,
   WORKING_GRAPH_KEY,
 } from './scenarioStorage';
-import { initialEdges, initialNodes } from './scenarios';
+import type { Edge, Node } from 'reactflow';
+import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
+
+const initialNodes: Node<MediaFunctionNodeData>[] = [
+  { id: 'a', type: 'mediaFunction', position: { x: 0, y: 0 }, data: { kind: 'input', label: 'A', latencyMs: 0, inputCount: 0, outputCount: 1 } },
+  { id: 'b', type: 'mediaFunction', position: { x: 200, y: 0 }, data: { kind: 'output', label: 'B', latencyMs: 0, inputCount: 1, outputCount: 0 } },
+];
+const initialEdges: Edge[] = [{ id: 'a-b', source: 'a', sourceHandle: 'out-0', target: 'b', targetHandle: 'in-0' }];
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));

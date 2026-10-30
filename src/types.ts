@@ -9,6 +9,7 @@ export type MediaFunctionKind =
   | 'technical' // Single-input minor processor (color corrector, EQ, converter)
   | 'recording' // Pure consumer/reader
   | 'repeater' // Grain repeater / artificial buffer node
+  | 'delay' // Profanity delay: parks A+V in its own long buffer, then re-writes as a new source
   | 'output'; // Final presentation output
 
 /** MXL timing classification for a reader's requested grain. */

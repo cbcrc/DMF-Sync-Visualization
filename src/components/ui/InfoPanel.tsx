@@ -29,7 +29,9 @@ export function InfoPanel() {
       <div className="info-panel__text info-panel__intro">
         A grain's index (<code>timestamp ÷ duration</code>) is preserved end to end. A Media
         Function writes its result back at the <em>same</em> index — processing only delays when
-        a flow's head is published, it never renumbers grains.
+        a flow's head is published, it never renumbers grains. The one exception is a Profanity
+        Delay: it parks media in its own buffer (outside MXL), then re-writes it as a new source,
+        so its flows start at the head again — though the delay still counts toward total latency.
       </div>
 
       <div className="info-panel__row">
@@ -62,11 +64,13 @@ export function InfoPanel() {
       </div>
 
       <div className="info-panel__text info-panel__footnote">
-        Slot strips under each node show <strong>W</strong> (write head) and <strong>R</strong>
-        (requested read) on the ring; the dotted track inside a function shows the grain actually
-        being processed, at a speed set by its latency. At a sync point (e.g. Egress), a dashed
-        ring means a grain has arrived and is paused — waiting for its sibling flow to catch up —
-        before both are consumed together.
+        Each function's ring buffers sit beside it and mark the <strong>Write</strong> head and
+        each reader's requested read (<strong>R1</strong>, <strong>R2</strong>…). Select a
+        function to see how far its readers sit behind "Now" and the write head. The dotted track
+        inside a function shows the grain actually being processed, at a speed set by its latency.
+        At a sync point (e.g. an Output), a dashed ring means a grain has arrived and is paused —
+        waiting for its sibling flow to catch up — before both are consumed together. Outputs with
+        "Sync outputs" ticked are released together as one group.
       </div>
     </div>
   );
