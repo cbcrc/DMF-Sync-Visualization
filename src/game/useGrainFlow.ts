@@ -2,16 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import type { RingBufferStatus } from '../types';
-import { stepGrains, edgeTravelDurationMs, nextReadEventAt, nextSpawnAt, type Grain } from './grainFlow';
+import { stepGrains, edgeTravelDurationMs, type Grain } from './grainFlow';
+import { MANUAL_STEP_MS } from './useSimClock';
 
 const TICK_MS = 40;
 const RESPAWN_GAP_MS = 350;
 const DRAIN_KEY = '__drained__';
-/** Safety cap on the manual-step settle loop below — normal hops resolve in
- *  2 iterations (hold-end -> travel -> holding); the wave-respawn edge case
- *  (drain -> spawn -> travel -> holding) takes one more. Capped generously
- *  in case of future multi-hop chains, never expected to actually hit this. */
-const SETTLE_MAX_ITERATIONS = 8;
 
 export interface GrainFlowResult {
   grains: Grain[];
@@ -21,11 +17,8 @@ export interface GrainFlowResult {
    *  along it, since travel is now effectively instantaneous. */
   edgeActivity: Map<string, number>;
   /**
-   * Item #9 follow-up: in Manual mode, advance directly to the next "read"
-   * event — the next time some downstream Media Function receives a grain —
-   * instead of a fixed time quantum that could land mid-travel. No-ops if
-   * nothing is currently counting down (e.g. fully stalled or still within
-   * the inter-wave gap with nothing yet due to respawn).
+   * Manual mode's "Step ▶": advances the clock to the next grain boundary
+   * (one video grain), so the displayed grain index moves exactly one slot.
    */
   stepToNextRead: () => void;
   /** Manual mode's "◀ Back": restores the state (grains, clock) from before the last Step. */
@@ -147,52 +140,28 @@ export function useGrainFlow(
     return () => clearInterval(interval);
   }, []);
 
-  // Item #9 follow-up: Manual mode's "Step ▶" used to just bump the shared
-  // clock by a fixed grain-duration quantum, which often landed mid-travel —
-  // the grain had departed its node but not yet arrived (read) at the next
-  // one, requiring a second click to actually see the handoff. This instead
-  // figures out exactly when the next read happens and resolves it in full.
+  // Manual mode's "Step ▶" advances the clock to the next grain boundary, so
+  // the displayed index moves exactly one slot per click. The grains are
+  // simulated in 1 ms sub-steps up to that boundary so every hold, hop and
+  // spawn inside the grain still resolves at its true time.
   const stepToNextRead = useCallback(() => {
     const now = getNowRef.current();
-    const current = grainsRef.current;
-
-    // The usual case: some grain is actively holding (aging, not parked
-    // waiting on a sibling) at a node — `nextReadEventAt` gives the moment
-    // it will have arrived (been read) at its destination; back up by one
-    // edge-travel quantum to get the moment its hold actually ends (the
-    // settle loop below re-applies that quantum to resolve the arrival).
-    const nextRead = nextReadEventAt(current);
-    let startAt: number | null = nextRead === null ? null : nextRead - edgeTravelDurationMs();
-    // No active countdown found — the pipeline may be fully drained between
-    // waves. The only other scheduled event is the next wave's respawn,
-    // which isn't gated by an edge-travel quantum (no backing-up needed).
-    if (startAt === null) {
-      const drainedAt = lastSpawnByNode.current.get(DRAIN_KEY);
-      if (drainedAt !== undefined) startAt = nextSpawnAt(drainedAt);
-    }
-    // Nothing scheduled at all (e.g. permanently stalled on every branch) —
-    // nothing to step to.
-    if (startAt === null || startAt <= now) return;
+    const target = (Math.floor(now / MANUAL_STEP_MS + 1e-6) + 1) * MANUAL_STEP_MS;
 
     historyRef.current.push({
       now,
-      grains: structuredClone(current),
+      grains: structuredClone(grainsRef.current),
       lastSpawn: new Map(lastSpawnByNode.current),
       dropped: new Map([...droppedHandlesByNode.current].map(([k, v]) => [k, new Set(v)])),
       edgeActivity: new Map(edgeActivityRef.current),
     });
     if (historyRef.current.length > MAX_STEP_HISTORY) historyRef.current.shift();
 
-    // Resolve in a small settle loop rather than one `stepGrains` call: each
-    // phase transition stamps `startTime = now`, so the newly-created
-    // 'traveling' grain needs its *own* later `now` to in turn resolve into
-    // 'holding' at the destination — two sequential instants, not one. The
-    // loop also transparently covers the drain->respawn case (spawn, then
-    // one more hop to the first node's actual read) without special-casing it.
-    let working = current;
-    let t = startAt;
-    for (let i = 0; i < SETTLE_MAX_ITERATIONS; i++) {
-      const stepped = stepGrains(
+    let working = grainsRef.current;
+    let t = now;
+    while (t < target) {
+      t = Math.min(t + edgeTravelDurationMs(), target);
+      working = stepGrains(
         working,
         t,
         nodesRef.current,
@@ -201,17 +170,14 @@ export function useGrainFlow(
         statusRef.current,
         droppedHandlesByNode.current,
       );
-      for (const g of stepped) {
+      for (const g of working) {
         if (g.phase === 'traveling' && g.edgeId) edgeActivityRef.current.set(g.edgeId, t);
       }
-      working = stepped;
-      if (!working.some((g) => g.phase === 'traveling')) break;
-      t += edgeTravelDurationMs();
     }
 
     grainsRef.current = working;
     setGrains(working);
-    stepClockByRef.current?.(t - now);
+    stepClockByRef.current?.(target - now);
   }, []);
 
   const stepBack = useCallback(() => {
