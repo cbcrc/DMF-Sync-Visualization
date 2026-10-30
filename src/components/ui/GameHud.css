@@ -147,9 +147,17 @@
   color: #4caf50;
 }
 
+.game-hud__step-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .game-hud__step-btn {
   font-family: inherit;
-  font-size: 0.65rem;
+  font-size: 0.8rem;
+  flex: 1;
+  padding: 6px 14px !important;
   font-weight: 600;
   color: #ffffff;
   background: #1a1b1e;

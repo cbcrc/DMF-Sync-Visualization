@@ -136,17 +136,17 @@ export function GameHud({
             </button>
           ))}
         </div>
-        {playbackMode === 'manual' && (
-          <>
-            <button type="button" className="game-hud__step-btn" onClick={onStepBack} title="Go back one step">
-              ◀ Back
-            </button>
-            <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
-              Step ▶
-            </button>
-          </>
-        )}
       </div>
+      {playbackMode === 'manual' && (
+        <div className="game-hud__step-row">
+          <button type="button" className="game-hud__step-btn" onClick={onStepBack} title="Go back one step">
+            ◀ Back
+          </button>
+          <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
+            Step ▶
+          </button>
+        </div>
+      )}
 
       <div className="game-hud__stats">
         <div className="game-hud__stat">
