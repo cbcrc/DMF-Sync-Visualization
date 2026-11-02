@@ -72,7 +72,8 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
 ### D. Synchronization Groups (Sync Groups)
 * **Definition:** A grouping mechanism for multiple signals (e.g., Audio + Video) that must arrive aligned at a common node or output.
 * **Alignment Constraint:** Low-latency signals (e.g., Audio: 2ms) inside a Sync Group with high-latency signals (e.g., Video: 33ms) MUST be artificially delayed to match the highest-latency signal in the group.
-* **Ignoring sync:** a mixer input can be set to "live", which reads as close to its write head as possible and does not hold the function back. The default ("sync") reads at the aligned index.
+* **Per-function sync groups:** like an MXL flow synchronization group, a group belongs to one consuming function. Each input of a mixer is in group A (default), B, or "live". Every group is read at its own slowest member and releases on its own; the function writes once all its groups are ready, so its output lags by the latest group.
+* **Live:** an input in no group reads as close to its write head as possible and does not hold the function back. Older saved scenarios that set an input to ignore sync load as live.
 * **Risk:** Artificially delaying a stream to maintain sync pushes its Read Head ($R$) closer to the back edge of the Ring Buffer ($W - T_{domain}$), risking an overrun (Red state).
 
 ---

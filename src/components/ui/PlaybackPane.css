@@ -1,0 +1,84 @@
+.pb-pane {
+  position: relative;
+  width: 300px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+  font-size: 0.7rem;
+}
+
+.pb-pane__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pb-pane__title {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.pb-pane__min {
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #757575;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.pb-pane__min:hover {
+  color: #ffffff;
+}
+
+.pb-pane__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pb-pane__label {
+  opacity: 0.85;
+}
+
+.pb-pane__chip {
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.pb-pane__chip:hover {
+  border-color: #ffffff;
+}
+
+.pb-pane__chip--active {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.pb-pane__chip--wide {
+  flex: 1;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+}
+
+.pb-pane__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

@@ -32,18 +32,29 @@ _Read this first when resuming work._
 
 ## Status
 
-Verified by `npx tsc -b`, `npx eslint src` and `npx vitest run` (24 tests).
+Verified by `npx tsc -b`, `npx eslint src` and `npx vitest run` (39 tests).
 
 Done and described below: grain-flow visualization (TO-DO #1, #8-#14),
 playback modes, the side panel (MXL clock, plus ring telemetry for the
 selected function), the Scenarios page and persistence, the canvas editing and
 ring-buffer blocks, the grouped "Add media function" palette, the Profanity
-Delay, per-input sync/live on mixers, and the end-to-end timeline.
+Delay, per-function sync groups (A, B, live) on mixers, the end-to-end timeline,
+minimizable and dockable panes with a top toolbar, and the Workload Config (domain
+size, frame rate, resolution, audio sample rate).
 
 Open work lives in `TO-DO.md`. Check any changes in a browser (`npm run dev`)
-as well as with the checks above. The recent canvas layout work (node layouts,
-aligned Linear out lanes, reader bubbles, palette, timeline) has only been
-checked by typecheck, lint and tests, not looked at in a browser yet.
+as well as with the checks above. The recent canvas and docking work (node
+layouts, aligned Linear out lanes, reader bubbles, palette, timeline, top
+toolbar, docks, R# input tags) has only been checked by typecheck, lint and
+tests, not looked at in a browser yet.
+
+UI shell (`App.tsx`): a full-width top bar (the canvas toolbar, portalled in
+by `FlowCanvas`) above a row of left dock, canvas and right dock, with a bottom
+dock under the canvas. Docked panes never overlap. `game/docks.ts` holds the
+layout (dock and order, `dmf-sync-viz:docks:v2`) and the minimized panes
+(`dmf-sync-viz:minimized:v1`). `game/mediaConfig.ts` holds the A/V workload
+format (`dmf-sync-viz:media:v1`, default 1080p50, 48 kHz). Menus are in
+`ToolbarMenus.tsx`; playback controls in `PlaybackPane.tsx`.
 
 ## Core model — read this before touching timing logic
 
@@ -86,13 +97,16 @@ src/
                              per writer flow), ClockStrip (domain TAI clock), EndToEndTimeline
                              (bottom timeline, one lane per output), GrainSlotStrip and
                              ContinuousBufferTrack (per-reader slot/continuous views),
-                             RingBufferGauge, GameHud, InfoPanel, ScenariosPage
+                             RingBufferGauge, GameHud (Status pane), InfoPanel (Help),
+                             ScenariosPage, ToolbarMenus (Canvas, Workload Config),
+                             PlaybackPane, PaneToolbar, DockItem (+ Dock.css)
   game/                      graphLatency (per-input evaluation + writerFlows), writerRings
                              (readings grouped per writer, one ring per output flow),
                              connectionRules (which track an input may read), levels and
                              scenarios (6 built-in scenarios), scenarioStorage, stabilityMonitor,
                              endToEndTimeline (input-to-output path per output), syncInputs
-                             (which mixer inputs read free of sync),
+                             (sync group of each mixer input, live = 0), docks (pane layout),
+                             mediaConfig (A/V workload format),
                              useGameLoop, grainFlow/useGrainFlow, useSimClock, useHashRoute
 ```
 
@@ -160,10 +174,13 @@ src/
   a deliberate departure from preserved grain indices, because the delay is a
   new source.
 - **Mixer sync / live.** Editorial functions with more than one input get a
-  per-input toggle (`ignoreSyncInputs`, `syncInputs.ts`). A "live" input is
-  read as close to its write head as possible (one grain behind) and no longer
-  holds the function back; a "sync" input reads at the aligned index. If every
-  wired input is live they all stay synced. Checked against dmf-mxl/mxl
+  per-input sync group (`inputGroups`, `syncInputs.ts`): sync A (default), sync
+  B or live (`LIVE_GROUP` = 0, `MAX_SYNC_GROUPS` = 2). Each group is aligned at its
+  own slowest member and released on its own; the function writes once every group
+  is ready. A "live" input is read as close to its write head as possible (one
+  grain behind) and no longer holds the function back. If every wired input is
+  live they all fall back to group A. Saved scenarios with the old
+  `ignoreSyncInputs` load as live. Checked against dmf-mxl/mxl
   (`6e654e2`): "sync" is a Flow Synchronization Group
   (`FlowSynchronizationGroup::waitForDataAt`, waits for every reader's head
   to reach the grain for one timestamp) and "live" is a reader outside the
@@ -266,7 +283,7 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   answer to "which audio grains line up with this video frame," since
   audio's 1ms grains make that span visibly many grains wide against
   video's single one (item #10.ii).
-- **Origin-timestamp visualization (HUD toggle "Show origin timestamps",
+- **Origin-timestamp visualization (Canvas menu option "Show grain origin tags",
   off by default):** each grain carries `originTs`, a real (`Date.now()`-
   based) capture timestamp set once when a producer spawns it and preserved
   unchanged through every travel/hold/fan-out derived from it — mirroring
@@ -320,12 +337,12 @@ Each consuming hook takes an optional `getNow: () => number` parameter
 (defaulting to `performance.now()`/`Date.now()` respectively) so they remain
 independently functional if ever used without the shared clock.
 
-Three modes, switched via a HUD button row:
+Three modes, switched in the Animation playback pane:
 
 - **Normal** — advances 1:1 with real time (unchanged default behavior).
 - **Stepping** — auto-advances at 20% real speed (`STEPPING_SPEED` in
   `useSimClock.ts`) so fast-traveling grains are easier to track by eye.
-- **Manual** — frozen; only the HUD's "Step ▶" button (shown only in this
+- **Manual** (the default) — frozen; only the pane's "Step ▶" button (shown only in this
   mode) moves the clock, by exactly one video grain's duration
   (`MANUAL_STEP_MS`) per click — ties the control directly to "advance one
   grain index," reinforcing the grain-index concepts from items #10/#11.
@@ -451,7 +468,7 @@ the Slow Video Function's latency slider down.
 ## Scenarios page and persistence
 
 - `src/game/scenarios.ts` holds the built-in scenario catalogue and graphs. `src/game/scenarioStorage.ts` persists to localStorage: user-saved scenarios (`dmf-sync-viz:scenarios:v1`; nodes, edges, domain size, name, description) and the autosaved working graph (`dmf-sync-viz:working:v1`, restored on load).
-- `ScenariosPage` is a full-screen overlay at hash route `#/scenarios` (opened from the HUD); the canvas stays mounted underneath. Saving with an existing name replaces that scenario.
+- `ScenariosPage` is a full-screen overlay at hash route `#/scenarios` (opened from the Canvas menu); the canvas stays mounted underneath. Saving with an existing name replaces that scenario.
 
 ## Scenario 5 — Many Readers, One Writer
 
@@ -489,10 +506,15 @@ An empty 100ms domain to build on from the palette.
   grain is readable once its slices are committed, so one grain behind is
   conservative for whole-grain writes (it is exact while a grain is still being
   written in slices).
-- In MXL every input of a function can be live (no sync group at all). Here at
-  least one input stays synced when all are set to live, because the function
+- In MXL every input of a function can be live (no sync group at all). Here
+  they fall back to group A when all are set to live, because the function
   needs one timestamp to decide which grain index it writes. The pills still
-  show "live" for those inputs.
+  show "live" for those inputs. Not modelled from MXL's sync groups: a
+  consumer-chosen timestamp, a wait timeout, and partial-grain readers.
+- Ring length truncates like MXL (`Instance.cpp`), and the domain slider's
+  minimum keeps at least 3 video grains (`minDomainSizeMs`). The game loop
+  refreshes the graph every 50 ms (`TICK_MS`); ring markers extrapolate between
+  ticks.
 - Reads are evaluated instantaneously, not via deadline-based blocking/retry.
 - **Grain Repeater** reads the **oldest retained grain** (far end of the ring,
   `readsTail`) and writes it into a fresh ring with the **same grain index**
@@ -507,7 +529,7 @@ An empty 100ms domain to build on from the palette.
   (per-sample, half-buffer writer/reader split) — see "Per-track grain rate"
   above.
 - The writer-reserved slot margin (real MXL: always exactly 2 physical
-  slots, regardless of a flow's grain rate) is instead pinned to a fixed
+  slots, regardless of a flow's grain rate; here never fewer than 2) is instead pinned to a fixed
   *time* budget (`WRITER_RESERVED_MS`, anchored to video's 2-grain/40ms
   margin) and re-derived into each track's own grain count. This keeps
   existing scenarios' pass/fail balance consistent across video's coarse and

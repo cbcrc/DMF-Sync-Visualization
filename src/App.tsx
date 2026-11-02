@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react';
+import { DockItem } from './components/ui/DockItem';
+import { DEFAULT_LAYOUT, DOCKS_KEY, MINIMIZED_KEY, loadLayout, loadMinimized, movePane, type DockItemId, type DockSide } from './game/docks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
@@ -6,6 +9,7 @@ import type { RingBufferStatus } from './types';
 import { gaugeZone } from './engine/ringBufferEngine';
 import { RingBufferPanel } from './components/ui/RingBufferPanel';
 import { GameHud } from './components/ui/GameHud';
+import { PaneToolbar, type PaneId } from './components/ui/PaneToolbar';
 import { InfoPanel } from './components/ui/InfoPanel';
 import { EndToEndTimeline } from './components/ui/EndToEndTimeline';
 import { useGameLoop } from './game/useGameLoop';
@@ -22,9 +26,35 @@ import {
 } from './game/scenarioStorage';
 import { useHashRoute } from './game/useHashRoute';
 import { groupReadingsByWriter } from './game/writerRings';
+import { PlaybackPane } from './components/ui/PlaybackPane';
+import { ToolbarMenus } from './components/ui/ToolbarMenus';
+import { MediaConfigContext, loadMediaConfig, persistMediaConfig } from './game/mediaConfig';
 import './App.css';
 
 function App() {
+  const [layout, setLayout] = useState(() => loadLayout(localStorage));
+  const dockPane = useCallback(
+    (id: DockItemId, side: DockSide, beforeId: DockItemId | null = null) => setLayout((l) => movePane(l, id, side, beforeId)),
+    [],
+  );
+  useEffect(() => localStorage.setItem(DOCKS_KEY, JSON.stringify(layout)), [layout]);
+  const [dragId, setDragId] = useState<DockItemId | null>(null);
+  const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
+  const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
+  const [minimizedPanes, setMinimizedPanes] = useState<Set<PaneId>>(() => loadMinimized(localStorage, ALL_PANES, DEFAULT_MINIMIZED));
+  useEffect(() => localStorage.setItem(MINIMIZED_KEY, JSON.stringify([...minimizedPanes])), [minimizedPanes]);
+  const togglePane = useCallback((id: PaneId) => {
+    setMinimizedPanes((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }, []);
+  const resetLayout = useCallback(() => {
+    setLayout(DEFAULT_LAYOUT);
+    setMinimizedPanes(new Set(DEFAULT_MINIMIZED));
+  }, []);
+  const minimize = (id: PaneId) => () => togglePane(id);
   const [graphNodes, setGraphNodes] = useState<Node<MediaFunctionNodeData>[]>([]);
   const [graphEdges, setGraphEdges] = useState<Edge[]>([]);
   const [route, navigate] = useHashRoute();
@@ -39,6 +69,8 @@ function App() {
   );
   const [domainSizeMs, setDomainSizeMs] = useState(restored?.domainSizeMs ?? level.domainSizeMs);
   const [initialGraph, setInitialGraph] = useState<{ nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }>(() => restored ?? level);
+  const [media, setMedia] = useState(() => loadMediaConfig(localStorage));
+  useEffect(() => persistMediaConfig(localStorage, media), [media]);
   const [graphLoadKey, setGraphLoadKey] = useState(0);
   const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
   // Grain index mode: simplified count from 100 (default) vs. the real MXL index —
@@ -67,7 +99,7 @@ function App() {
     setGraphEdges(edges);
   }, []);
 
-  const { graph, stability, resetStability } = useGameLoop(graphNodes, graphEdges, domainSizeMs, clock.getNow);
+  const { graph, stability, resetStability } = useGameLoop(graphNodes, graphEdges, domainSizeMs, clock.getNow, media);
 
   const zoneByNodeId = useMemo(() => {
     const map = new Map<string, 'green' | 'yellow' | 'red'>();
@@ -139,6 +171,13 @@ function App() {
     [savedScenarios, domainSizeMs, graphNodes, graphEdges],
   );
 
+  const promptSaveScenario = () => {
+    const title = window.prompt('Save scenario as (an existing name replaces it):');
+    if (title === null) return;
+    if (!title.trim()) return window.alert('Please enter a name.');
+    if (!handleSaveScenario(title, '')) window.alert('Could not save: browser storage is full or unavailable.');
+  };
+
   const handleDeleteScenario = useCallback(
     (id: string) => {
       const list = savedScenarios.filter((s) => s.id !== id);
@@ -166,8 +205,103 @@ function App() {
     handleRestartWave();
   }, [resetStability, handleRestartWave]);
 
+  const paneNodes: Record<DockItemId, ReactNode> = {
+    palette: minimizedPanes.has('palette') ? null : <></>,
+    playback: minimizedPanes.has('playback') ? null : (
+        <PlaybackPane
+          onMinimize={minimize('playback')}
+          playbackMode={clock.mode}
+          onSetPlaybackMode={clock.setMode}
+          onStep={() => manualStepRef.current()}
+          onStepBack={() => manualBackRef.current()}
+          showRealGrainIndex={showRealGrainIndex}
+          onToggleRealGrainIndex={setShowRealGrainIndex}
+        />
+    ),
+    controls: minimizedPanes.has('controls') ? null : (
+      <GameHud
+        onMinimize={minimize('controls')}
+        level={level}
+        totalWorkloadLatencyMs={graph.totalWorkloadLatencyMs}
+        stabilityMarginMs={graph.stabilityMarginMs}
+        stability={stability}
+        onReset={handleReset}
+        onRestartWave={handleRestartWave}
+        lateInputs={lateInputs}
+        nodeLabelById={nodeLabelById}
+      />
+    ),
+    rings: minimizedPanes.has('clock') && minimizedPanes.has('rings') ? null : (
+      <RingBufferPanel
+        nodes={graphNodes}
+        graph={graph}
+        domainSizeMs={domainSizeMs}
+        showRealGrainIndex={showRealGrainIndex}
+        parkedInputKeys={parkedInputKeys}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
+        showClock={!minimizedPanes.has('clock')}
+        showRings={!minimizedPanes.has('rings')}
+        onMinimizeClock={minimize('clock')}
+        onMinimizeRings={minimize('rings')}
+        getNow={clock.getNow}
+      />
+    ),
+    timeline: minimizedPanes.has('timeline') ? null : (
+      <EndToEndTimeline
+        graph={graph}
+        nodes={graphNodes}
+        edges={graphEdges}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
+        onMinimize={minimize('timeline')}
+      />
+    ),
+    help: minimizedPanes.has('help') ? null : <InfoPanel onMinimize={minimize('help')} />,
+  };
+
+  const renderDock = (side: DockSide) => {
+    const ids = layout.order.filter((id) => layout.docks[id] === side && paneNodes[id]);
+    return (
+      <div
+        className={`dock dock--${side}${dragId ? ' dock--droppable' : ''}`}
+        title={ids.length === 0 ? `${side[0].toUpperCase()}${side.slice(1)} dock (empty): drag a pane here` : undefined}
+        onDragOver={(e) => dragId && e.preventDefault()}
+        onDrop={(e) => {
+          if (!dragId) return;
+          e.preventDefault();
+          dockPane(dragId, side);
+          setDragId(null);
+        }}
+      >
+        {ids.map((id, i) => (
+          <DockItem
+            key={id}
+            id={id}
+            side={side}
+            nextId={ids[i + 1] ?? null}
+            onDock={(to) => dockPane(id, to)}
+            dragId={dragId}
+            onDragId={setDragId}
+            onDropBefore={(from, before) => dockPane(from, side, before)}
+            grow={id === 'timeline'}
+            bodyRef={id === 'palette' ? setPaletteHost : undefined}
+          >
+            {paneNodes[id]}
+          </DockItem>
+        ))}
+      </div>
+    );
+  };
+
   return (
+    <MediaConfigContext.Provider value={media}>
     <div className="app-root">
+      <div className="app-toolbar" ref={setToolbarHost} />
+      <div className="app-body">
+      {renderDock('left')}
+      <div className="app-center">
+        <div className="app-canvas">
       <FlowCanvas
         onGraphChange={onGraphChange}
         zoneByNodeId={zoneByNodeId}
@@ -175,6 +309,24 @@ function App() {
         inputsByNodeId={graph.inputsByNodeId}
         writerRings={writerRings}
         focusedNodeId={focusedNodeId}
+        menus={
+          <ToolbarMenus
+            level={level}
+            onSelectLevel={handleSelectLevel}
+            onOpenScenarios={() => navigate('scenarios')}
+            onSaveScenario={promptSaveScenario}
+            showOriginTimestamps={showOriginTimestamps}
+            onToggleOriginTimestamps={setShowOriginTimestamps}
+            domainSizeMs={domainSizeMs}
+            onDomainSizeChange={setDomainSizeMs}
+            media={media}
+            onMediaChange={setMedia}
+          />
+        }
+        paneToolbar={<PaneToolbar minimized={minimizedPanes} onToggle={togglePane} onResetLayout={resetLayout} />}
+        toolbarHost={toolbarHost}
+        paletteHost={minimizedPanes.has('palette') ? null : paletteHost}
+        onMinimizePalette={minimize('palette')}
         onFocusNode={setFocusedNodeId}
         initialGraph={initialGraph}
         graphLoadKey={graphLoadKey}
@@ -186,47 +338,12 @@ function App() {
         onParkedInputsChange={setParkedInputKeys}
         stepClockBy={clock.step}
         onManualStepReady={registerManualStep}
-        onSaveScenario={(title) => handleSaveScenario(title, '')}
       />
-      <RingBufferPanel
-        nodes={graphNodes}
-        graph={graph}
-        domainSizeMs={domainSizeMs}
-        showRealGrainIndex={showRealGrainIndex}
-        parkedInputKeys={parkedInputKeys}
-        focusedNodeId={focusedNodeId}
-        onFocusNode={setFocusedNodeId}
-      />
-      <GameHud
-        level={level}
-        onSelectLevel={handleSelectLevel}
-        onOpenScenarios={() => navigate('scenarios')}
-        domainSizeMs={domainSizeMs}
-        onDomainSizeChange={setDomainSizeMs}
-        totalWorkloadLatencyMs={graph.totalWorkloadLatencyMs}
-        stabilityMarginMs={graph.stabilityMarginMs}
-        stability={stability}
-        onReset={handleReset}
-        onRestartWave={handleRestartWave}
-        lateInputs={lateInputs}
-        nodeLabelById={nodeLabelById}
-        showOriginTimestamps={showOriginTimestamps}
-        onToggleOriginTimestamps={setShowOriginTimestamps}
-        showRealGrainIndex={showRealGrainIndex}
-        onToggleRealGrainIndex={setShowRealGrainIndex}
-        playbackMode={clock.mode}
-        onSetPlaybackMode={clock.setMode}
-        onStep={() => manualStepRef.current()}
-        onStepBack={() => manualBackRef.current()}
-      />
-      <EndToEndTimeline
-        graph={graph}
-        nodes={graphNodes}
-        edges={graphEdges}
-        focusedNodeId={focusedNodeId}
-        onFocusNode={setFocusedNodeId}
-      />
-      <InfoPanel />
+        </div>
+        {renderDock('bottom')}
+      </div>
+      {renderDock('right')}
+      </div>
       {route === 'scenarios' && (
         <ScenariosPage
           scenarios={scenarios}
@@ -238,7 +355,12 @@ function App() {
         />
       )}
     </div>
+    </MediaConfigContext.Provider>
   );
 }
+
+/** Panes shown on first visit: Add functions, Playback, Clock and Rings; the rest start minimized. Later visits restore the saved state. */
+const DEFAULT_MINIMIZED: PaneId[] = ['controls', 'timeline', 'help'];
+const ALL_PANES: PaneId[] = ['palette', 'playback', 'controls', 'clock', 'rings', 'timeline', 'help'];
 
 export default App;

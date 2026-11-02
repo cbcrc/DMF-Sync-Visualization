@@ -19,7 +19,7 @@ A DMF has linear, synchronous boundaries (Ingress and Egress) around an
 asynchronous domain, and inside that asynchronous domain behaviour follows
 the Media eXchange Layer (MXL; normative source: https://github.com/dmf-mxl/mxl).
 
-**Version 0.2.261030** — the same functionality as 0.2 (per-writer ring buffers with reader pointers, a many-readers scenario, a blank canvas to build on, and saved scenarios), with reworked layouts: a grouped "Add media function" palette, a Profanity Delay, per-input sync/live on mixers, an end-to-end timeline, and a clock panel that shows ring buffers for the selected function. Versions are `0.2.YYMMDD`.
+**Version 0.2.261101** — the same model as 0.2, with a reworked interface: minimizable, dockable panes under a full-width top toolbar, a Workload Config (domain size, frame rate, resolution, audio sample rate), a separate Animation playback pane, per-function sync groups (sync A, sync B, live) on mixers, and reader tags (R1, R2…) on inputs. Versions are `0.2.YYMMDD`.
 
 ### How It Works
 Users wire Media Function nodes between an Ingress and an Egress and watch, in real
@@ -41,17 +41,38 @@ correct.
 ![Unofficial Definitions](assets/images/Definition_Block_Diagram.png)
 *Figure 1: The unoffical DMF definitions*
 
+### Quick start
+
+1. Open a scenario from **Canvas ▾** (or pick Blank Canvas), or add functions from the **Add media function** pane and drag between handles to wire them.
+2. Click a function. Its ring buffers appear in the **Ring buffers** pane, and its readers are tagged **R1**, **R2**… on the inputs.
+3. Press **Step ▶** in the **Animation playback** pane to advance one grain, or switch to Stepping or Normal to let it run.
+4. Change a function's latency (slider) and watch which readers go yellow (too early) or red (too late ✕).
+5. Set the domain size, video rate and audio sample rate under **Workload Config ▾**.
+
+### Toolbar and panes
+
+- The top bar has the editing tools on the left (**Canvas ▾**, **Workload Config ▾**, Undo, Copy/Paste, **Show Now**) and the pane buttons on the right.
+- Panes: Add media function, Animation playback, Status, Clock, Ring buffers, End-to-end timeline and Help. A pane button toggles it; **–** minimizes it. First visits open Add media function, Playback, Clock and Ring buffers.
+- Each pane has a header bar. Drag its grip to reorder it or move it to another dock, or click ◧ ⬓ ◨ to dock it left, bottom or right. Docked panes never overlap the canvas.
+- Docks, pane order and minimized panes are saved in your browser. **Reset layout** restores the defaults.
+
+### Animation playback
+
+- **Manual** (default): time only moves when you press **Step ▶** (one grain). **◀ Back** undoes the last step.
+- **Stepping**: runs automatically at 0.2× speed so grains visibly crawl.
+- **Normal**: runs in real time.
+- **Grain index**: *Simplified* counts from 100. *TAI Time* shows the last digits of the real MXL index (TAI time ÷ grain duration).
+
 ### Using the canvas
 
-- Add functions from the **Add media function** palette, grouped into Sources, Synthetic (CG, Clip Player, Tone Generator), Technical (Colour Corrector, Multiview, Repeater, Audio Processor), Editorial (mixers, Profanity Delay) and Outputs. Each group also has a "Generic" function that stands in for anything, and you drag between handles to connect them.
-- Every media function carries its own ring buffers, drawn as part of its block. The function writes into them whether or not anything reads. Each reader appears as a pointer showing how far behind the write head it reads; click a pointer or a function to highlight that reader's link.
-- Inputs and Outputs can be video only, audio only or both. Audio readers read only audio and video readers only video. An input takes one link (drop a new one on it to replace it).
-- The toolbar has **Undo** (also Ctrl/Cmd+Z) and **Now**, which shows how far behind real time each writer is.
-- Select a function and use **Copy** / **Paste** (Ctrl/Cmd+C, Ctrl/Cmd+V) to duplicate it; the copy takes the next free number in its name.
-- In **Manual** playback, **Step ▶** moves one grain forward and **◀ Back** undoes the last step.
-- New functions are added at the centre of the current view.
-- The **End-to-end timeline** along the bottom has one lane per output, running from the input to the output. Each block is a media function whose width is the latency it adds, and its caret marks where it reads from (how far behind now). Hatched gaps are time spent waiting for sync. Close it with ×. It doesn't use the Origin Time Stamp (OTS) carried on the linear side yet. Its model already has an OTS lead-in field (`leadInMs` in `src/game/endToEndTimeline.ts`) for when that is added.
-- Scenario 6, "Blank Canvas", starts empty. The Scenarios page (`#/scenarios`) saves and reopens your own.
+- Palette groups: Sources, Synthetic, Technical, Editorial (mixers, Profanity Delay) and Outputs. Each group also has a "Generic" function. New functions appear at the centre of the view.
+- Every function carries its own ring buffers and writes to them whether or not anything reads. Each reader is a pointer showing how far behind the write head it reads. Click a pointer or function to highlight that link.
+- Inputs and Outputs can be video, audio or both. An input takes one link (drop a new one on it to replace it).
+- On a mixer, each input is **sync A**, **sync B** or **live**. Inputs in a group read the same index, set by the slowest, and release together. A live input reads at the head and never waits.
+- **Show Now** draws wall-clock now beside each write head, to show how far behind the writer is.
+- **Copy** / **Paste** (Ctrl/Cmd+C, Ctrl/Cmd+V) duplicates a selected function. **Undo** is Ctrl/Cmd+Z.
+- **Canvas ▾** also holds saved scenarios, "Save canvas as scenario…" and the grain origin tags option. The Scenarios page is `#/scenarios`.
+- The **End-to-end timeline** has one lane per output. Each block is a function whose width is the latency it adds, and its caret marks where it reads from. Hatched gaps are time spent waiting for sync. It doesn't use the Origin Time Stamp (OTS) yet; its model has a `leadInMs` field for when that is added (`src/game/endToEndTimeline.ts`).
 
 ## Getting started after cloning this repo
 

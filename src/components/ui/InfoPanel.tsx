@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import './InfoPanel.css';
 
 /**
@@ -6,39 +5,27 @@ import './InfoPanel.css';
  * Kept deliberately short — one line per concept — so it's a quick reference,
  * not a document. Starts open so new users see it immediately.
  */
-export function InfoPanel() {
-  const [open, setOpen] = useState(true);
-
-  if (!open) {
-    return (
-      <button type="button" className="info-panel-toggle" onClick={() => setOpen(true)} aria-label="Show ring buffer help">
-        ?
-      </button>
-    );
-  }
-
+export function InfoPanel({ onMinimize }: { onMinimize: () => void }) {
   return (
     <div className="info-panel">
       <div className="info-panel__header">
         <span className="info-panel__title">How MXL timestamps drive this</span>
-        <button type="button" className="info-panel__close" onClick={() => setOpen(false)} aria-label="Close">
-          ×
+        <button type="button" className="info-panel__close" onClick={onMinimize} aria-label="Minimize" title="Minimize">
+          –
         </button>
       </div>
 
       <div className="info-panel__text info-panel__intro">
-        A grain's index (<code>timestamp ÷ duration</code>) is preserved end to end. A Media
-        Function writes its result back at the <em>same</em> index — processing only delays when
-        a flow's head is published, it never renumbers grains. The one exception is a Profanity
-        Delay: it parks media in its own buffer (outside MXL), then re-writes it as a new source,
-        so its flows start at the head again — though the delay still counts toward total latency.
+        A grain's index (<code>timestamp ÷ duration</code>) never changes as it moves through the
+        graph. Functions write at the <em>same</em> index; processing only delays when the head
+        is published. A Profanity Delay is the exception: it re-writes media as a new source.
       </div>
 
       <div className="info-panel__row">
         <span className="info-panel__dot info-panel__dot--green" />
         <div>
           <div className="info-panel__label">OK</div>
-          <div className="info-panel__text">Requested grain is still retained. Serial chains always land here.</div>
+          <div className="info-panel__text">The requested grain is still in the ring.</div>
         </div>
       </div>
 
@@ -46,31 +33,26 @@ export function InfoPanel() {
         <span className="info-panel__dot info-panel__dot--yellow" />
         <div>
           <div className="info-panel__label">Too early</div>
-          <div className="info-panel__text">Requested grain is newer than the head — the reader waits. No data lost.</div>
+          <div className="info-panel__text">The grain is newer than the head, so the reader waits. Nothing is lost.</div>
         </div>
       </div>
 
       <div className="info-panel__row">
         <span className="info-panel__dot info-panel__dot--red" />
         <div>
-          <div className="info-panel__label">Too late — the sync trap</div>
+          <div className="info-panel__label">Too late ✕</div>
           <div className="info-panel__text">
-            A sync point reads the <em>same</em> index from every input, aligned to its slowest
-            branch. A faster branch's grain can age past the retained window before that index is
-            read — unrecoverable loss, shown as a "✕". Fix by shortening the slow branch (drag its
-            latency slider), growing the MXL Domain, or adding a Grain Repeater.
+            Inputs in one sync group read the same index, set by the slowest. A faster input's grain
+            can be overwritten first. Shorten the slow path, grow the Domain, or add a Grain Repeater.
           </div>
         </div>
       </div>
 
       <div className="info-panel__text info-panel__footnote">
-        Each function's ring buffers sit beside it and mark the <strong>Write</strong> head and
-        each reader's requested read (<strong>R1</strong>, <strong>R2</strong>…). Select a
-        function to see how far its readers sit behind "Now" and the write head. The dotted track
-        inside a function shows the grain actually being processed, at a speed set by its latency.
-        At a sync point (e.g. an Output), a dashed ring means a grain has arrived and is paused —
-        waiting for its sibling flow to catch up — before both are consumed together. Outputs with
-        "Sync outputs" ticked are released together as one group.
+        <strong>Rings</strong> mark the Write head and each reader (<strong>R1</strong>, <strong>R2</strong>…,
+        also tagged on the reader's inputs). Click one to focus it. <strong>Sync A / B</strong> on a mixer input
+        groups inputs that wait for each other; <strong>live</strong> reads at the head and never waits.
+        A dashed ring is a grain paused for its group. Use <strong>Show Now</strong> to see wall-clock lag.
       </div>
     </div>
   );

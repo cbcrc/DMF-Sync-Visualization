@@ -1,17 +1,12 @@
-import { LEVELS, type Level } from '../../game/levels';
+import type { Level } from '../../game/levels';
 import type { InputReading } from '../../game/graphLatency';
 import type { StabilityState } from '../../game/stabilityMonitor';
 import { FAIL_RED_DURATION_MS } from '../../game/stabilityMonitor';
-import type { PlaybackMode } from '../../game/useSimClock';
 import './GameHud.css';
 
 export interface GameHudProps {
+  onMinimize: () => void;
   level: Level;
-  onSelectLevel: (levelId: string) => void;
-  /** Opens the scenarios page (browse built-in and saved scenarios, save the current canvas). */
-  onOpenScenarios: () => void;
-  domainSizeMs: number;
-  onDomainSizeChange: (sizeMs: number) => void;
   totalWorkloadLatencyMs: number;
   stabilityMarginMs: number;
   stability: StabilityState;
@@ -20,32 +15,16 @@ export interface GameHudProps {
   /** Every reader input currently reading a grain that has been overwritten. */
   lateInputs: InputReading[];
   nodeLabelById: Map<string, string>;
-  /** Show each grain's MXL origin-timestamp index/offset-from-now + node write flashes. */
-  showOriginTimestamps: boolean;
-  onToggleOriginTimestamps: (show: boolean) => void;
-  /** Grain index display: false = simplified count from 100, true = real MXL index (last digits in slots). */
-  showRealGrainIndex: boolean;
-  onToggleRealGrainIndex: (show: boolean) => void;
-  /** Item #9: Normal (real-time) / Stepping (slow auto-advance) / Manual (frozen, step-by-step). */
-  playbackMode: PlaybackMode;
-  onSetPlaybackMode: (mode: PlaybackMode) => void;
-  /** Manual-mode only: advance the shared sim clock by one grain quantum. */
-  onStep: () => void;
-  /** Manual-mode only: undo the last step. */
-  onStepBack: () => void;
 }
 
 /**
- * Task 4 HUD: level challenge picker + MXL Domain size control, plus the
+ * Status pane: current canvas description, plus the
  * spec's §3 telemetry readouts (Total Workload Latency, Stability Margin)
  * and the §4.3 fail condition (any node Red for > 3s).
  */
 export function GameHud({
+  onMinimize,
   level,
-  onSelectLevel,
-  onOpenScenarios,
-  domainSizeMs,
-  onDomainSizeChange,
   totalWorkloadLatencyMs,
   stabilityMarginMs,
   stability,
@@ -53,100 +32,17 @@ export function GameHud({
   onRestartWave,
   lateInputs,
   nodeLabelById,
-  showOriginTimestamps,
-  onToggleOriginTimestamps,
-  showRealGrainIndex,
-  onToggleRealGrainIndex,
-  playbackMode,
-  onSetPlaybackMode,
-  onStep,
-  onStepBack,
 }: GameHudProps) {
   const marginClass = stabilityMarginMs < 0 ? 'game-hud__stat-value--bad' : '';
 
   return (
     <div className="game-hud">
-      <div className="game-hud__levels">
-        {LEVELS.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            className={`game-hud__level-btn${l.id === level.id ? ' game-hud__level-btn--active' : ''}`}
-            onClick={() => onSelectLevel(l.id)}
-          >
-            {l.title}
-          </button>
-        ))}
-        <button type="button" className="game-hud__level-btn" onClick={onOpenScenarios}>
-          All / saved scenarios…
-        </button>
-      </div>
+      <button type="button" className="game-hud__min" onClick={onMinimize} aria-label="Minimize status" title="Minimize">
+        –
+      </button>
+      <div className="game-hud__title">{level.title}</div>
       <div className="game-hud__desc">{level.description}</div>
       {level.guidance && <div className="game-hud__guidance">{level.guidance}</div>}
-
-      <label className="game-hud__slider">
-        MXL Domain Size: <strong>{domainSizeMs}ms</strong>
-        <input
-          type="range"
-          min={10}
-          max={1000}
-          step={10}
-          value={domainSizeMs}
-          onChange={(e) => onDomainSizeChange(Number(e.target.value))}
-        />
-      </label>
-
-      <label className="game-hud__checkbox">
-        <input
-          type="checkbox"
-          checked={showOriginTimestamps}
-          onChange={(e) => onToggleOriginTimestamps(e.target.checked)}
-        />
-        Show origin timestamps
-      </label>
-
-      <div className="game-hud__playback">
-        <span className="game-hud__playback-label">Grain index:</span>
-        <div className="game-hud__playback-modes">
-          {[false, true].map((real) => (
-            <button
-              key={String(real)}
-              type="button"
-              className={`game-hud__playback-btn${real === showRealGrainIndex ? ' game-hud__playback-btn--active' : ''}`}
-              onClick={() => onToggleRealGrainIndex(real)}
-              title={real ? 'The true MXL grain index (TAI time ÷ grain duration); last digits shown' : 'A simple count starting at 100'}
-            >
-              {real ? 'Real MXL' : 'Simplified'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="game-hud__playback">
-        <span className="game-hud__playback-label">Playback:</span>
-        <div className="game-hud__playback-modes">
-          {(['normal', 'stepping', 'manual'] as PlaybackMode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`game-hud__playback-btn${m === playbackMode ? ' game-hud__playback-btn--active' : ''}`}
-              onClick={() => onSetPlaybackMode(m)}
-            >
-              {m === 'normal' ? 'Normal' : m === 'stepping' ? 'Stepping' : 'Manual'}
-            </button>
-          ))}
-        </div>
-      </div>
-      {playbackMode === 'manual' && (
-        <div className="game-hud__step-row">
-          <button type="button" className="game-hud__step-btn" onClick={onStepBack} title="Go back one step">
-            ◀ Back
-          </button>
-          <button type="button" className="game-hud__step-btn" onClick={onStep} title="Advance one grain">
-            Step ▶
-          </button>
-        </div>
-      )}
 
       <div className="game-hud__stats">
         <div className="game-hud__stat">

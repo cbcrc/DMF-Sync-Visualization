@@ -57,4 +57,13 @@ describe('scenarioStorage', () => {
     persistWorkingGraph(storage, { scenarioId: 's', domainSizeMs: 80, nodes: [], edges: [] });
     expect(loadWorkingGraph(storage)).toBeNull();
   });
+
+  it('upgrades the older ignoreSyncInputs list to live sync groups', () => {
+    const mixer = (extra: object) => ({ id: 'm', position: { x: 0, y: 0 }, data: { kind: 'editorial', label: 'M', latencyMs: 0, inputCount: 2, outputCount: 1, ...extra } });
+    const load = (extra: object) =>
+      loadWorkingGraph(memoryStorage({ [WORKING_GRAPH_KEY]: JSON.stringify({ scenarioId: 's', domainSizeMs: 80, nodes: [mixer(extra)], edges: [] }) }))?.nodes[0].data.inputGroups;
+    expect(load({ ignoreSyncInputs: [1] })).toEqual([1, 0]);
+    expect(load({ inputGroups: [1, 2] })).toEqual([1, 2]);
+    expect(load({})).toBeUndefined();
+  });
 });

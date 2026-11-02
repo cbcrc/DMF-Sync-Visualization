@@ -1,8 +1,5 @@
 .game-hud {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  z-index: 10;
+  position: relative;
   width: 300px;
   background: #111214;
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -11,6 +8,23 @@
   color: #ffffff;
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   box-sizing: border-box;
+}
+
+.game-hud__min {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #757575;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.game-hud__min:hover {
+  color: #ffffff;
 }
 
 .game-hud__levels {
@@ -244,4 +258,10 @@
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
+}
+
+.game-hud__title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
 }

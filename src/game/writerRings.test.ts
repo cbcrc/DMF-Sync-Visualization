@@ -55,4 +55,14 @@ describe('groupReadingsByWriter', () => {
     expect(unread.map((r) => `${r.writerNodeId}:${r.track}`).sort()).toEqual(['a:video', 'src:audio']);
     expect(unread.find((r) => r.writerNodeId === 'src')!.handleId).toBe('out-1');
   });
+
+  it('places each reader on the slot of the grain it reads, matching its age behind the head', () => {
+    const nodes = [node('src', 'input', 0, 1, 0), node('a', 'technical', 1, 1, 0), node('b', 'recording', 1, 0, 40)];
+    const edges = [edge('src', 'a'), edge('a', 'b')];
+    const ring = groupReadingsByWriter(computeGraphLatency(nodes, edges, 100, 1_000_020)).find((r) => r.writerNodeId === 'a')!;
+    for (const r of ring.readers.filter((x) => x.status === 'OK')) {
+      expect(r.ringAge).toBe(ring.publishedGrainIndex - r.requestedGrainIndex);
+      expect(r.ringSlot).toBe(r.requestedSlot);
+    }
+  });
 });

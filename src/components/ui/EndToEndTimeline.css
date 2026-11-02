@@ -1,33 +1,16 @@
-.e2e,
-.e2e-toggle {
-  position: absolute;
-  bottom: 16px;
-  z-index: 10;
+.e2e {
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   color: #ffffff;
   box-sizing: border-box;
 }
 
 .e2e {
-  left: 332px;
-  right: 352px;
-  max-height: 40vh;
-  overflow-y: auto;
   background: #111214;
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 8px;
   padding: 8px 12px;
 }
 
-.e2e-toggle {
-  left: 332px;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 14px;
-  padding: 4px 10px;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
 
 .e2e__header {
   display: flex;

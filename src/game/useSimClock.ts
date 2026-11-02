@@ -19,7 +19,7 @@ export type PlaybackMode = 'normal' | 'stepping' | 'manual';
 const STEPPING_SPEED = 0.2;
 
 /** Default single-click advance in Manual mode: one video grain's worth of simulated time. */
-export const MANUAL_STEP_MS = grainDurationMs();
+const MANUAL_STEP_MS = grainDurationMs();
 
 export interface SimClock {
   mode: PlaybackMode;
@@ -36,8 +36,8 @@ export interface SimClock {
  * Manual: frozen — only `step()` moves it forward, one quantum at a time.
  */
 export function useSimClock(): SimClock {
-  const [mode, setModeState] = useState<PlaybackMode>('normal');
-  const modeRef = useRef<PlaybackMode>('normal');
+  const [mode, setModeState] = useState<PlaybackMode>('manual');
+  const modeRef = useRef<PlaybackMode>('manual');
   const simNowRef = useRef(TAI_EPOCH_OFFSET_MS + performance.now());
   const lastRealRef = useRef(performance.now());
 

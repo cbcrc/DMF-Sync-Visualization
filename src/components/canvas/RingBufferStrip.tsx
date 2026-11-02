@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import type { WriterRing } from '../../game/writerRings';
 import { readerTitle } from '../../game/writerRings';
-import { READ_BEHIND_WRITE_GRAINS } from '../../engine/ringBufferEngine';
-import { grainIndexLabel } from '../../engine/mxlGrainIndex';
+import { grainIndexLabel, grainIndexToRingBufferIndex, slotColor } from '../../engine/mxlGrainIndex';
 import { CELL_H, LANE_H, NOW_W, OVERWRITTEN_W, RING_STRIP_W, STRIP_W } from './ringStripLayout';
 import './RingBufferStrip.css';
 
@@ -42,26 +41,27 @@ export interface RingBufferStripProps {
  */
 export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = false, showRealGrainIndex = false, onFocusNode, children }: RingBufferStripProps) {
   const n = ring.grainCount;
-  const drawCells = ring.track !== 'audio' && n <= MAX_DRAWN_CELLS;
+  const audio = ring.track === 'audio';
+  const drawCells = !audio && n <= MAX_DRAWN_CELLS;
   // Readers that are too late sit in the box left of the grains, stacked by order.
   const lateKeys = ring.readers.filter((r) => r.status === 'TOO_LATE').map((r) => r.key);
   const laneOf = (r: WriterRing['readers'][number]) => (r.status === 'TOO_LATE' ? lateKeys.indexOf(r.key) : r.lane);
   const maxLane = ring.readers.reduce((m, r) => Math.max(m, laneOf(r)), 0);
+  // Slot colours (matching the circular ring in the side panel) only show for the selected function's own ring.
+  const selected = ring.writerNodeId === focusedNodeId;
   const holdsFocus = ring.readers.some((r) => r.readerNodeId === focusedNodeId);
 
-  // The head is the rightmost box (the one being written). A reader sits `age`
-  // boxes to its left, where age = deltaGrains + READ_BEHIND_WRITE_GRAINS
-  // (`deltaGrains` is measured from the newest readable grain, one behind the
-  // head), so it can never occupy the write box. A too-early reader waits at
-  // the newest readable box (age 1), drawn hollow.
+  // The head is the rightmost box (the one being written). A reader sits
+  // `ringAge` boxes to its left (shared with the circular ring in WriterRing,
+  // see `WriterReader.ringAge`), so it can never occupy the write box. A
+  // too-early reader waits at the newest readable box (age 1), drawn hollow.
   const maxAge = n - 1;
-  const readableOldestAge = Math.min(maxAge, ring.retainedGrains + READ_BEHIND_WRITE_GRAINS);
+  const readableOldestAge = ring.readableOldestAge;
   const unreadableCount = maxAge - readableOldestAge;
   const slotPx = STRIP_W / n;
   const pointerX = (reader: WriterRing['readers'][number]) => {
-    if (reader.status === 'TOO_LATE') return OVERWRITTEN_W / 2;
-    const age = Math.min(Math.max(reader.behindHeadGrains + READ_BEHIND_WRITE_GRAINS, 1), maxAge);
-    return OVERWRITTEN_W + (n - 1 - age + 0.5) * slotPx;
+    if (reader.ringAge === null) return OVERWRITTEN_W / 2;
+    return OVERWRITTEN_W + (n - 1 - reader.ringAge + 0.5) * slotPx;
   };
   // "Now" sits `lagGrains` boxes right of the head's centre, to scale but
   // never closer than 6px (so a tiny lag stays visible) or past the zone.
@@ -69,6 +69,20 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
   const nowOffset = Math.min(NOW_W - 6, Math.max(6, ring.lagGrains * slotPx));
   const extra = showNow ? NOW_W : 0;
   const overwritten = lateKeys.length;
+  // Audio has no slots: faint ticks mark the commit batches (at least 4px apart) and, when selected, the
+  // same slot colours as the circular ring run along the readable samples.
+  const audioBackground = () => {
+    const tickPx = Math.max(1, Math.ceil(4 / slotPx)) * slotPx;
+    const ticks = `repeating-linear-gradient(90deg, rgba(0,0,0,0.3) 0 1px, transparent 1px ${tickPx}px)`;
+    if (!selected || n > 240) return ticks;
+    const stops: string[] = [];
+    for (let age = readableOldestAge; age >= 1; age -= 1) {
+      const c = slotColor(grainIndexToRingBufferIndex(ring.publishedGrainIndex - age, n), n);
+      const i = readableOldestAge - age;
+      stops.push(`${c} ${(100 * i) / readableOldestAge}% ${(100 * (i + 1)) / readableOldestAge}%`);
+    }
+    return `${ticks}, linear-gradient(90deg, ${stops.join(', ')})`;
+  };
   const label = (grainIndex: number, digits: number) => grainIndexLabel(grainIndex, ring.grainRate, showRealGrainIndex, digits);
 
   return (
@@ -107,11 +121,14 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
               const age = n - 1 - c;
               const readable = age >= 1 && age <= readableOldestAge;
               const idx = ring.publishedGrainIndex - age;
+              const slot = grainIndexToRingBufferIndex(idx, n);
+              const color = slotColor(slot, n);
               return (
                 <div
                   key={c}
-                  className={`ws__cell${age === 0 ? ' ws__cell--head' : readable ? '' : ' ws__cell--unreadable'}`}
-                  title={`grain ${label(idx, 12)}${age === 0 ? ' · being written, cannot be read' : readable ? '' : ' · outside retained history'}`}
+                  className={`ws__cell${age === 0 ? ' ws__cell--head' : readable ? '' : ' ws__cell--unreadable'}${selected && age === 0 ? ' ws__cell--head-selected' : ''}`}
+                  style={!selected ? undefined : readable || age === 0 ? { background: color, color: '#0e1822' } : { boxShadow: `inset 0 -4px 0 ${color}` }}
+                  title={`slot ${slot + 1} · grain ${label(idx, 12)}${age === 0 ? ' · being written, cannot be read' : readable ? '' : ' · outside retained history'}`}
                 >
                   {label(idx, n > 8 ? 3 : 4)}
                 </div>
@@ -120,13 +137,32 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
           ) : (
             <>
               <div className="ws__bar ws__bar--unreadable" style={{ flexGrow: unreadableCount }} title="Writer-reserved / outside retained history — a read here is too late" />
-              <div className="ws__bar" style={{ flexGrow: readableOldestAge }}>
-                {ring.track === 'audio' ? 'continuous' : `${n} grains`}
+              <div
+                className={`ws__bar${audio ? ' ws__bar--audio' : ''}`}
+                style={{ flexGrow: readableOldestAge, backgroundImage: audio ? audioBackground() : undefined }}
+                title={audio ? 'Continuous samples. Ticks mark commit batches; a reader takes any window of samples ending at its read point.' : undefined}
+              >
+                {audio ? '' : `${n} grains`}
               </div>
               <div className="ws__bar ws__bar--head" style={{ flexGrow: 1 }} title="Being written — cannot be read" />
             </>
           )}
         </div>
+        {audio &&
+          ring.readers.map((reader) => {
+            if (reader.ringAge === null) return null;
+            const widthPx = Math.min(reader.windowGrains, n) * slotPx;
+            const right = pointerX(reader) + slotPx / 2;
+            const left = Math.max(OVERWRITTEN_W, right - widthPx);
+            return (
+              <div
+                key={`win-${reader.key}`}
+                className={`ws__win${reader.readerNodeId === focusedNodeId ? ' ws__win--focused' : ''}`}
+                style={{ left, width: right - left, top: CELL_H - 4 }}
+                title={`Reads ${reader.windowGrains} batch${reader.windowGrains === 1 ? '' : 'es'} of samples ending at its read point`}
+              />
+            );
+          })}
         {ring.readers.map((reader) => {
           if (reader.readerNodeId !== focusedNodeId) return null;
           const nowMs = reader.behindNowGrains * ring.grainDurationMs;

@@ -34,9 +34,32 @@ export const DEFAULT_GRAIN_RATE: GrainRate = { numerator: 50, denominator: 1 };
  */
 export const AUDIO_GRAIN_RATE: GrainRate = { numerator: 1000, denominator: 1 };
 
+/**
+ * The media format the simulated domain carries. Frame rate sets the video
+ * grain rate (and so the grain duration and slot counts); the audio sample rate
+ * sets how many samples each 1 ms audio commit batch holds. Resolution is a
+ * label, shown for context.
+ */
+export interface MediaConfig {
+  /** Video frame rate, which is also the video grain rate. */
+  videoRate: GrainRate;
+  /** Picture size label, e.g. `1920x1080`. */
+  resolution: string;
+  /** Audio sample rate in Hz. */
+  audioSampleRate: number;
+}
+
+/** 1080p50 with 48 kHz audio: MXL's Timing.md worked example, and the broadcast-standard sample rate. */
+export const DEFAULT_MEDIA_CONFIG: MediaConfig = { videoRate: DEFAULT_GRAIN_RATE, resolution: '1920x1080', audioSampleRate: 48000 };
+
+/** Samples in one audio commit batch (one `AUDIO_GRAIN_RATE` grain). */
+export function samplesPerAudioBatch(config: MediaConfig = DEFAULT_MEDIA_CONFIG): number {
+  return config.audioSampleRate / (AUDIO_GRAIN_RATE.numerator / AUDIO_GRAIN_RATE.denominator);
+}
+
 /** Which track-appropriate grain rate to use for a flow, by MXL data format. */
-export function grainRateForTrack(track: 'video' | 'audio' | 'data'): GrainRate {
-  return track === 'audio' ? AUDIO_GRAIN_RATE : DEFAULT_GRAIN_RATE;
+export function grainRateForTrack(track: 'video' | 'audio' | 'data', config: MediaConfig = DEFAULT_MEDIA_CONFIG): GrainRate {
+  return track === 'audio' ? AUDIO_GRAIN_RATE : config.videoRate;
 }
 
 /** `GrainDurationNs = GrainRateDenominator * 1e9 / GrainRateNumerator`, expressed here in ms. */
@@ -44,9 +67,20 @@ export function grainDurationMs(rate: GrainRate = DEFAULT_GRAIN_RATE): number {
   return (1000 * rate.denominator) / rate.numerator;
 }
 
-/** Number of discrete grain slots an MXL ring buffer of `domainSizeMs` history holds. */
+/**
+ * Number of discrete grain slots an MXL ring buffer of `domainSizeMs` history holds. Like MXL
+ * (`Instance.cpp`: history * rate, integer division) it truncates, so a partial grain adds no slot.
+ */
 export function ringBufferLength(domainSizeMs: number, rate: GrainRate = DEFAULT_GRAIN_RATE): number {
-  return Math.max(1, Math.round(domainSizeMs / grainDurationMs(rate)));
+  return Math.max(1, Math.floor((domainSizeMs * rate.numerator) / (1000 * rate.denominator) + 1e-9));
+}
+
+/** Fewest grains a ring needs to be usable: the head, the grain being read, and one spare slot. */
+export const MIN_USABLE_GRAINS = 3;
+
+/** Smallest domain size (a multiple of `stepMs`) that gives a video flow at least `MIN_USABLE_GRAINS` slots. */
+export function minDomainSizeMs(rate: GrainRate = DEFAULT_GRAIN_RATE, stepMs = 10): number {
+  return Math.ceil((MIN_USABLE_GRAINS * grainDurationMs(rate)) / stepMs) * stepMs;
 }
 
 /** `GrainIndex = Timestamp / GrainDurationNs` (integer division; here `timestampMs` stands in for TAI ns/1e6). */
@@ -57,6 +91,11 @@ export function timestampToGrainIndex(timestampMs: number, rate: GrainRate = DEF
 /** `RingBufferIndex = GrainIndex mod RingBufferLength` — always normalized to [0, length). */
 export function grainIndexToRingBufferIndex(grainIndex: number, length: number): number {
   return ((grainIndex % length) + length) % length;
+}
+
+/** Colour of a physical ring slot, shared by the circular ring and the linear strip so a grain reads the same in both. */
+export function slotColor(slot: number, length: number): string {
+  return `hsl(${(slot * 360) / length} 55% 62%)`;
 }
 
 /**

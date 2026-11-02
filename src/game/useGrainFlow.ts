@@ -3,7 +3,8 @@ import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import type { RingBufferStatus } from '../types';
 import { stepGrains, edgeTravelDurationMs, type Grain } from './grainFlow';
-import { MANUAL_STEP_MS } from './useSimClock';
+import { grainDurationMs } from '../engine/mxlGrainIndex';
+import { useMediaConfig } from './mediaConfig';
 
 const TICK_MS = 40;
 const RESPAWN_GAP_MS = 350;
@@ -48,6 +49,9 @@ export function useGrainFlow(
    *  resolves, instead of the HUD's Step button applying its own fixed quantum. */
   stepClockBy?: (incrementMs: number) => void,
 ): GrainFlowResult {
+  const stepMs = grainDurationMs(useMediaConfig().videoRate);
+  const stepMsRef = useRef(stepMs);
+  stepMsRef.current = stepMs;
   const [grains, setGrains] = useState<Grain[]>([]);
   const grainsRef = useRef<Grain[]>(grains);
   const nodesRef = useRef(nodes);
@@ -146,7 +150,8 @@ export function useGrainFlow(
   // spawn inside the grain still resolves at its true time.
   const stepToNextRead = useCallback(() => {
     const now = getNowRef.current();
-    const target = (Math.floor(now / MANUAL_STEP_MS + 1e-6) + 1) * MANUAL_STEP_MS;
+    const stepMs = stepMsRef.current;
+    const target = (Math.floor(now / stepMs + 1e-6) + 1) * stepMs;
 
     historyRef.current.push({
       now,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../canvas/MediaFunctionNode';
 import type { GraphBufferState } from '../../game/graphLatency';
@@ -11,6 +11,7 @@ interface Props {
   edges: Edge[];
   focusedNodeId: string | null;
   onFocusNode: (id: string | null) => void;
+  onMinimize: () => void;
 }
 
 const fmt = (ms: number) => `${Math.round(ms)}ms`;
@@ -25,19 +26,10 @@ function tickStep(maxMs: number): number {
  * Linear end-to-end timeline: one lane per output, running from the source
  * input (left, 0ms) to the output. Each media function is a block whose width
  * is the latency it adds; the caret at its left edge is where it reads from
- * (how far behind "now" in its input ring). The operator can close it.
+ * (how far behind "now" in its input ring). The operator can minimize it.
  */
-export function EndToEndTimeline({ graph, nodes, edges, focusedNodeId, onFocusNode }: Props) {
-  const [open, setOpen] = useState(true);
+export function EndToEndTimeline({ graph, nodes, edges, focusedNodeId, onFocusNode, onMinimize }: Props) {
   const rows = useMemo(() => buildEndToEndTimeline(graph, nodes, edges), [graph, nodes, edges]);
-
-  if (!open) {
-    return (
-      <button type="button" className="e2e-toggle" onClick={() => setOpen(true)}>
-        End-to-end timeline
-      </button>
-    );
-  }
 
   const axisMs = Math.max(100, ...rows.map((r) => r.totalMs));
   const step = tickStep(axisMs);
@@ -48,8 +40,8 @@ export function EndToEndTimeline({ graph, nodes, edges, focusedNodeId, onFocusNo
     <div className="e2e">
       <div className="e2e__header">
         <div className="e2e__title">End-to-end timeline · input → output</div>
-        <button type="button" className="e2e__close" onClick={() => setOpen(false)} aria-label="Close timeline">
-          ×
+        <button type="button" className="e2e__close" onClick={onMinimize} aria-label="Minimize timeline" title="Minimize">
+          –
         </button>
       </div>
       {rows.length === 0 ? (

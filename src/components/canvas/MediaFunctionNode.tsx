@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from 'reactflow';
 import type { MediaFunctionKind } from '../../types';
 import { nodeSizeForLatency } from './nodeSizing';
-import { hasSyncChoice } from '../../game/syncInputs';
+import { LIVE_GROUP, MAX_SYNC_GROUPS, groupLabel, hasSyncChoice } from '../../game/syncInputs';
 import { DELAY_MAX_MS, LATENCY_RANGE, outputModeOf } from './nodeDefaults';
 import { grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
+import { useMediaConfig } from '../../game/mediaConfig';
 import type { WriterRing } from '../../game/writerRings';
 import { RingBufferStrip } from './RingBufferStrip';
 import './MediaFunctionNode.css';
@@ -48,7 +49,7 @@ export interface MediaFunctionNodeData {
    * grain with a new reference time (item #10.iii).
    */
   processingOriginTs?: number;
-  /** Mirrors the HUD's "Show origin timestamps" toggle (`App.tsx`). */
+  /** Mirrors the Canvas menu's "Show grain origin tags" toggle (`App.tsx`). */
   showOriginTimestamps?: boolean;
   /** Mirrors the HUD's "Use real MXL index" toggle (item #11, `App.tsx`). */
   showRealGrainIndex?: boolean;
@@ -68,6 +69,8 @@ export interface MediaFunctionNodeData {
   /** This function's own ring buffers (one per output flow), drawn as part of its block. */
   rings?: WriterRing[];
   labelByNodeId?: Map<string, string>;
+  /** Reader tag of each input ("R1"...), as shown on the upstream writer's ring. */
+  readerTags?: Map<number, string>;
   focusedNodeId?: string | null;
   /** Show wall-clock "now" on each ring, to see how far behind it the writer is. */
   showNow?: boolean;
@@ -75,9 +78,12 @@ export interface MediaFunctionNodeData {
   /** Output only: release together with every other Output that has this on; off = as fast as possible. */
   syncOutputs?: boolean;
   onSyncOutputsChange?: (nodeId: string, synced: boolean) => void;
-  /** Mixer inputs (by index) that ignore sync and read as close to the write head as possible. */
-  ignoreSyncInputs?: number[];
-  onSyncInputChange?: (nodeId: string, inputIndex: number, ignoreSync: boolean) => void;
+  /**
+   * Mixer sync group per input (by index): 1.. = a group whose members are read
+   * together at their slowest member, 0 = live (read at the write head). Missing = group 1.
+   */
+  inputGroups?: number[];
+  onSyncInputChange?: (nodeId: string, inputIndex: number, group: number) => void;
   /** Lets an Input or Output switch between video only, audio only, or both flows. */
   onOutputModeChange?: (nodeId: string, mode: OutputMode) => void;
 }
@@ -148,6 +154,7 @@ function EditableLabel({ id, label, onChange }: { id: string; label: string; onC
 
 /** Custom React Flow node rendering a Media Function, sized by its processing latency. */
 export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctionNodeData>) {
+  const media = useMediaConfig();
   const size = nodeSizeForLatency(data.latencyMs);
   const meta = KIND_META[data.kind];
   const zoneClass = data.zone ? ` mf-node--zone-${data.zone}` : '';
@@ -197,26 +204,43 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
             style={{ top: `${top}%` }}
           />
         ))}
+      {data.readerTags &&
+        handleOffsets(data.inputCount).map((top, i) => {
+          const tag = data.readerTags?.get(i);
+          return tag ? (
+            <span
+              key={`tag-${i}`}
+              className="mf-node__reader-tag"
+              style={{ top: `${top}%` }}
+              title={`Input ${i + 1} reads as ${tag} on the upstream ring`}
+            >
+              {tag}
+            </span>
+          ) : null;
+        })}
       {hasSyncChoice(data) &&
         data.onSyncInputChange &&
         handleOffsets(data.inputCount).map((top, i) => {
-          const ignored = data.ignoreSyncInputs?.includes(i) ?? false;
+          const group = data.inputGroups?.[i] ?? 1;
+          const live = group === LIVE_GROUP;
+          // Cycle A, B, ... (one more than there are inputs is never useful), then live.
+          const maxGroup = Math.min(MAX_SYNC_GROUPS, data.inputCount);
+          const nextGroup = live ? 1 : group >= maxGroup ? LIVE_GROUP : group + 1;
           return (
             <button
               key={`sync-${i}`}
               type="button"
-              className={`mf-node__input-sync nodrag${ignored ? ' mf-node__input-sync--free' : ''}`}
+              className={`mf-node__input-sync nodrag${live ? ' mf-node__input-sync--free' : ''}`}
               style={{ top: `${top}%` }}
               title={
-                ignored
-                  ? `Input ${i + 1} ignores sync: read as close to the write head as possible, and the function does not wait for it. Click to force sync.`
-                  : `Input ${i + 1} is synced: read at the grain index aligned with the other synced inputs. Click to ignore sync.`
+                live
+                  ? `Input ${i + 1} is live: read as close to the write head as possible, in no sync group, so the function does not wait for it. Click for sync group ${groupLabel(nextGroup)}.`
+                  : `Input ${i + 1} is in sync group ${groupLabel(group)}: read at the same index as the other inputs in group ${groupLabel(group)} (the slowest of them). Click for ${groupLabel(nextGroup)}.`
               }
-              aria-pressed={ignored}
-              onClick={() => data.onSyncInputChange?.(id, i, !ignored)}
+              onClick={() => data.onSyncInputChange?.(id, i, nextGroup)}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              {ignored ? 'live' : 'sync'}
+              {live ? 'live' : `sync ${groupLabel(group)}`}
             </button>
           );
         })}
@@ -237,9 +261,7 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
             </option>
           ))}
         </select>
-      ) : (
-        <div className="mf-node__kind">{data.audioOnly ? `Audio ${meta.name}` : data.videoOnly ? `Video ${meta.name}` : meta.name}</div>
-      )}
+      ) : null}
 
       {data.kind === 'output' && data.onSyncOutputsChange && (
         <label
@@ -296,7 +318,7 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
             >
               ref #{grainIndexForDisplay(
                 data.processingOriginTs,
-                grainRateForTrack(data.processingStreamIndex === 1 ? 'audio' : 'video'),
+                grainRateForTrack(data.processingStreamIndex === 1 ? 'audio' : 'video', media),
                 data.domainSizeMs ?? 100,
                 data.showRealGrainIndex ?? false,
               )} kept

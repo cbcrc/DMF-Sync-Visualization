@@ -1,0 +1,27 @@
+.pane-toolbar {
+  display: flex;
+  gap: 4px;
+  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+}
+
+.pane-toolbar__btn {
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: #ffffff;
+  background: #2a2c30;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.pane-toolbar__btn:hover {
+  border-color: #ee0000;
+}
+
+/* Minimized: hollow, so it reads as "click to bring back". */
+.pane-toolbar__btn--minimized {
+  color: #9a9a9a;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.3);
+}

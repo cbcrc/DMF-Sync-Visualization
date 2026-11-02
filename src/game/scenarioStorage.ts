@@ -30,6 +30,16 @@ const KINDS: MediaFunctionKind[] = ['input', 'synthetic', 'editorial', 'technica
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Reads per-input sync groups, upgrading the older `ignoreSyncInputs` list (those inputs were live). */
+function sanitizeInputGroups(d: Record<string, unknown>, inputCount: number): { inputGroups?: number[] } {
+  const groups = Array.from({ length: inputCount }, (_, i) => {
+    const g = Array.isArray(d.inputGroups) ? d.inputGroups[i] : undefined;
+    if (Number.isInteger(g) && (g as number) >= 0) return Math.min(g as number, 2);
+    return Array.isArray(d.ignoreSyncInputs) && d.ignoreSyncInputs.includes(i) ? 0 : 1;
+  });
+  return groups.every((g) => g === 1) ? {} : { inputGroups: groups };
+}
+
 /** Keeps only the persistent fields of a node (drops live zone/processing state). */
 export function sanitizeNode(raw: unknown): Node<MediaFunctionNodeData> | null {
   if (!isRecord(raw) || typeof raw.id !== 'string' || !isRecord(raw.data) || !isRecord(raw.position)) return null;
@@ -51,9 +61,7 @@ export function sanitizeNode(raw: unknown): Node<MediaFunctionNodeData> | null {
       ...(d.audioOnly === true ? { audioOnly: true } : {}),
       ...(d.videoOnly === true ? { videoOnly: true } : {}),
       ...(d.syncOutputs === true ? { syncOutputs: true } : {}),
-      ...(Array.isArray(d.ignoreSyncInputs) && d.ignoreSyncInputs.some((i) => Number.isInteger(i))
-        ? { ignoreSyncInputs: d.ignoreSyncInputs.filter((i): i is number => Number.isInteger(i)) }
-        : {}),
+      ...sanitizeInputGroups(d, d.inputCount as number),
     },
   };
 }

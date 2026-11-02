@@ -1,7 +1,7 @@
 // Core Ring Buffer evaluation logic.
 // See SPEC.md §2.A and §3 for the MXL too-early/too-late rules.
 
-import type { RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
+import type { GrainRate, RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs, ringBufferLength } from './mxlGrainIndex';
 
 /**
@@ -46,9 +46,9 @@ export const RING_BUFFER_ZONES = {
  * sits in a domain window of `domainSizeMs`: the retained history plus the
  * grain being written.
  */
-export function oldestReadableAgeMs(domainSizeMs: number): number {
-  const dur = grainDurationMs(DEFAULT_GRAIN_RATE);
-  return (retainedGrainsFor(ringBufferLength(domainSizeMs, DEFAULT_GRAIN_RATE), dur) + READ_BEHIND_WRITE_GRAINS) * dur;
+export function oldestReadableAgeMs(domainSizeMs: number, videoRate: GrainRate = DEFAULT_GRAIN_RATE): number {
+  const dur = grainDurationMs(videoRate);
+  return (retainedGrainsFor(ringBufferLength(domainSizeMs, videoRate), dur) + READ_BEHIND_WRITE_GRAINS) * dur;
 }
 
 /**
@@ -65,7 +65,8 @@ export function retainedGrainsFor(
   grainCount: number,
   trackDurationMs: number = grainDurationMs(DEFAULT_GRAIN_RATE),
 ): number {
-  const reservedGrains = Math.max(1, Math.round(WRITER_RESERVED_MS / trackDurationMs));
+  // Never fewer than MXL's own two slots, even when a slow frame rate makes 40ms less than that.
+  const reservedGrains = Math.max(WRITER_RESERVED_SLOTS, Math.round(WRITER_RESERVED_MS / trackDurationMs));
   return Math.max(0, grainCount - reservedGrains);
 }
 

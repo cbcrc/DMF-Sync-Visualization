@@ -1,5 +1,6 @@
 import type { GrainRate, RingBufferStatus } from '../types';
 import { grainIndexToRingBufferIndex, timestampToGrainIndex } from '../engine/mxlGrainIndex';
+import { READ_BEHIND_WRITE_GRAINS } from '../engine/ringBufferEngine';
 import type { GraphBufferState, InputReading, Track } from './graphLatency';
 
 /** One reader's position in a writer's ring. */
@@ -20,6 +21,23 @@ export interface WriterReader {
    * readers on one slot fan out instead of overprinting each other.
    */
   lane: number;
+  /**
+   * Where the reader sits in the ring, in grains behind the write head
+   * (1 = newest readable). Shared by the linear strip and the circular ring so
+   * both draw the reader on the same grain. `null` when too late: the grain it
+   * asked for has been overwritten, so it has no slot. A too-early reader waits
+   * at age 1.
+   */
+  ringAge: number | null;
+  /** Physical slot at `ringAge`, or `null` when too late. */
+  ringSlot: number | null;
+  /**
+   * How many grains (commit batches) the reader consumes per read, ending at its
+   * read index. For an MXL continuous (audio) flow a read is an arbitrary window
+   * of samples, so this is drawn as a span. It is the aligned video grain's worth
+   * of audio at a sync point, otherwise one batch.
+   */
+  windowGrains: number;
   reading: InputReading;
 }
 
@@ -35,6 +53,8 @@ export interface WriterRing {
   grainDurationMs: number;
   grainCount: number;
   retainedGrains: number;
+  /** Oldest readable age behind the head; ages beyond it (up to `grainCount - 1`) are writer-reserved. */
+  readableOldestAge: number;
   publishedGrainIndex: number;
   publishedSlot: number;
   nowGrainIndex: number;
@@ -44,6 +64,17 @@ export interface WriterRing {
   lagMs: number;
   readers: WriterReader[];
 }
+
+export function readableOldestAgeOf(grainCount: number, retainedGrains: number): number {
+  return Math.min(Math.max(grainCount - 1, 0), retainedGrains + READ_BEHIND_WRITE_GRAINS);
+}
+
+function windowGrainsOf(reading: InputReading, grainDurationMs: number): number {
+  const span = reading.alignmentSpanMs;
+  return span ? Math.max(1, Math.round((span.endMs - span.startMs) / grainDurationMs)) : 1;
+}
+
+const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 /**
  * Regroups the per-input readings by the writer flow they read, so one ring
@@ -70,19 +101,27 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
     );
     const laneCount = new Map<number, number>();
     const readers = sorted.map((reading): WriterReader => {
-      const slot = reading.buffer.requestedRingBufferIndex;
-      const lane = laneCount.get(slot) ?? 0;
-      laneCount.set(slot, lane + 1);
+      const status = reading.evaluation.status;
+      const ringAge =
+        status === 'TOO_LATE'
+          ? null
+          : Math.min(Math.max(reading.evaluation.deltaGrains + READ_BEHIND_WRITE_GRAINS, 1), Math.max(buffer.grainCount - 1, 1));
+      const laneKey = ringAge === null ? -1 : ringAge;
+      const lane = laneCount.get(laneKey) ?? 0;
+      laneCount.set(laneKey, lane + 1);
       return {
         key: readerKey(reading),
         readerNodeId: reading.readerNodeId,
         inputIndex: reading.inputIndex,
         status: reading.evaluation.status,
         requestedGrainIndex: reading.buffer.requestedGrainIndex,
-        requestedSlot: slot,
+        requestedSlot: reading.buffer.requestedRingBufferIndex,
         behindHeadGrains: reading.evaluation.deltaGrains,
         behindNowGrains: nowGrainIndex - reading.buffer.requestedGrainIndex,
         lane,
+        ringAge,
+        windowGrains: windowGrainsOf(reading, buffer.grainDurationMs),
+        ringSlot: ringAge === null ? null : mod(buffer.publishedRingBufferIndex - ringAge, buffer.grainCount),
         reading,
       };
     });
@@ -96,6 +135,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
       grainDurationMs: buffer.grainDurationMs,
       grainCount: buffer.grainCount,
       retainedGrains: buffer.retainedGrains,
+      readableOldestAge: readableOldestAgeOf(buffer.grainCount, buffer.retainedGrains),
       publishedGrainIndex: buffer.publishedGrainIndex,
       publishedSlot: buffer.publishedRingBufferIndex,
       nowGrainIndex,
@@ -120,6 +160,7 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
       grainDurationMs: flow.grainDurationMs,
       grainCount: flow.grainCount,
       retainedGrains: flow.retainedGrains,
+      readableOldestAge: readableOldestAgeOf(flow.grainCount, flow.retainedGrains),
       publishedGrainIndex: flow.publishedGrainIndex,
       publishedSlot: flow.publishedSlot,
       nowGrainIndex,

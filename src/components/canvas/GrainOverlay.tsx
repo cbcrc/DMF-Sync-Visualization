@@ -4,7 +4,8 @@ import type { Node } from 'reactflow';
 import type { MediaFunctionNodeData } from './MediaFunctionNode';
 import type { Grain } from '../../game/grainFlow';
 import { buildNodeGeometry, getGrainPosition, outputAnchor } from '../../game/grainFlow';
-import { grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
+import { type MediaConfig, grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
+import { useMediaConfig } from '../../game/mediaConfig';
 import './GrainOverlay.css';
 
 export interface GrainOverlayProps {
@@ -64,8 +65,8 @@ const TAG_STACK_GAP_PX = 20;
 const AGE_DISPLAY_STEP_MS = 100;
 
 /** Matches `graphLatency.ts`'s `indexToTrack` convention (producer output 0 = video, 1 = audio). */
-function grainRateForStreamIndex(streamIndex: number | undefined) {
-  return grainRateForTrack(streamIndex === 1 ? 'audio' : 'video');
+function grainRateForStreamIndex(streamIndex: number | undefined, media: MediaConfig) {
+  return grainRateForTrack(streamIndex === 1 ? 'audio' : 'video', media);
 }
 
 interface RetainedTag {
@@ -119,6 +120,7 @@ export function GrainOverlay({
   getNow = () => performance.now(),
 }: GrainOverlayProps) {
   const { x, y, zoom } = useViewport();
+  const media = useMediaConfig();
   const geometry = buildNodeGeometry(nodes);
   const now = getNow();
   // `originTs`/age display now shares the same simulated clock as `now` (see
@@ -172,7 +174,7 @@ export function GrainOverlay({
         y: anchor.y,
         idx: grainIndexForDisplay(
           g.originTs ?? wallNow,
-          grainRateForStreamIndex(g.streamIndex),
+          grainRateForStreamIndex(g.streamIndex, media),
           domainSizeMs,
           showRealGrainIndex,
         ),
@@ -222,7 +224,7 @@ export function GrainOverlay({
       const [fromId, streamClass] = key.split('|');
       const idx = grainIndexForDisplay(
         g.originTs ?? wallNow,
-        grainRateForStreamIndex(g.streamIndex),
+        grainRateForStreamIndex(g.streamIndex, media),
         domainSizeMs,
         showRealGrainIndex,
       );

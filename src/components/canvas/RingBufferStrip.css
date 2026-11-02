@@ -68,6 +68,10 @@
   color: #0b2a52;
 }
 
+.ws__cell--head-selected {
+  box-shadow: inset 0 0 0 2px #efb03a;
+}
+
 .ws__overwritten {
   position: absolute;
   top: 0;
@@ -224,4 +228,22 @@
 .ws__bubble span {
   color: #f5a623;
   font-weight: 600;
+}
+
+/* Audio: a continuous sample bar, plus each reader's read window under it. */
+.ws__bar--audio {
+  background-color: #e1f7e1;
+}
+
+.ws__win {
+  position: absolute;
+  height: 4px;
+  background: #f4902c;
+  border-radius: 1px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ws__win--focused {
+  background: #ee0000;
 }

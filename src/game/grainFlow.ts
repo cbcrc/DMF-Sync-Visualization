@@ -12,7 +12,7 @@
 
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
-import { freeRunningInputs, rewritesAsNewSource } from './syncInputs';
+import { freeRunningInputs, inputGroupsFor, rewritesAsNewSource } from './syncInputs';
 import { nodeSizeForLatency } from '../components/canvas/nodeSizing';
 import type { RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs } from '../engine/mxlGrainIndex';
@@ -296,10 +296,13 @@ export function stepGrains(
   // Mixer inputs set to ignore sync are read at the write head: the grain is
   // taken on arrival and the mixer does not wait for it.
   const freeHandlesByNode = new Map<string, Set<number>>();
+  // Sync group of each wired input, per node: a group's inputs release together.
+  const groupByHandle = new Map<string, Map<number, number>>();
   for (const n of nodes) {
     const wired = edges.filter((e) => e.target === n.id).map((e) => parseHandleIndex(e.targetHandle, 'in-'));
     const free = freeRunningInputs(n.data, wired);
     if (free.size > 0) freeHandlesByNode.set(n.id, free);
+    groupByHandle.set(n.id, inputGroupsFor(n.data, wired));
   }
 
   const next: Grain[] = [];
@@ -418,40 +421,54 @@ export function stepGrains(
   }
 
   const releaseDurationById = new Map<string, number>();
-  const stalledNodeIds = new Set<string>();
+  const stalledGrainIds = new Set<string>();
 
-  // Nodes release independently, except Output functions flagged `syncOutputs`,
-  // which form one group released together once every member has all its inputs.
-  const groups = new Map<string, string[]>();
-  for (const nodeId of requiredHandlesByNode.keys()) {
-    const data = nodes.find((n) => n.id === nodeId)?.data;
-    const key = data?.kind === 'output' && data.syncOutputs ? '__synced_outputs__' : nodeId;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(nodeId);
+  // Each sync group of a node releases independently of the node's other
+  // groups, except Output functions flagged `syncOutputs`, which form one group
+  // released together once every member has all its inputs.
+  interface ReleaseMember {
+    id: string;
+    handles: Set<number>;
   }
+  const groups = new Map<string, ReleaseMember[]>();
+  for (const [nodeId, handles] of requiredHandlesByNode) {
+    const data = nodes.find((n) => n.id === nodeId)?.data;
+    const syncedOutput = data?.kind === 'output' && data.syncOutputs;
+    const byGroup = new Map<number, Set<number>>();
+    for (const h of handles) {
+      const group = groupByHandle.get(nodeId)?.get(h) ?? 1;
+      if (!byGroup.has(group)) byGroup.set(group, new Set());
+      byGroup.get(group)!.add(h);
+    }
+    for (const [group, groupHandles] of byGroup) {
+      const key = syncedOutput ? '__synced_outputs__' : `${nodeId}#${group}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push({ id: nodeId, handles: groupHandles });
+    }
+  }
+  const parkedFor = (m: ReleaseMember) =>
+    (parkedByNode.get(m.id) ?? []).filter((g) => m.handles.has(g.targetHandleIndex ?? 0));
 
   for (const members of groups.values()) {
-    if (!members.some((id) => parkedByNode.has(id))) continue;
+    if (!members.some((m) => parkedFor(m).length > 0)) continue;
     // If any required sibling input was dropped, synchronization failed for this wave.
     // The surviving sibling stays parked in an alert state until restart or tuning fix.
-    const hasDroppedSibling = members.some((id) =>
-      [...requiredHandlesByNode.get(id)!].some((h) => droppedHandles.get(id)?.has(h)),
-    );
+    const hasDroppedSibling = members.some((m) => [...m.handles].some((h) => droppedHandles.get(m.id)?.has(h)));
     if (hasDroppedSibling) {
-      for (const id of members) if (parkedByNode.has(id)) stalledNodeIds.add(id);
+      for (const m of members) for (const g of parkedFor(m)) stalledGrainIds.add(g.id);
       continue;
     }
 
-    const allPresent = members.every((id) => {
-      const present = new Set((parkedByNode.get(id) ?? []).map((g) => g.targetHandleIndex ?? 0));
-      return [...requiredHandlesByNode.get(id)!].every((h) => present.has(h));
+    const allPresent = members.every((m) => {
+      const present = new Set(parkedFor(m).map((g) => g.targetHandleIndex ?? 0));
+      return [...m.handles].every((h) => present.has(h));
     });
     if (!allPresent) continue;
-    for (const id of members) {
-      const duration = nodes.find((n) => n.id === id)?.data.kind === 'delay'
-        ? HOLD_BASE_MS + Math.max(0, geometry.get(id)!.latencyMs) // parked in real time, past the usual hold cap
-        : holdDuration(geometry.get(id)!.latencyMs);
-      for (const g of parkedByNode.get(id) ?? []) releaseDurationById.set(g.id, duration);
+    for (const m of members) {
+      const duration = nodes.find((n) => n.id === m.id)?.data.kind === 'delay'
+        ? HOLD_BASE_MS + Math.max(0, geometry.get(m.id)!.latencyMs) // parked in real time, past the usual hold cap
+        : holdDuration(geometry.get(m.id)!.latencyMs);
+      for (const g of parkedFor(m)) releaseDurationById.set(g.id, duration);
     }
   }
 
@@ -459,7 +476,7 @@ export function stepGrains(
     if (releaseDurationById.has(g.id)) {
       return { ...g, startTime: now, durationMs: releaseDurationById.get(g.id)!, parked: false, stalled: false };
     }
-    if (g.phase === 'holding' && g.parked && stalledNodeIds.has(g.fromId)) {
+    if (g.phase === 'holding' && g.parked && stalledGrainIds.has(g.id)) {
       return { ...g, stalled: true };
     }
     return g;

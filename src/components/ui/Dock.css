@@ -1,0 +1,180 @@
+/* Layout: left dock | (canvas over bottom dock) | right dock. Docked panes never overlap. */
+.app-root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Full-width top bar above every dock, so panes never cover the menus. */
+.app-toolbar {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 6px 8px;
+  background: #0b0b0d;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.app-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.dock {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: auto;
+  background: #0b0b0d;
+}
+
+/* An empty dock stays as a slim strip so it is still visible as a place to dock. */
+.dock:empty {
+  flex-basis: 28px !important;
+  padding: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  box-sizing: border-box;
+}
+
+.dock--bottom:empty {
+  height: 28px;
+}
+
+.dock--left,
+.dock--right {
+  flex: 0 0 332px;
+  flex-direction: column;
+}
+
+.dock--bottom {
+  flex: 0 0 auto;
+  max-height: 45vh;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.dock--bottom .dock-item {
+  flex: 0 0 auto;
+}
+
+.dock--bottom .dock-item--grow {
+  flex: 1 0 420px;
+}
+
+.dock--left .dock-item,
+.dock--right .dock-item {
+  flex: 0 0 auto;
+}
+
+/* Side docks fix the pane width; bottom docks let panes keep their own. */
+.dock--left .dock-item__body > *,
+.dock--right .dock-item__body > *,
+.dock-item--grow .dock-item__body > * {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.dock-item {
+  position: relative;
+}
+
+.dock-item__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 16px;
+}
+
+.dock-item__btns {
+  display: flex;
+  gap: 2px;
+}
+
+.dock-item__grip {
+  font-size: 0.6rem;
+  color: #757575;
+  cursor: grab;
+  user-select: none;
+}
+
+.dock-item__grip:hover {
+  color: #ffffff;
+}
+
+.dock-item--dragging {
+  opacity: 0.4;
+}
+
+.dock--droppable {
+  outline: 1px dashed rgba(76, 175, 80, 0.6);
+  outline-offset: -2px;
+}
+
+.dock-item--drop-before-v::before,
+.dock-item--drop-after-v::after,
+.dock-item--drop-before-h::before,
+.dock-item--drop-after-h::after {
+  content: '';
+  position: absolute;
+  background: #4caf50;
+  z-index: 5;
+}
+
+.dock-item--drop-before-v::before,
+.dock-item--drop-after-v::after {
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.dock-item--drop-before-v::before { top: -5px; }
+.dock-item--drop-after-v::after { bottom: -5px; }
+
+.dock-item--drop-before-h::before,
+.dock-item--drop-after-h::after {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.dock-item--drop-before-h::before { left: -5px; }
+.dock-item--drop-after-h::after { right: -5px; }
+
+
+.dock-item__btn {
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0 4px;
+  color: #757575;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.dock-item__btn:hover {
+  color: #ffffff;
+}
+
+.dock-item__btn--active {
+  color: #4caf50;
+}
+
+.app-canvas .flow-canvas-root {
+  position: absolute;
+  inset: 0;
+}

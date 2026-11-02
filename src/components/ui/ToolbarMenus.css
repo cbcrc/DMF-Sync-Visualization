@@ -1,0 +1,91 @@
+.tb-menu {
+  position: relative;
+}
+
+.tb-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(17, 18, 20, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  color: #ffffff;
+}
+
+.tb-menu__heading {
+  margin-top: 4px;
+  font-weight: 700;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.6rem;
+}
+
+.tb-menu__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tb-menu__field select {
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.tb-menu__note {
+  opacity: 0.7;
+  font-size: 0.65rem;
+}
+
+.tb-menu__row {
+  display: flex;
+  gap: 4px;
+}
+
+.tb-menu__item,
+.tb-menu__chip {
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: #ffffff;
+  background: #1a1b1e;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tb-menu__item:hover,
+.tb-menu__chip:hover {
+  border-color: #ffffff;
+}
+
+.tb-menu__item--active,
+.tb-menu__chip--active {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.tb-menu__chip--wide {
+  flex: 1;
+  text-align: center;
+}
+
+.tb-menu__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

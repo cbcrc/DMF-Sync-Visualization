@@ -14,12 +14,34 @@
   max-width: 200px;
 }
 
+.fc-palette__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .fc-palette__title {
   font-size: 0.7rem;
   color: #757575;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 6px;
+}
+
+.fc-palette__min {
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #757575;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.fc-palette__min:hover {
+  color: #ffffff;
 }
 
 .fc-palette__buttons {
@@ -99,12 +121,24 @@
 .fc-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 16px;
   padding: 4px 8px;
   background: rgba(17, 18, 20, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
+}
+
+.fc-toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pane selection: right-hand section, divided from the editing tools. */
+.fc-toolbar__section--panes {
+  padding-left: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .fc-toolbar__btn {

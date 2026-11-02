@@ -1,8 +1,4 @@
 .info-panel {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  z-index: 10;
   width: 320px;
   background: #111214;
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -11,8 +7,6 @@
   color: #ffffff;
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   box-sizing: border-box;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
 }
 
 .info-panel__header {
@@ -110,23 +104,4 @@
   line-height: 1.4;
 }
 
-.info-panel-toggle {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  z-index: 10;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  color: #ffffff;
-  font-family: 'Radio Canada', Inter, system-ui, sans-serif;
-  font-weight: 700;
-  cursor: pointer;
-}
 
-.info-panel-toggle:hover {
-  border-color: #ee0000;
-  color: #ee0000;
-}

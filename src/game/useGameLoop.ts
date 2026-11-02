@@ -6,10 +6,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
+import { DEFAULT_MEDIA_CONFIG, type MediaConfig } from '../engine/mxlGrainIndex';
 import { computeGraphLatency, type GraphBufferState } from './graphLatency';
 import { createStabilityState, tickStability, type StabilityState } from './stabilityMonitor';
 
-const TICK_MS = 200;
+const TICK_MS = 50;
 
 export interface GameLoopState {
   graph: GraphBufferState;
@@ -25,6 +26,7 @@ export function useGameLoop(
    *  buffer evaluation and the stability fail-timer move in lockstep with the
    *  HUD's playback mode (Normal/Stepping/Manual). */
   getNow: () => number = () => Date.now(),
+  media: MediaConfig = DEFAULT_MEDIA_CONFIG,
 ): GameLoopState {
   const [clockTimestampMs, setClockTimestampMs] = useState(() => getNow());
   const getNowRef = useRef(getNow);
@@ -32,8 +34,8 @@ export function useGameLoop(
   const lastTickClockRef = useRef(clockTimestampMs);
 
   const graph = useMemo(
-    () => computeGraphLatency(nodes, edges, domainSizeMs, clockTimestampMs),
-    [nodes, edges, domainSizeMs, clockTimestampMs],
+    () => computeGraphLatency(nodes, edges, domainSizeMs, clockTimestampMs, media),
+    [nodes, edges, domainSizeMs, clockTimestampMs, media],
   );
   const graphRef = useRef(graph);
   graphRef.current = graph;

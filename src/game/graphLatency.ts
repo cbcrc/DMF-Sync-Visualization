@@ -33,7 +33,8 @@ import type {
 } from '../types';
 import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, oldestReadableAgeMs, statusSeverity } from '../engine/ringBufferEngine';
 import {
-  DEFAULT_GRAIN_RATE,
+  DEFAULT_MEDIA_CONFIG,
+  type MediaConfig,
   grainDurationMs,
   grainIndexToRingBufferIndex,
   grainRateForTrack,
@@ -41,7 +42,7 @@ import {
   timestampToGrainIndex,
 } from '../engine/mxlGrainIndex';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
-import { freeRunningInputs, rewritesAsNewSource } from './syncInputs';
+import { LIVE_GROUP, inputGroupsFor, rewritesAsNewSource } from './syncInputs';
 
 /** MXL data-format track a flow carries — determines its grain rate (item #10.i). */
 export type Track = 'video' | 'audio' | 'data';
@@ -70,8 +71,10 @@ export interface InputReading {
 /** Per-node accumulated latency, before/after this node's own processing delay. */
 export interface NodeLatencyInfo {
   nodeId: string;
-  /** Lag (ms) of the aligned grain index this node reads — its slowest branch. */
+  /** Lag (ms) of the aligned grain index this node reads — its slowest branch (across sync groups, the latest group). */
   inputLatencyMs: number;
+  /** Aligned lag of each sync group (group number → ms); live inputs are not in any group. */
+  groupLagMs: Map<number, number>;
   /** Lag (ms) of this node's own published output flow head. */
   outputLatencyMs: number;
   /** What this node itself adds to the end-to-end latency: its own latency, a repeater's tail read, and the grain it reads behind its input's head. */
@@ -145,8 +148,8 @@ interface GraphNodeLike {
   inputSourceIds: (string | null)[];
   /** Audio-only / video-only functions read and write that track regardless of wiring. */
   fixedTrack?: Track;
-  /** Mixer inputs set to read free of the sync point (see `freeRunningInputs`). */
-  ignoreSyncInputs?: number[];
+  /** Mixer sync group per input; 0 = live (see `inputGroupsFor`). */
+  inputGroups?: number[];
   inputCount: number;
   /** A source whose outputs are all the same track, each its own flow (e.g. the CG's two video outputs). */
   multiOutput: boolean;
@@ -172,7 +175,7 @@ function buildGraphNodes(
       latencyMs: n.data.latencyMs,
       inputCount: n.data.inputCount,
       multiOutput: n.data.inputCount === 0 && n.data.outputCount > 1 && (n.data.videoOnly ?? false),
-      ...(n.data.ignoreSyncInputs ? { ignoreSyncInputs: n.data.ignoreSyncInputs } : {}),
+      ...(n.data.inputGroups ? { inputGroups: n.data.inputGroups } : {}),
       inputSourceIds: new Array(n.data.inputCount).fill(null),
       ...(n.data.audioOnly ? { fixedTrack: 'audio' as const } : n.data.videoOnly ? { fixedTrack: 'video' as const } : {}),
     });
@@ -260,6 +263,7 @@ export function computeGraphLatency(
   edges: Edge[],
   domainSizeMs: number,
   timestampMs = Date.now(),
+  media: MediaConfig = DEFAULT_MEDIA_CONFIG,
 ): GraphBufferState {
   const byId = buildGraphNodes(nodes, edges);
   const branchByNodeId = new Map<string, BranchInfo>();
@@ -268,7 +272,7 @@ export function computeGraphLatency(
 
   // Reported at the top level as the domain's reference (video) grain clock —
   // individual reader inputs use their own track's grain rate (see below).
-  const grainRate = DEFAULT_GRAIN_RATE;
+  const grainRate = media.videoRate;
   const durationMs = grainDurationMs(grainRate);
   const grainCount = ringBufferLength(domainSizeMs, grainRate);
 
@@ -297,22 +301,34 @@ export function computeGraphLatency(
     const allParents = wired.map((w) => resolveBranch(w.p));
     visiting.delete(id);
 
-    // Inputs set to ignore sync are read at their own write head, so they
-    // neither set the aligned index nor hold this node back.
-    const free = freeRunningInputs(node, wired.map((w) => w.index));
-    const parents = allParents.filter((_, i) => !free.has(wired[i].index));
-
-    // Sync Group alignment (§2.D): all inputs are read at the slowest branch's
-    // grain index, so this node's own output inherits that lag.
-    const alignedLagMs = parents.length > 0 ? Math.max(...parents.map((p) => p.lagMs)) : 0;
-    const maxStalenessMs = parents.reduce((worst, p) => Math.max(worst, alignedLagMs - p.lagMs), 0);
-    const wasSynced = parents.length > 1 && new Set(parents.map((p) => p.lagMs)).size > 1;
+    // Live inputs are read at their own write head, so they neither set an
+    // aligned index nor hold this node back. The rest are split into sync
+    // groups (like MXL flow synchronization groups): each group is read at its
+    // own slowest member, and the node can only write once every group is ready.
+    const groupOf = inputGroupsFor(node, wired.map((w) => w.index));
+    const lagsByGroup = new Map<number, number[]>();
+    const parents: BranchInfo[] = [];
+    wired.forEach((w, i) => {
+      const g = groupOf.get(w.index)!;
+      if (g === LIVE_GROUP) return;
+      parents.push(allParents[i]);
+      if (!lagsByGroup.has(g)) lagsByGroup.set(g, []);
+      lagsByGroup.get(g)!.push(allParents[i].lagMs);
+    });
+    const groupLagMs = new Map([...lagsByGroup].map(([g, lags]) => [g, Math.max(...lags)]));
+    const alignedLagMs = groupLagMs.size > 0 ? Math.max(...groupLagMs.values()) : 0;
+    let maxStalenessMs = 0;
+    let wasSynced = false;
+    for (const [g, lags] of lagsByGroup) {
+      maxStalenessMs = Math.max(maxStalenessMs, groupLagMs.get(g)! - Math.min(...lags));
+      if (lags.length > 1 && new Set(lags).size > 1) wasSynced = true;
+    }
 
     const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
     // A Grain Repeater reads the oldest grain still retained (the far end of
     // the ring from the write head) and writes it into a fresh ring with the
     // same grain index, so its output head sits that far behind its input's.
-    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? oldestReadableAgeMs(domainSizeMs) : 0;
+    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? oldestReadableAgeMs(domainSizeMs, media.videoRate) : 0;
     // A reader can only consume the grain behind its input's write head, so a
     // function (other than a repeater, which already counts it in `tailReadMs`,
     // or a delay, which restarts; sinks write nothing) writes that same grain index one grain
@@ -323,7 +339,7 @@ export function computeGraphLatency(
         .slice()
         .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
       const track: Track = node.fixedTrack ?? (firstInbound ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo) : 'video');
-      readBehindMs = READ_BEHIND_WRITE_GRAINS * grainDurationMs(grainRateForTrack(track));
+      readBehindMs = READ_BEHIND_WRITE_GRAINS * grainDurationMs(grainRateForTrack(track, media));
     }
     const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs + readBehindMs;
 
@@ -335,6 +351,7 @@ export function computeGraphLatency(
     latencyByNodeId.set(id, {
       nodeId: id,
       inputLatencyMs: alignedLagMs,
+      groupLagMs,
       outputLatencyMs: lagMs,
       ownLatencyMs: node.latencyMs + tailReadMs + readBehindMs,
       workloadLatencyMs: workloadMs,
@@ -363,6 +380,7 @@ export function computeGraphLatency(
       latencyByNodeId.set(n.id, {
         ...info,
         inputLatencyMs: groupLagMs,
+        groupLagMs: new Map([[1, groupLagMs]]),
         outputLatencyMs: groupLagMs + n.data.latencyMs,
         workloadLatencyMs: info.workloadLatencyMs + (groupLagMs - info.inputLatencyMs),
         maxStalenessMs: Math.max(...parentLags.map((l) => groupLagMs - l)),
@@ -382,7 +400,7 @@ export function computeGraphLatency(
     if (!graphNode || !info) continue;
 
     const readings: InputReading[] = [];
-    const freeInputs = freeRunningInputs(
+    const groupOf = inputGroupsFor(
       graphNode,
       graphNode.inputSourceIds.flatMap((p, i) => (p ? [i] : [])),
     );
@@ -392,8 +410,8 @@ export function computeGraphLatency(
 
       // The flow's published head carries the newest grain index it has
       // written; this reader asks for the aligned (slowest-branch) index.
-      const isFree = freeInputs.has(inputIndex);
-      const alignedLagMs = isFree ? branch.lagMs : info.inputLatencyMs;
+      const group = groupOf.get(inputIndex) ?? 1;
+      const alignedLagMs = group === LIVE_GROUP ? branch.lagMs : (info.groupLagMs.get(group) ?? info.inputLatencyMs);
       const stalenessMs = alignedLagMs - branch.lagMs;
 
       // This input's own track/grain rate (item #10.i): audio gets a much
@@ -401,7 +419,7 @@ export function computeGraphLatency(
       // (`mxlGrainIndex.ts`) but with its own geometry.
       const inputEdge = edgeByTargetIndex.get(`${node.id}:${inputIndex}`);
       const track: Track = graphNode.fixedTrack ?? (inputEdge ? trackForEdge(inputEdge, byId, inboundEdgesByTarget, trackMemo) : 'video');
-      const trackRate = grainRateForTrack(track);
+      const trackRate = grainRateForTrack(track, media);
       const trackDurationMs = grainDurationMs(trackRate);
       const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
 
@@ -456,13 +474,14 @@ export function computeGraphLatency(
       // reading both a video and an audio sibling — the audio input's view
       // should show *which slice* of its much finer grains lines up with
       // the one video grain being read at the same aligned instant.
-      const videoSibling = readings.find((r) => r.track === 'video');
+      // Only inputs in the same sync group line up with each other.
+      const videoSibling = readings.find((r) => r.track === 'video' && groupOf.get(r.inputIndex) !== LIVE_GROUP);
       if (videoSibling) {
         const videoGrainMs = videoSibling.buffer.grainDurationMs;
         const alignedInstantMs = videoSibling.buffer.requestedTimestampMs;
         const startMs = Math.floor(alignedInstantMs / videoGrainMs) * videoGrainMs;
         readings.forEach((r) => {
-          if (r.track === 'audio' && !freeInputs.has(r.inputIndex)) {
+          if (r.track === 'audio' && groupOf.get(r.inputIndex) === groupOf.get(videoSibling.inputIndex)) {
             r.alignmentSpanMs = { startMs, endMs: startMs + videoGrainMs };
           }
         });
@@ -512,7 +531,7 @@ export function computeGraphLatency(
       const flowKey = flowKeyOf(node.id, track, `out-${index}`, graphNode.multiOutput);
       if (seenFlows.has(flowKey)) continue;
       seenFlows.add(flowKey);
-      const trackRate = grainRateForTrack(track);
+      const trackRate = grainRateForTrack(track, media);
       const trackDurationMs = grainDurationMs(trackRate);
       const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);

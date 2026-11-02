@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Background,
   Controls,
   MiniMap,
-  Panel,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -51,6 +51,16 @@ export interface FlowCanvasProps {
   inputsByNodeId: Map<string, InputReading[]>;
   /** Every writer flow's ring with its readers, drawn as a linear strip above each writer node. */
   writerRings: WriterRing[];
+  /** Whether the "Add media function" palette is shown; it is minimized from its header and restored from the pane toolbar. */
+  /** Element (inside a dock) the Add media function palette is rendered into; null hides it. */
+  /** Element (a full-width bar above the docks) the toolbar is rendered into. */
+  toolbarHost?: HTMLElement | null;
+  paletteHost?: HTMLElement | null;
+  onMinimizePalette?: () => void;
+  /** Pane show/hide buttons, drawn at the right of the canvas toolbar. */
+  paneToolbar?: ReactNode;
+  /** Dropdown menus (canvas, workload config, playback) shown first in the left section. */
+  menus?: ReactNode;
   /** Reader function whose node, inbound links and ring pointers are highlighted (null = none). */
   focusedNodeId: string | null;
   /** Called when a node or a ring pointer is clicked (id), or the empty canvas is (null). */
@@ -86,8 +96,6 @@ export interface FlowCanvasProps {
    * undo the last step) — this component owns the grain-flow state they act on.
    */
   onManualStepReady?: (stepToNextRead: () => void, stepBack: () => void) => void;
-  /** Saves the current canvas under the given name; returns false if storage failed. */
-  onSaveScenario?: (title: string) => boolean;
 }
 
 function FlowCanvasInner({
@@ -97,6 +105,11 @@ function FlowCanvasInner({
   inputsByNodeId,
   writerRings,
   focusedNodeId,
+  toolbarHost = null,
+  paletteHost = null,
+  onMinimizePalette,
+  paneToolbar,
+  menus,
   onFocusNode,
   initialGraph,
   graphLoadKey,
@@ -108,7 +121,6 @@ function FlowCanvasInner({
   onParkedInputsChange,
   stepClockBy,
   onManualStepReady,
-  onSaveScenario,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
   const storeApi = useStoreApi();
@@ -373,27 +385,19 @@ function FlowCanvasInner({
   );
 
   const handleSyncInputChange = useCallback(
-    (nodeId: string, inputIndex: number, ignoreSync: boolean) => {
+    (nodeId: string, inputIndex: number, group: number) => {
       pushHistory();
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id !== nodeId) return n;
-          const rest = (n.data.ignoreSyncInputs ?? []).filter((i) => i !== inputIndex);
-          const next = ignoreSync ? [...rest, inputIndex].sort((a, b) => a - b) : rest;
-          return { ...n, data: { ...n.data, ignoreSyncInputs: next.length > 0 ? next : undefined } };
+          const groups = Array.from({ length: n.data.inputCount }, (_, i) => n.data.inputGroups?.[i] ?? 1);
+          groups[inputIndex] = group;
+          return { ...n, data: { ...n.data, inputGroups: groups.every((g) => g === 1) ? undefined : groups } };
         }),
       );
     },
     [setNodes, pushHistory],
   );
-
-  const handleSaveScenario = useCallback(() => {
-    if (!onSaveScenario) return;
-    const title = window.prompt('Save scenario as (an existing name replaces it):');
-    if (title === null) return;
-    if (!title.trim()) return window.alert('Please enter a name.');
-    if (!onSaveScenario(title)) window.alert('Could not save: browser storage is full or unavailable.');
-  }, [onSaveScenario]);
 
   /** Switch a producer between video only, audio only, or both flows. */
   const handleOutputModeChange = useCallback(
@@ -520,6 +524,18 @@ function FlowCanvasInner({
     return map;
   }, [writerRings]);
   const labelByNodeId = useMemo(() => new Map(nodes.map((n) => [n.id, n.data.label])), [nodes]);
+  // Reader tag ("R1", "R2", ...) of each input, matching the pointer on the writer's ring.
+  const readerTagsByNode = useMemo(() => {
+    const map = new Map<string, Map<number, string>>();
+    for (const ring of writerRings) {
+      ring.readers.forEach((reader, i) => {
+        const tags = map.get(reader.readerNodeId) ?? new Map<number, string>();
+        tags.set(reader.inputIndex, `R${i + 1}`);
+        map.set(reader.readerNodeId, tags);
+      });
+    }
+    return map;
+  }, [writerRings]);
 
   const styledNodes = useMemo(
     () =>
@@ -548,13 +564,14 @@ function FlowCanvasInner({
             onOutputModeChange: handleOutputModeChange,
             rings: ringsByWriter.get(n.id),
             labelByNodeId,
+            readerTags: readerTagsByNode.get(n.id),
             focusedNodeId,
             showNow,
             onFocusNode,
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, handleLabelChange, handleSyncOutputsChange, handleSyncInputChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, onFocusNode, showNow],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, handleLabelChange, handleSyncOutputsChange, handleSyncInputChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, readerTagsByNode, onFocusNode, showNow],
   );
 
   // Item #9 follow-up: briefly highlight an edge's drawn path the moment a
@@ -613,7 +630,10 @@ function FlowCanvasInner({
         grains={grains}
         getNow={getNow}
       />
-      <Panel position="top-center" className="fc-toolbar" aria-label="Canvas toolbar">
+      {toolbarHost && createPortal(
+      <div className="fc-toolbar" role="toolbar" aria-label="Canvas toolbar">
+        <div className="fc-toolbar__section">
+        {menus}
         <button
           type="button"
           className="fc-toolbar__btn"
@@ -655,18 +675,22 @@ function FlowCanvasInner({
           className={`fc-toolbar__btn${showNow ? ' fc-toolbar__btn--on' : ''}`}
           onClick={() => setShowNow((v) => !v)}
           aria-pressed={showNow}
-          title="Show wall-clock now on each ring buffer"
+          title="Show now on each ring buffer"
         >
-          ◔ Now
+          ◔ Show Now
         </button>
-        {onSaveScenario && (
-          <button type="button" className="fc-toolbar__btn" onClick={handleSaveScenario} title="Save this canvas as a scenario">
-            💾 Save scenario
+        </div>
+        {paneToolbar && <div className="fc-toolbar__section fc-toolbar__section--panes">{paneToolbar}</div>}
+      </div>,
+      toolbarHost)}
+      {paletteHost && createPortal(
+      <div className="fc-palette">
+        <div className="fc-palette__header">
+          <div className="fc-palette__title">Add media function</div>
+          <button type="button" className="fc-palette__min" onClick={onMinimizePalette} aria-label="Minimize add media function" title="Minimize">
+            –
           </button>
-        )}
-      </Panel>
-      <Panel position="top-left" className="fc-palette">
-        <div className="fc-palette__title">Add media function</div>
+        </div>
         {PALETTE_GROUPS.map((group) => (
           <div key={group.id} className="fc-palette__group">
             <div className="fc-palette__group-title">{group.title}</div>
@@ -685,7 +709,8 @@ function FlowCanvasInner({
           only on the input whose slot was already overwritten (READ TOO LATE), and pales/wobbles
           (?) while an input waits on a not-yet-written grain
         </div>
-      </Panel>
+      </div>,
+      paletteHost)}
     </ReactFlow>
   );
 }

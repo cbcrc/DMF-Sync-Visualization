@@ -1,7 +1,7 @@
 {
   "name": "media-workload-education",
   "private": true,
-  "version": "0.2.261030",
+  "version": "0.2.261101",
   "type": "module",
   "scripts": {
     "dev": "vite",
