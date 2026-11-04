@@ -1,0 +1,252 @@
+{
+  "format": "dmf-sync-viz.scenarios",
+  "version": 1,
+  "exportedAt": "2026-11-04T15:07:38.246Z",
+  "scenarios": [
+    {
+      "title": "3 cams 3 audio 2 outs",
+      "description": "",
+      "domainSizeMs": 100,
+      "media": {
+        "frameRate": "50/1",
+        "resolution": "1920x1080",
+        "audioSampleRate": 48000
+      },
+      "nodes": [
+        {
+          "id": "input-1793804498668-1",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1109.9166572555273,
+            "y": 330.1904167026584
+          },
+          "data": {
+            "kind": "input",
+            "label": "Cam 1",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 1
+          }
+        },
+        {
+          "id": "output-1793804508036-2",
+          "type": "mediaFunction",
+          "position": {
+            "x": 2322.2555655182373,
+            "y": 553.6984043579719
+          },
+          "data": {
+            "kind": "output",
+            "label": "PGM OUT",
+            "latencyMs": 0,
+            "inputCount": 2,
+            "outputCount": 0
+          }
+        },
+        {
+          "id": "input-1793804498668-1-copy-1793804521686-0",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1107.9178331773114,
+            "y": 448.04189548179016
+          },
+          "data": {
+            "kind": "input",
+            "label": "Cam 2",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 1
+          }
+        },
+        {
+          "id": "input-1793804498668-1-copy-1793804525609-0",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1107.9677322248624,
+            "y": 561.7959280093887
+          },
+          "data": {
+            "kind": "input",
+            "label": "Cam 3 - REM",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 2
+          }
+        },
+        {
+          "id": "input-1793804552071-3",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1110.0594016211417,
+            "y": 739.6007794716637
+          },
+          "data": {
+            "kind": "input",
+            "label": "Studio Mic 1",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 1,
+            "audioOnly": true
+          }
+        },
+        {
+          "id": "technical-1793804575891-4",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1461.7576554922684,
+            "y": 543.265597200218
+          },
+          "data": {
+            "kind": "technical",
+            "label": "Colour Corrector 4",
+            "latencyMs": 6,
+            "inputCount": 1,
+            "outputCount": 1,
+            "videoOnly": true
+          }
+        },
+        {
+          "id": "video-mixer-1793804595016-5",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1846.2354793756615,
+            "y": 360.2471152462557
+          },
+          "data": {
+            "kind": "editorial",
+            "label": "Video Mixer 5",
+            "latencyMs": 20,
+            "inputCount": 3,
+            "outputCount": 1,
+            "videoOnly": true
+          }
+        },
+        {
+          "id": "audio-mixer-1793804621845-6",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1868.089309998362,
+            "y": 663.2881948804252
+          },
+          "data": {
+            "kind": "editorial",
+            "label": "Audio Mixer 6",
+            "latencyMs": 8,
+            "inputCount": 3,
+            "outputCount": 1,
+            "audioOnly": true,
+            "inputGroups": [
+              0,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "output-1793804508036-2-copy-1793804640047-0",
+          "type": "mediaFunction",
+          "position": {
+            "x": 2322.305464565788,
+            "y": 707.4025378380196
+          },
+          "data": {
+            "kind": "output",
+            "label": "IFB OUT",
+            "latencyMs": 0,
+            "inputCount": 1,
+            "outputCount": 0,
+            "audioOnly": true
+          }
+        },
+        {
+          "id": "input-1793804552071-3-copy-1793804681764-0",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1110.1093006686924,
+            "y": 850.2817273106124
+          },
+          "data": {
+            "kind": "input",
+            "label": "Studio Mic 2",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 1,
+            "audioOnly": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-input-1793804498668-1-copy-1793804525609-0-out-0-technical-1793804575891-4-in-0-1793804581036",
+          "source": "input-1793804498668-1-copy-1793804525609-0",
+          "target": "technical-1793804575891-4",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-technical-1793804575891-4-out-0-video-mixer-1793804595016-5-in-2-1793804601361",
+          "source": "technical-1793804575891-4",
+          "target": "video-mixer-1793804595016-5",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-2"
+        },
+        {
+          "id": "e-input-1793804498668-1-copy-1793804521686-0-out-0-video-mixer-1793804595016-5-in-1-1793804603705",
+          "source": "input-1793804498668-1-copy-1793804521686-0",
+          "target": "video-mixer-1793804595016-5",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-1"
+        },
+        {
+          "id": "e-input-1793804498668-1-out-0-video-mixer-1793804595016-5-in-0-1793804606109",
+          "source": "input-1793804498668-1",
+          "target": "video-mixer-1793804595016-5",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-video-mixer-1793804595016-5-out-0-output-1793804508036-2-in-0-1793804608037",
+          "source": "video-mixer-1793804595016-5",
+          "target": "output-1793804508036-2",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-input-1793804498668-1-copy-1793804525609-0-out-1-audio-mixer-1793804621845-6-in-0-1793804628423",
+          "source": "input-1793804498668-1-copy-1793804525609-0",
+          "target": "audio-mixer-1793804621845-6",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-input-1793804552071-3-out-1-audio-mixer-1793804621845-6-in-1-1793804630635",
+          "source": "input-1793804552071-3",
+          "target": "audio-mixer-1793804621845-6",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-1"
+        },
+        {
+          "id": "e-input-1793804552071-3-copy-1793804681764-0-out-1-audio-mixer-1793804621845-6-in-2-1793804688484",
+          "source": "input-1793804552071-3-copy-1793804681764-0",
+          "target": "audio-mixer-1793804621845-6",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-2"
+        },
+        {
+          "id": "e-audio-mixer-1793804621845-6-out-1-output-1793804508036-2-copy-1793804640047-0-in-0-1793804694087",
+          "source": "audio-mixer-1793804621845-6",
+          "target": "output-1793804508036-2-copy-1793804640047-0",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-audio-mixer-1793804621845-6-out-1-output-1793804508036-2-in-1-1793804696622",
+          "source": "audio-mixer-1793804621845-6",
+          "target": "output-1793804508036-2",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-1"
+        }
+      ]
+    }
+  ]
+}

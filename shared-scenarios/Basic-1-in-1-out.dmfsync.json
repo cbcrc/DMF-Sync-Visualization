@@ -1,0 +1,87 @@
+{
+  "format": "dmf-sync-viz.scenarios",
+  "version": 1,
+  "exportedAt": "2026-11-04T15:17:25.064Z",
+  "scenarios": [
+    {
+      "title": "Basic 1 in 1 out",
+      "description": "",
+      "domainSizeMs": 100,
+      "media": {
+        "frameRate": "50/1",
+        "resolution": "1920x1080",
+        "audioSampleRate": 48000
+      },
+      "nodes": [
+        {
+          "id": "input-1793804933728-7",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1349.5675870067685,
+            "y": 543.6607559939102
+          },
+          "data": {
+            "kind": "input",
+            "label": "Input 1",
+            "latencyMs": 0,
+            "inputCount": 0,
+            "outputCount": 2
+          }
+        },
+        {
+          "id": "output-1793804951436-9",
+          "type": "mediaFunction",
+          "position": {
+            "x": 2270.814122209251,
+            "y": 593.9382259991851
+          },
+          "data": {
+            "kind": "output",
+            "label": "Output 1",
+            "latencyMs": 0,
+            "inputCount": 2,
+            "outputCount": 0
+          }
+        },
+        {
+          "id": "generic-technical-1793805381435-10",
+          "type": "mediaFunction",
+          "position": {
+            "x": 1808.9655546607553,
+            "y": 517.7881800951825
+          },
+          "data": {
+            "kind": "technical",
+            "label": "Generic Video Proc",
+            "latencyMs": 6,
+            "inputCount": 1,
+            "outputCount": 1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-input-1793804933728-7-out-0-generic-technical-1793805381435-10-in-0-1793805387744",
+          "source": "input-1793804933728-7",
+          "target": "generic-technical-1793805381435-10",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-generic-technical-1793805381435-10-out-0-output-1793804951436-9-in-0-1793805389821",
+          "source": "generic-technical-1793805381435-10",
+          "target": "output-1793804951436-9",
+          "sourceHandle": "out-0",
+          "targetHandle": "in-0"
+        },
+        {
+          "id": "e-input-1793804933728-7-out-1-output-1793804951436-9-in-1-1793805392206",
+          "source": "input-1793804933728-7",
+          "target": "output-1793804951436-9",
+          "sourceHandle": "out-1",
+          "targetHandle": "in-1"
+        }
+      ]
+    }
+  ]
+}
