@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildScenarioFile,
   loadSavedScenarios,
+  mergeImported,
+  parseScenarioFile,
   loadWorkingGraph,
   persistSavedScenarios,
   persistWorkingGraph,
@@ -65,5 +68,65 @@ describe('scenarioStorage', () => {
     expect(load({ ignoreSyncInputs: [1] })).toEqual([1, 0]);
     expect(load({ inputGroups: [1, 2] })).toEqual([1, 2]);
     expect(load({})).toBeUndefined();
+  });
+});
+
+describe('scenario export/import', () => {
+  it('round-trips through the file format without overwriting same-named scenarios', () => {
+    const { list } = upsertScenario([], { title: 'Mine', domainSizeMs: 80, nodes: initialNodes, edges: initialEdges }, 1);
+    const parsed = parseScenarioFile(JSON.stringify(buildScenarioFile(list)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const merged = mergeImported(list, parsed.scenarios, 2);
+    expect(merged.map((s) => s.title)).toEqual(['Mine', 'Mine (2)']);
+    expect(new Set(merged.map((s) => s.id)).size).toBe(2);
+    expect(merged[1].edges).toHaveLength(1);
+  });
+
+  it('rejects foreign or newer files and ignores unknown fields', () => {
+    expect(parseScenarioFile('nope').ok).toBe(false);
+    expect(parseScenarioFile('{"format":"other"}').ok).toBe(false);
+    expect(parseScenarioFile(JSON.stringify({ format: 'dmf-sync-viz.scenarios', version: 99, scenarios: [] })).ok).toBe(false);
+    const ok = parseScenarioFile(
+      JSON.stringify({
+        format: 'dmf-sync-viz.scenarios',
+        version: 1,
+        future: true,
+        scenarios: [{ title: 'X', domainSizeMs: 50, nodes: initialNodes, edges: initialEdges, extra: 1 }],
+      }),
+    );
+    expect(ok.ok).toBe(true);
+  });
+});
+
+describe('scenario media format', () => {
+  const media = { videoRate: { numerator: 60000, denominator: 1001 }, resolution: '3840x2160', audioSampleRate: 96000 };
+
+  it('travels through storage, export and import', () => {
+    const { list } = upsertScenario([], { title: 'UHD', domainSizeMs: 80, media, nodes: initialNodes, edges: initialEdges }, 1);
+    const storage = memoryStorage();
+    persistSavedScenarios(storage, list);
+    expect(loadSavedScenarios(storage)[0].media).toEqual(media);
+
+    const file = buildScenarioFile(list);
+    expect(file.scenarios[0].media).toEqual({ frameRate: '60000/1001', resolution: '3840x2160', audioSampleRate: 96000 });
+    const parsed = parseScenarioFile(JSON.stringify(file));
+    expect(parsed.ok && parsed.scenarios[0].media).toEqual(media);
+  });
+
+  it('leaves media unset for older files without it', () => {
+    const { list } = upsertScenario([], { title: 'Old', domainSizeMs: 80, nodes: initialNodes, edges: initialEdges }, 1);
+    const parsed = parseScenarioFile(JSON.stringify(buildScenarioFile(list)));
+    expect(parsed.ok && parsed.scenarios[0].media).toBeUndefined();
+  });
+});
+
+describe('shared-scenarios folder', () => {
+  it('only contains files that import cleanly', () => {
+    const files = import.meta.glob('../../shared-scenarios/*.dmfsync.json', { query: '?raw', import: 'default', eager: true });
+    for (const [name, text] of Object.entries(files)) {
+      const parsed = parseScenarioFile(text as string);
+      expect(parsed.ok, `${name}: ${parsed.ok ? '' : parsed.error}`).toBe(true);
+    }
   });
 });

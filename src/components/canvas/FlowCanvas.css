@@ -143,7 +143,7 @@
 .fc-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100%;
   gap: 20px;
   padding: 0;
@@ -158,8 +158,7 @@
 
 /* Pane selection: right-hand section, divided from the editing tools. */
 .fc-toolbar__section--panes {
-  padding-left: 20px;
-  border-left: 1px solid var(--ui-border);
+  margin-left: 0;
 }
 
 .fc-toolbar__btn {
@@ -241,6 +240,9 @@
   align-items: center;
   align-self: stretch;
   gap: 2px;
+  padding: 4px 10px 3px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
 }
 
 .fc-toolbar__buttons {

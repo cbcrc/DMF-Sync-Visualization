@@ -1,10 +1,11 @@
 import './PaneToolbar.css';
 
-export type PaneId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help';
+export type PaneId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help' | 'workload';
 
 const PANES: { id: PaneId; label: string }[] = [
   { id: 'palette', label: 'Add Function' },
   { id: 'playback', label: 'Playback' },
+  { id: 'workload', label: 'Workload Config' },
   { id: 'controls', label: 'Status' },
   { id: 'clock', label: 'Clock' },
   { id: 'rings', label: 'Ring Buffers' },

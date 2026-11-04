@@ -6,7 +6,7 @@ const inDock = (l: typeof DEFAULT_LAYOUT, side: string) => l.order.filter((id) =
 describe('movePane', () => {
   it('reorders within a dock', () => {
     const l = movePane(DEFAULT_LAYOUT, 'controls', 'left', 'palette');
-    expect(inDock(l, 'left')).toEqual(['controls', 'palette', 'playback']);
+    expect(inDock(l, 'left')).toEqual(['controls', 'palette', 'playback', 'workload']);
   });
 
   it('moves to another dock before a given pane, or last when none', () => {

@@ -97,9 +97,8 @@ export function RingBufferPanel({
       )}
       {writers.map((ring) => {
         const writerLabel = labelByNodeId.get(ring.writerNodeId) ?? ring.writerNodeId;
-        const holdsFocus = ring.readers.some((r) => r.readerNodeId === focusedNodeId);
         return (
-          <div key={ring.key} className={`rb-panel__group${holdsFocus ? ' rb-panel__group--focused' : ''}`}>
+          <div key={ring.key} className="rb-panel__group">
             <div className="rb-panel__group-title">
               {writerLabel} <span className="rb-panel__track">{ring.track}</span>
             </div>

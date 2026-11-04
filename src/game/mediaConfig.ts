@@ -24,17 +24,34 @@ export const SAMPLE_RATES = [44100, 48000, 96000];
 
 export const rateId = (r: GrainRate) => `${r.numerator}/${r.denominator}`;
 
+/** Portable form of a MediaConfig (frame rate as "num/den"), used in storage and shared files. */
+export interface MediaJson {
+  frameRate: string;
+  resolution: string;
+  audioSampleRate: number;
+}
+
+export const mediaToJson = (c: MediaConfig): MediaJson => ({
+  frameRate: rateId(c.videoRate),
+  resolution: c.resolution,
+  audioSampleRate: c.audioSampleRate,
+});
+
+/** Reads untrusted media JSON; unknown values fall back to defaults. Undefined if it isn't an object. */
+export function mediaFromJson(raw: unknown): MediaConfig | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  const frame = FRAME_RATES.find((f) => f.id === r.frameRate);
+  return {
+    videoRate: frame?.rate ?? DEFAULT_MEDIA_CONFIG.videoRate,
+    resolution: RESOLUTIONS.includes(r.resolution as string) ? (r.resolution as string) : DEFAULT_MEDIA_CONFIG.resolution,
+    audioSampleRate: SAMPLE_RATES.includes(r.audioSampleRate as number) ? (r.audioSampleRate as number) : DEFAULT_MEDIA_CONFIG.audioSampleRate,
+  };
+}
+
 export function loadMediaConfig(storage: Pick<Storage, 'getItem'>): MediaConfig {
   try {
-    const raw: unknown = JSON.parse(storage.getItem(MEDIA_CONFIG_KEY) ?? 'null');
-    if (typeof raw !== 'object' || raw === null) return DEFAULT_MEDIA_CONFIG;
-    const r = raw as Record<string, unknown>;
-    const frame = FRAME_RATES.find((f) => f.id === r.frameRate);
-    return {
-      videoRate: frame?.rate ?? DEFAULT_MEDIA_CONFIG.videoRate,
-      resolution: RESOLUTIONS.includes(r.resolution as string) ? (r.resolution as string) : DEFAULT_MEDIA_CONFIG.resolution,
-      audioSampleRate: SAMPLE_RATES.includes(r.audioSampleRate as number) ? (r.audioSampleRate as number) : DEFAULT_MEDIA_CONFIG.audioSampleRate,
-    };
+    return mediaFromJson(JSON.parse(storage.getItem(MEDIA_CONFIG_KEY) ?? 'null')) ?? DEFAULT_MEDIA_CONFIG;
   } catch {
     return DEFAULT_MEDIA_CONFIG;
   }
@@ -42,10 +59,7 @@ export function loadMediaConfig(storage: Pick<Storage, 'getItem'>): MediaConfig 
 
 export function persistMediaConfig(storage: Pick<Storage, 'setItem'>, config: MediaConfig): void {
   try {
-    storage.setItem(
-      MEDIA_CONFIG_KEY,
-      JSON.stringify({ frameRate: rateId(config.videoRate), resolution: config.resolution, audioSampleRate: config.audioSampleRate }),
-    );
+    storage.setItem(MEDIA_CONFIG_KEY, JSON.stringify(mediaToJson(config)));
   } catch {
     // Storage full or unavailable: the setting just won't survive a reload.
   }

@@ -259,3 +259,15 @@
   opacity: 0.9;
   pointer-events: none;
 }
+
+/* Light theme: the hatched "gone" areas were fixed dark colours; use light equivalents. */
+:root[data-theme='light'] .ws__overwritten {
+  background: repeating-linear-gradient(135deg, #fde4e4, #fde4e4 3px, #f8cccc 3px, #f8cccc 6px);
+  border-color: rgba(220, 38, 38, 0.6);
+  color: #b91c1c;
+}
+
+:root[data-theme='light'] .ws__cell--unreadable,
+:root[data-theme='light'] .ws__bar--unreadable {
+  background: repeating-linear-gradient(135deg, #e4e4e7, #e4e4e7 3px, #d4d4d8 3px, #d4d4d8 6px);
+}

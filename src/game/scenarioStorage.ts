@@ -5,6 +5,8 @@
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionKind } from '../types';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
+import type { MediaConfig } from '../engine/mxlGrainIndex';
+import { mediaFromJson, mediaToJson, type MediaJson } from './mediaConfig';
 import type { Scenario } from './scenarios';
 
 export const SAVED_SCENARIOS_KEY = 'dmf-sync-viz:scenarios:v1';
@@ -109,6 +111,12 @@ function writeJson(storage: StorageLike, key: string, value: unknown): boolean {
   }
 }
 
+/** `{ media }` when the raw value is a valid media object, else nothing (so the key is omitted). */
+const mediaField = (raw: unknown): { media?: MediaConfig } => {
+  const media = mediaFromJson(raw);
+  return media ? { media } : {};
+};
+
 export function loadSavedScenarios(storage: StorageLike): SavedScenario[] {
   const raw = readJson(storage, SAVED_SCENARIOS_KEY);
   if (!Array.isArray(raw)) return [];
@@ -124,6 +132,7 @@ export function loadSavedScenarios(storage: StorageLike): SavedScenario[] {
       description: typeof item.description === 'string' ? item.description : '',
       domainSizeMs: item.domainSizeMs,
       ...graph,
+      ...mediaField(item.media),
       builtIn: false,
       savedAt: isNum(item.savedAt) ? item.savedAt : 0,
     });
@@ -132,7 +141,11 @@ export function loadSavedScenarios(storage: StorageLike): SavedScenario[] {
 }
 
 export function persistSavedScenarios(storage: StorageLike, scenarios: SavedScenario[]): boolean {
-  return writeJson(storage, SAVED_SCENARIOS_KEY, scenarios);
+  return writeJson(
+    storage,
+    SAVED_SCENARIOS_KEY,
+    scenarios.map(({ media, ...rest }) => (media ? { ...rest, media: mediaToJson(media) } : rest)),
+  );
 }
 
 /**
@@ -141,7 +154,7 @@ export function persistSavedScenarios(storage: StorageLike, scenarios: SavedScen
  */
 export function upsertScenario(
   existing: SavedScenario[],
-  input: { title: string; description?: string; domainSizeMs: number; nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] },
+  input: { title: string; description?: string; domainSizeMs: number; media?: MediaConfig; nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] },
   now: number = Date.now(),
 ): { list: SavedScenario[]; saved: SavedScenario } {
   const title = input.title.trim() || 'Untitled scenario';
@@ -153,6 +166,7 @@ export function upsertScenario(
     description: input.description?.trim() ?? match?.description ?? '',
     domainSizeMs: input.domainSizeMs,
     ...graph,
+    ...(input.media ? { media: input.media } : {}),
     builtIn: false,
     savedAt: now,
   };
@@ -171,4 +185,98 @@ export function loadWorkingGraph(storage: StorageLike): WorkingGraph | null {
 export function persistWorkingGraph(storage: StorageLike, working: WorkingGraph): boolean {
   const graph = sanitizeGraph(working.nodes, working.edges) ?? { nodes: [], edges: [] };
   return writeJson(storage, WORKING_GRAPH_KEY, { ...working, ...graph });
+}
+
+// ---- Sharing: export / import as a versioned JSON file ----
+
+export const SCENARIO_FILE_FORMAT = 'dmf-sync-viz.scenarios';
+/** Bump only for changes older readers can't handle; additive fields don't need it. */
+export const SCENARIO_FILE_VERSION = 1;
+
+export interface ScenarioFile {
+  format: typeof SCENARIO_FILE_FORMAT;
+  version: number;
+  exportedAt: string;
+  scenarios: {
+    title: string;
+    description: string;
+    domainSizeMs: number;
+    media?: MediaJson;
+    nodes: Node<MediaFunctionNodeData>[];
+    edges: Edge[];
+  }[];
+}
+
+/** A scenario as read from a file: the same, but with media already parsed. */
+export type ImportedScenario = Omit<ScenarioFile['scenarios'][number], 'media'> & { media?: MediaConfig };
+
+/** Builds the shareable file contents. Always a list, so one scenario or many use one shape. */
+export function buildScenarioFile(scenarios: SavedScenario[], now: Date = new Date()): ScenarioFile {
+  return {
+    format: SCENARIO_FILE_FORMAT,
+    version: SCENARIO_FILE_VERSION,
+    exportedAt: now.toISOString(),
+    scenarios: scenarios.map(({ title, description, domainSizeMs, media, nodes, edges }) => ({
+      title,
+      description,
+      domainSizeMs,
+      ...(media ? { media: mediaToJson(media) } : {}),
+      nodes,
+      edges,
+    })),
+  };
+}
+
+export type ParsedScenarioFile = { ok: true; scenarios: ImportedScenario[] } | { ok: false; error: string };
+
+/** Validates untrusted file text. Unknown fields are ignored so newer files still load. */
+export function parseScenarioFile(text: string): ParsedScenarioFile {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { ok: false, error: 'That file is not valid JSON.' };
+  }
+  if (!isRecord(raw) || raw.format !== SCENARIO_FILE_FORMAT || !Array.isArray(raw.scenarios)) {
+    return { ok: false, error: 'That file is not a DMF Sync Visualizer scenario export.' };
+  }
+  if (!isNum(raw.version) || raw.version > SCENARIO_FILE_VERSION) {
+    return { ok: false, error: 'That file was made by a newer version of this tool. Update and try again.' };
+  }
+  const scenarios: ImportedScenario[] = [];
+  for (const item of raw.scenarios) {
+    if (!isRecord(item) || !isNum(item.domainSizeMs)) continue;
+    const graph = sanitizeGraph(item.nodes, item.edges);
+    if (!graph) continue;
+    scenarios.push({
+      title: (typeof item.title === 'string' ? item.title.trim().slice(0, 80) : '') || 'Imported scenario',
+      description: typeof item.description === 'string' ? item.description.slice(0, 400) : '',
+      domainSizeMs: Math.min(1000, Math.max(10, item.domainSizeMs)),
+      ...mediaField(item.media),
+      ...graph,
+    });
+  }
+  return scenarios.length > 0 ? { ok: true, scenarios } : { ok: false, error: 'No usable scenarios found in that file.' };
+}
+
+/** Adds imported scenarios as new entries; a clashing name gets " (2)", " (3)"… so nothing is overwritten. */
+export function mergeImported(
+  existing: SavedScenario[],
+  imported: ImportedScenario[],
+  now: number = Date.now(),
+): SavedScenario[] {
+  const taken = new Set(existing.map((s) => s.title.toLowerCase()));
+  const added = imported.map((s, i) => {
+    let title = s.title;
+    for (let n = 2; taken.has(title.toLowerCase()); n++) title = `${s.title} (${n})`;
+    taken.add(title.toLowerCase());
+    return {
+      ...s,
+      title,
+      id: `saved-${now}-${i}-${Math.floor(Math.random() * 1e6)}`,
+      builtIn: false as const,
+      savedAt: now,
+    };
+  });
+  return [...existing, ...added];
 }

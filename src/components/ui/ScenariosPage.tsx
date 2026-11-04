@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Scenario } from '../../game/scenarios';
 import { ringBufferLength } from '../../engine/mxlGrainIndex';
+import { buildScenarioFile } from '../../game/scenarioStorage';
+import type { SavedScenario } from '../../game/scenarioStorage';
 import './ScenariosPage.css';
 
 export interface ScenariosPageProps {
@@ -11,6 +13,8 @@ export interface ScenariosPageProps {
   /** Saves the current canvas under `title` (same name replaces). Returns false if storage failed. */
   onSave: (title: string, description: string) => boolean;
   onDelete: (id: string) => void;
+  /** Imports scenarios from the text of an exported file as new saved scenarios. */
+  onImport: (fileText: string) => { ok: boolean; text: string };
   onClose: () => void;
 }
 
@@ -57,10 +61,11 @@ function Thumbnail({ scenario }: { scenario: Scenario }) {
  * card, plus a form to save the current canvas. Rendered over the canvas, which
  * stays mounted underneath so nothing on it is lost by opening this page.
  */
-export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onDelete, onClose }: ScenariosPageProps) {
+export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onDelete, onImport, onClose }: ScenariosPageProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const existing = scenarios.find((s) => !s.builtIn && s.title.toLowerCase() === title.trim().toLowerCase());
 
   const handleSave = () => {
@@ -74,6 +79,23 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
       setTitle('');
       setDescription('');
     }
+  };
+
+  const download = (list: Scenario[], filename: string) => {
+    const file = buildScenarioFile(list as SavedScenario[]);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const fileName = (title: string) => `${title.replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || 'scenario'}.dmfsync.json`;
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setMessage(onImport(await file.text()));
+    if (fileInput.current) fileInput.current.value = '';
   };
 
   const builtIn = scenarios.filter((s) => s.builtIn);
@@ -93,6 +115,11 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
           <button type="button" className="scn-btn scn-btn--primary" onClick={() => onOpen(s.id)}>
             Open
           </button>
+          {!s.builtIn && (
+            <button type="button" className="scn-btn" onClick={() => download([s], fileName(s.title))}>
+              Export
+            </button>
+          )}
           {!s.builtIn && (
             <button
               type="button"
@@ -145,6 +172,34 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
             saved scenario replaces it.
           </p>
           {message && <p className={message.ok ? 'scn-msg' : 'scn-msg scn-msg--bad'}>{message.text}</p>}
+        </section>
+
+        <section className="scn-save" aria-label="Share scenarios">
+          <h3>Share</h3>
+          <div className="scn-save__fields">
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              onChange={(e) => void handleFile(e.target.files?.[0])}
+            />
+            <button type="button" className="scn-btn" onClick={() => fileInput.current?.click()}>
+              Import From File…
+            </button>
+            <button
+              type="button"
+              className="scn-btn"
+              disabled={saved.length === 0}
+              onClick={() => download(saved, 'dmf-sync-scenarios.dmfsync.json')}
+            >
+              Export All Saved
+            </button>
+          </div>
+          <p className="scn-save__hint">
+            Exports are JSON files you can send to others. Imported scenarios are added alongside yours; a name that
+            already exists gets a number added instead of overwriting.
+          </p>
         </section>
 
         <h3 className="scn-section">Saved by you</h3>

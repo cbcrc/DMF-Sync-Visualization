@@ -1,7 +1,7 @@
 // Where each pane is docked and in what order, and its persistence.
 
 export type DockSide = 'left' | 'bottom' | 'right';
-export type DockItemId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help';
+export type DockItemId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help' | 'workload';
 
 /** `order` is one global list; a dock shows its panes in that relative order. */
 export interface DockLayout {
@@ -10,8 +10,8 @@ export interface DockLayout {
 }
 
 export const DEFAULT_LAYOUT: DockLayout = {
-  docks: { palette: 'left', playback: 'left', controls: 'left', clock: 'right', rings: 'right', help: 'right', timeline: 'bottom' },
-  order: ['palette', 'playback', 'controls', 'clock', 'rings', 'timeline', 'help'],
+  docks: { palette: 'left', playback: 'left', workload: 'left', controls: 'left', clock: 'right', rings: 'right', help: 'right', timeline: 'bottom' },
+  order: ['palette', 'playback', 'workload', 'controls', 'clock', 'rings', 'timeline', 'help'],
 };
 
 export const DOCKS_KEY = 'dmf-sync-viz:docks:v2';

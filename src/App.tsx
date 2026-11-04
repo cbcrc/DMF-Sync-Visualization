@@ -18,6 +18,8 @@ import { ScenariosPage } from './components/ui/ScenariosPage';
 import { BUILTIN_SCENARIOS, DEFAULT_SCENARIO_ID, type Scenario } from './game/scenarios';
 import {
   loadSavedScenarios,
+  mergeImported,
+  parseScenarioFile,
   loadWorkingGraph,
   persistSavedScenarios,
   persistWorkingGraph,
@@ -27,6 +29,7 @@ import {
 import { useHashRoute } from './game/useHashRoute';
 import { groupReadingsByWriter } from './game/writerRings';
 import { PlaybackPane } from './components/ui/PlaybackPane';
+import { WorkloadPane } from './components/ui/WorkloadPane';
 import { ToolbarMenus } from './components/ui/ToolbarMenus';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { MediaConfigContext, loadMediaConfig, persistMediaConfig } from './game/mediaConfig';
@@ -42,6 +45,7 @@ const DOCK_CHEVRON: Record<DockSide, [string, string]> = {
 const PANE_NAMES: Record<DockItemId, string> = {
   palette: 'Add Function',
   playback: 'Playback',
+  workload: 'Workload Config',
   controls: 'Status',
   clock: 'Clock',
   rings: 'Ring Buffers',
@@ -176,6 +180,7 @@ function App() {
       if (!selected) return;
       setLevelId(id);
       setDomainSizeMs(selected.domainSizeMs);
+      if (selected.media) setMedia(selected.media);
       setInitialGraph({ nodes: selected.nodes, edges: selected.edges });
       setGraphLoadKey((k) => k + 1);
       resetStability();
@@ -191,6 +196,7 @@ function App() {
         title,
         description,
         domainSizeMs,
+        media,
         nodes: graphNodes,
         edges: graphEdges,
       });
@@ -199,7 +205,7 @@ function App() {
       setLevelId(saved.id);
       return true;
     },
-    [savedScenarios, domainSizeMs, graphNodes, graphEdges],
+    [savedScenarios, domainSizeMs, media, graphNodes, graphEdges],
   );
 
   const promptSaveScenario = () => {
@@ -213,6 +219,21 @@ function App() {
     (id: string) => {
       const list = savedScenarios.filter((s) => s.id !== id);
       if (persistSavedScenarios(localStorage, list)) setSavedScenarios(list);
+    },
+    [savedScenarios],
+  );
+
+  const handleImportScenarios = useCallback(
+    (text: string): { ok: boolean; text: string } => {
+      const parsed = parseScenarioFile(text);
+      if (!parsed.ok) return { ok: false, text: parsed.error };
+      const list = mergeImported(savedScenarios, parsed.scenarios);
+      if (!persistSavedScenarios(localStorage, list)) {
+        return { ok: false, text: 'Could not import: browser storage is full or unavailable.' };
+      }
+      setSavedScenarios(list);
+      const n = parsed.scenarios.length;
+      return { ok: true, text: `Imported ${n} scenario${n === 1 ? '' : 's'}.` };
     },
     [savedScenarios],
   );
@@ -248,6 +269,15 @@ function App() {
           showRealGrainIndex={showRealGrainIndex}
           onToggleRealGrainIndex={setShowRealGrainIndex}
         />
+    ),
+    workload: minimizedPanes.has('workload') ? null : (
+      <WorkloadPane
+        onMinimize={minimize('workload')}
+        domainSizeMs={domainSizeMs}
+        onDomainSizeChange={setDomainSizeMs}
+        media={media}
+        onMediaChange={setMedia}
+      />
     ),
     controls: minimizedPanes.has('controls') ? null : (
       <GameHud
@@ -397,10 +427,6 @@ function App() {
             onSaveScenario={promptSaveScenario}
             showOriginTimestamps={showOriginTimestamps}
             onToggleOriginTimestamps={setShowOriginTimestamps}
-            domainSizeMs={domainSizeMs}
-            onDomainSizeChange={setDomainSizeMs}
-            media={media}
-            onMediaChange={setMedia}
           />
           </>
         }
@@ -432,6 +458,7 @@ function App() {
           onOpen={handleSelectLevel}
           onSave={handleSaveScenario}
           onDelete={handleDeleteScenario}
+          onImport={handleImportScenarios}
           onClose={() => navigate('canvas')}
         />
       )}
@@ -441,7 +468,7 @@ function App() {
 }
 
 /** Panes shown on first visit: Add functions, Playback, Clock and Rings; the rest start minimized. Later visits restore the saved state. */
-const DEFAULT_MINIMIZED: PaneId[] = ['controls', 'timeline', 'help'];
-const ALL_PANES: PaneId[] = ['palette', 'playback', 'controls', 'clock', 'rings', 'timeline', 'help'];
+const DEFAULT_MINIMIZED: PaneId[] = ['workload', 'controls', 'timeline', 'help'];
+const ALL_PANES: PaneId[] = ['palette', 'playback', 'workload', 'controls', 'clock', 'rings', 'timeline', 'help'];
 
 export default App;

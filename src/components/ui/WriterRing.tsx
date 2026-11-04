@@ -311,7 +311,7 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
                 d={wedgePath(a - half + 0.02, a + half - 0.02)}
                 fill={slotColor(s, n)}
                 opacity={isHead ? 1 : retained ? Math.max(0.35, 1 - slotAge / (n + 1)) : 0.15}
-                stroke={isHead ? '#efb03a' : retained ? 'none' : 'rgba(255,255,255,0.35)'}
+                stroke={isHead ? '#efb03a' : retained ? 'none' : 'var(--ui-text-faint)'}
                 strokeWidth={isHead ? 1.5 : 1}
                 strokeDasharray={retained || isHead ? undefined : '2 2'}
               >
@@ -378,22 +378,22 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
 
         {!barOnly && (
           <>
-            <text x={CX} y={CY - 2} fill="#cfcfcf" fontSize="8" textAnchor="middle" fontWeight="700">
+            <text x={CX} y={CY - 2} style={{ fill: 'var(--ui-text-dim)' }} fontSize="8" textAnchor="middle" fontWeight="700">
               {audio ? `${samplesPerAudioBatch(media)} smp/ms` : `head slot ${ring.publishedSlot + 1}`}
             </text>
           </>
         )}
 
         {/* now bar: oldest retained grain (left) → now (right) */}
-        <text x={BAR_X0} y={barY - 8} fill="#cfcfcf" fontSize="7">
+        <text x={BAR_X0} y={barY - 8} style={{ fill: 'var(--ui-text-dim)' }} fontSize="7">
           oldest retained
         </text>
         <rect x={BAR_X0} y={barY} width={barX(ring.lagGrains) - BAR_X0} height={BAR_H} fill="rgba(76,175,80,0.3)" />
         <rect x={barX(ring.lagGrains)} y={barY} width={BAR_X1 - barX(ring.lagGrains)} height={BAR_H} fill="rgba(239,176,58,0.3)" />
-        <rect x={BAR_X0} y={barY} width={BAR_X1 - BAR_X0} height={BAR_H} fill="none" stroke="rgba(255,255,255,0.5)" />
+        <rect x={BAR_X0} y={barY} width={BAR_X1 - BAR_X0} height={BAR_H} fill="none" style={{ stroke: 'var(--ui-text-faint)' }} />
         <line x1={barX(ring.lagGrains)} y1={barY - 2} x2={barX(ring.lagGrains)} y2={barY + BAR_H + 2} stroke="#efb03a" strokeWidth="2" />
-        <line x1={BAR_X1} y1={barY - 4} x2={BAR_X1} y2={barY + BAR_H + 4} stroke="#ffffff" strokeWidth="2" />
-        <text x={BAR_X1} y={barY - 8} fill="#ffffff" fontSize="7" textAnchor="end" fontWeight="700">
+        <line x1={BAR_X1} y1={barY - 4} x2={BAR_X1} y2={barY + BAR_H + 4} style={{ stroke: 'var(--ui-text)' }} strokeWidth="2" />
+        <text x={BAR_X1} y={barY - 8} style={{ fill: 'var(--ui-text)' }} fontSize="7" textAnchor="end" fontWeight="700">
           now
         </text>
         <text x={barX(ring.lagGrains)} y={barY - 8} fill="#efb03a" fontSize="7" textAnchor="middle" fontWeight="700">

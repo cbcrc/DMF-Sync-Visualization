@@ -11,7 +11,7 @@ export function ThemeToggle() {
       title={`Switch to ${next} mode`}
       aria-label={`Switch to ${next} mode`}
     >
-      {theme === 'dark' ? '☀ Light' : '☾ Dark'}
+      {theme === 'dark' ? '☀ Light Mode' : '☾ Dark Mode'}
     </button>
   );
 }
