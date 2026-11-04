@@ -2,7 +2,7 @@ import { useMediaConfig } from '../../game/mediaConfig';
 import { grainIndexLabel, samplesPerAudioBatch, slotColor, slotHoldsGrainIndex } from '../../engine/mxlGrainIndex';
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import type { RingBufferStatus } from '../../types';
-import { readerTitle, type WriterRing as WriterRingModel } from '../../game/writerRings';
+import { readerTitle, videoGrainSpanOf, type WriterReader, type WriterRing as WriterRingModel } from '../../game/writerRings';
 import './WriterRing.css';
 
 export interface WriterRingProps {
@@ -46,6 +46,25 @@ const STATUS_COLOR: Record<RingBufferStatus, string> = {
   TOO_EARLY: '#ffc107',
   TOO_LATE: '#ee0000',
 };
+/** Reader marker colours: identical to the canvas strip's `.ws__ptr` pointers so a reader reads the same in both views. */
+function markerStyle(status: RingBufferStatus, focused: boolean) {
+  if (status === 'TOO_EARLY') return focused ? { fill: 'rgba(238, 0, 0, 0.4)', text: '#ff6b6b' } : { fill: 'rgba(244, 144, 44, 0.35)', text: '#f4902c' };
+  if (status === 'TOO_LATE') return { fill: focused ? '#ee0000' : '#7a0010', text: '#ffffff' };
+  return { fill: focused ? '#ee0000' : '#f4902c', text: '#ffffff' };
+}
+
+/** The canvas pointer shape (a house pointing up) centred on (cx, cy) with side `s`. */
+function pointerPoints(cx: number, cy: number, s: number) {
+  const h = s / 2;
+  return `${cx},${cy - h} ${cx + h},${cy - h + 0.35 * s} ${cx + h},${cy + h} ${cx - h},${cy + h} ${cx - h},${cy - h + 0.35 * s}`;
+}
+
+/** Audio window drawn in the video grain colour when the reader is time-aligned to a video flow. */
+const VIDEO_ALIGNED_COLOR = '#3b8fe0';
+
+/** Head marker colour, shared with the canvas strip's head pointer. */
+const HEAD_COLOR = '#1a73e8';
+
 const STATUS_LABEL: Record<RingBufferStatus, string> = { OK: 'OK', TOO_EARLY: 'waiting', TOO_LATE: 'too late' };
 
 const slotAngle = (slot: number, count: number) => -Math.PI / 2 + (slot * 2 * Math.PI) / count;
@@ -99,12 +118,18 @@ function useSmoothRotation(
   extraGrains: ExtraGrains,
   group: RefObject<SVGGElement | null>,
   label: RefObject<SVGGElement | null>,
+  /** Advance in whole `stepGrains` jumps (a video-aligned audio read consumes one video grain's span at a time). */
+  step?: { grainIndex: number; stepGrains: number },
 ) {
-  const targetRef = useRef({ target, n, extraGrains });
-  targetRef.current = { target, n, extraGrains };
+  const targetRef = useRef({ target, n, extraGrains, step });
+  targetRef.current = { target, n, extraGrains, step };
   const goal = () => {
     const t = targetRef.current;
-    return t.target + (Math.max(0, t.extraGrains()) * 2 * Math.PI) / t.n;
+    const extra = Math.max(0, t.extraGrains());
+    const advance = t.step && t.step.stepGrains > 1
+      ? Math.floor((t.step.grainIndex + extra + 1) / t.step.stepGrains) * t.step.stepGrains - 1 - t.step.grainIndex
+      : extra;
+    return t.target + (advance * 2 * Math.PI) / t.n;
   };
   useLayoutEffect(() => {
     let current = goal();
@@ -130,14 +155,13 @@ function useSmoothRotation(
   }, [group, label]);
 }
 
-/** An arrow just outside the ring pointing at the slot at `angle`; it rotates smoothly about the ring centre. */
-function Arrow({ grainIndex, n, extraGrains, color, label, sweepSlots = 0 }: { grainIndex: number; n: number; extraGrains: ExtraGrains; color: string; label: string; sweepSlots?: number }) {
+/** The head marker (MXL's `headIndex`): the same blue pointer as the canvas strip, just outside the ring, aimed at the head slot; it rotates smoothly about the ring centre. */
+function Arrow({ grainIndex, n, extraGrains, label, sweepSlots = 0 }: { grainIndex: number; n: number; extraGrains: ExtraGrains; label: string; sweepSlots?: number }) {
   const target = useGrainAngle(grainIndex, n);
   const group = useRef<SVGGElement>(null);
   const labelRef = useRef<SVGGElement>(null);
   useSmoothRotation(target, n, extraGrains, group, labelRef);
-  const p = polar(0, R_OUT + 7);
-  const t = polar(0, R_OUT + 17);
+  const p = polar(0, R_OUT + 15);
   return (
     <g ref={group} style={{ transformOrigin: `${CX}px ${CY}px` }}>
       {sweepSlots > 0 && (
@@ -145,12 +169,12 @@ function Arrow({ grainIndex, n, extraGrains, color, label, sweepSlots = 0 }: { g
           <title>Head and writer-reserved samples: cannot be read</title>
         </path>
       )}
-      <g transform={`translate(${p.x} ${p.y}) rotate(180)`}>
-        <path d="M-4,-4 L4,0 L-4,4 Z" fill={color} />
-      </g>
+      <polygon points={pointerPoints(p.x, p.y, 22)} fill={HEAD_COLOR} transform={`rotate(-90 ${p.x} ${p.y})`}>
+        <title>Head: the latest committed grain (MXL headIndex)</title>
+      </polygon>
       {/* counter-rotated so the label stays upright */}
-      <g ref={labelRef} style={{ transformOrigin: `${t.x}px ${t.y}px` }}>
-        <text x={t.x} y={t.y} fill={color} fontSize="7" fontWeight="700" textAnchor="middle" dominantBaseline="middle">
+      <g ref={labelRef} style={{ transformOrigin: `${p.x}px ${p.y}px` }}>
+        <text x={p.x} y={p.y} fill="#ffffff" fontSize="7" fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
           {label}
         </text>
       </g>
@@ -160,35 +184,58 @@ function Arrow({ grainIndex, n, extraGrains, color, label, sweepSlots = 0 }: { g
 
 /** A reader marker on a slot (rotates smoothly about the ring centre as its slot changes). */
 function SlotReader({
-  grainIndex, n, extraGrains, windowSlots = 0, radius, markerR, color, hollow, label, className, focused, onClick, title,
+  grainIndex, n, extraGrains, windowSlots = 0, videoAligned = false, stepGrains = 1, radius, markerR, color, status, label, className, focused, onClick, title,
 }: {
-  grainIndex: number; n: number; extraGrains: ExtraGrains; windowSlots?: number; radius: number; markerR: number; color: string; hollow: boolean; label: string; className: string; focused: boolean; onClick: () => void; title: string;
+  grainIndex: number; n: number; extraGrains: ExtraGrains; windowSlots?: number; videoAligned?: boolean; stepGrains?: number; radius: number; markerR: number; color: string; status: RingBufferStatus; label: string; className: string; focused: boolean; onClick: () => void; title: string;
 }) {
   const target = useGrainAngle(grainIndex, n);
   const group = useRef<SVGGElement>(null);
   const labelRef = useRef<SVGGElement>(null);
-  useSmoothRotation(target, n, extraGrains, group, labelRef);
+  useSmoothRotation(target, n, extraGrains, group, labelRef, videoAligned ? { grainIndex, stepGrains } : undefined);
   const edge = polar(0, R_IN);
   const p = polar(0, radius);
+  const style = markerStyle(status, focused);
   return (
     <g ref={group} className={className} onClick={onClick} style={{ transformOrigin: `${CX}px ${CY}px` }}>
       {windowSlots > 0 && (
         <path
           d={`M${polar(-(2 * Math.PI * (windowSlots - 0.5)) / n, R_OUT - 2).x},${polar(-(2 * Math.PI * (windowSlots - 0.5)) / n, R_OUT - 2).y} A${R_OUT - 2},${R_OUT - 2} 0 ${windowSlots > n / 2 ? 1 : 0} 1 ${polar(Math.PI / n, R_OUT - 2).x},${polar(Math.PI / n, R_OUT - 2).y}`}
           fill="none"
-          stroke={focused ? '#ee0000' : color}
+          stroke={focused ? '#ee0000' : videoAligned ? VIDEO_ALIGNED_COLOR : color}
           strokeWidth="4"
           opacity="0.95"
         />
       )}
       <line x1={edge.x} y1={edge.y} x2={p.x} y2={p.y} stroke={color} strokeWidth="1" opacity="0.6" />
-      <circle cx={p.x} cy={p.y} r={markerR} fill={hollow ? 'none' : color} stroke={focused ? '#ee0000' : hollow ? color : '#111214'} strokeWidth={focused ? 2.5 : 1} />
+      {/* apex turned outward so the pointer aims at its slot as it rotates */}
+      <polygon points={pointerPoints(p.x, p.y, markerR * 2)} fill={style.fill} transform={`rotate(90 ${p.x} ${p.y})`} />
       <g ref={labelRef} style={{ transformOrigin: `${p.x}px ${p.y}px` }}>
-        <text x={p.x} y={p.y} fill={hollow ? color : '#111214'} fontSize={markerR > 6 ? 8 : 7} fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
-          {label}
+        <text x={p.x} y={p.y} fill={style.text} fontSize={markerR > 6 ? 6.5 : 5.5} fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
+          R{label}
         </text>
       </g>
       <title>{title}</title>
+    </g>
+  );
+}
+
+/** Where video grains begin on an audio ring, drawn only while a reader is time-aligned to video. A slot is fixed by `index mod n`, so a boundary sits at the slot holding each grain index that is a multiple of the video span. */
+function VideoGrainTicks({ ring, n }: { ring: WriterRingModel; n: number }) {
+  const span = videoGrainSpanOf(ring);
+  if (span === null) return null;
+  const ticks = [];
+  for (let age = 0; age < n; age += 1) {
+    const grain = ring.publishedGrainIndex - age;
+    if (grain % span !== 0) continue;
+    const a = slotAngle(((ring.publishedSlot - age) % n + n) % n, n) - Math.PI / n;
+    const o = polar(a, R_OUT + 2);
+    const i = polar(a, R_IN - 2);
+    ticks.push(<line key={age} x1={i.x} y1={i.y} x2={o.x} y2={o.y} stroke={VIDEO_ALIGNED_COLOR} strokeWidth="1.5" opacity="0.9" />);
+  }
+  return (
+    <g pointerEvents="none">
+      <title>Video grain boundaries (aligned by timestamp)</title>
+      {ticks}
     </g>
   );
 }
@@ -214,6 +261,13 @@ function AudioRing({ n }: { n: number }) {
  * fan inward by lane. Under the ring a linear "now bar" shows the same
  * readers on a time axis: oldest retained grain on the left, now on the right.
  */
+/** Audio read window: aligned to a video grain (by timestamp) when a video sibling is synced, otherwise a plain batch. */
+function audioWindowText(reader: WriterReader, grainMs: number, sampleRate: number): string {
+  const windowMs = reader.windowGrains * grainMs;
+  if (reader.reading.alignmentSpanMs) return `1 video grain = ${Math.round(windowMs)}ms · ${Math.round((windowMs * sampleRate) / 1000).toLocaleString()} smp`;
+  return windowMs >= 1 ? `${Math.round(windowMs)}ms window` : '1 batch';
+}
+
 export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, focusedNodeId = null, onFocusNode, barOnly = false, audio = false, showRealGrainIndex = false, getNow, snapshotMs }: WriterRingProps) {
   const media = useMediaConfig();
   const n = ring.grainCount;
@@ -236,13 +290,13 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
   return (
     <div className="writer-ring">
       <div className="writer-ring__header">
-        <span className="writer-ring__label">{writerLabel}</span>
         <span className="writer-ring__lag">
           lag {ring.lagGrains} gr · {Math.round(ring.lagMs)}ms
         </span>
       </div>
       <svg className="writer-ring__svg" width={W} height={svgH} viewBox={`0 0 ${W} ${svgH}`} role="img" aria-label={`${writerLabel} ring buffer with ${ring.readers.length} readers`}>
         {audio && <AudioRing n={n} />}
+        {audio && !barOnly && <VideoGrainTicks ring={ring} n={n} />}
         {!barOnly && !audio && Array.from({ length: n }, (_, s) => {
           const j = slotHoldsGrainIndex(ring.publishedGrainIndex, s, n);
           const half = Math.PI / n;
@@ -277,13 +331,13 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
           );
         })}
 
-        {!barOnly && <Arrow grainIndex={ring.publishedGrainIndex} n={n} extraGrains={extraGrains} color="#efb03a" label="head" sweepSlots={audio ? n - ring.readableOldestAge : 0} />}
+        {!barOnly && <Arrow grainIndex={ring.publishedGrainIndex} n={n} extraGrains={extraGrains} label="Head" sweepSlots={audio ? n - ring.readableOldestAge : 0} />}
 
         {!barOnly && ring.readers.map((reader, i) => {
           const parked = parkedInputKeys?.has(reader.key) ?? false;
           const focused = reader.readerNodeId === focusedNodeId;
           const className = `writer-ring__reader${parked ? ' writer-ring__reader--parked' : ''}${focused ? ' writer-ring__reader--focused' : ''}`;
-          const color = STATUS_COLOR[reader.status];
+          const color = markerStyle(reader.status, focused).fill;
           const title = readerTitle(reader, labelByNodeId);
           if (reader.ringSlot === null) {
             // Too late: its grain was overwritten, so it has no slot. Park it in the hub, like the strip's "too late" box.
@@ -292,8 +346,8 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
             const y = CY + 22;
             return (
               <g key={reader.key} className={className} onClick={() => onFocusNode?.(reader.readerNodeId)}>
-                <circle cx={x} cy={y} r={markerR} fill={color} stroke={focused ? '#ee0000' : '#111214'} strokeWidth={focused ? 2.5 : 1} />
-                <text x={x} y={y} fill="#111214" fontSize={markerR > 6 ? 8 : 7} fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
+                <polygon points={pointerPoints(x, y, markerR * 2)} fill={markerStyle(reader.status, focused).fill} />
+                <text x={x} y={y + markerR * 0.2} fill="#ffffff" fontSize={markerR > 6 ? 6.5 : 5.5} fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
                   ✕
                 </text>
                 <title>{title}</title>
@@ -307,10 +361,12 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
               n={n}
               extraGrains={extraGrains}
               windowSlots={audio ? Math.min(reader.windowGrains, n) : 0}
+              videoAligned={audio && reader.reading.alignmentSpanMs !== undefined}
+              stepGrains={reader.windowGrains}
               radius={Math.max(markerR + 2, R_IN - 4 - markerR - reader.lane * (markerR * 2 + 1))}
               markerR={markerR}
               color={color}
-              hollow={reader.status === 'TOO_EARLY'}
+              status={reader.status}
               label={String(i + 1)}
               className={className}
               focused={focused}
@@ -349,10 +405,10 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
           const focused = reader.readerNodeId === focusedNodeId;
           return (
             <g key={reader.key} className={`writer-ring__reader${focused ? ' writer-ring__reader--focused' : ''}`} onClick={() => onFocusNode?.(reader.readerNodeId)}>
-              <line x1={x} y1={barY + BAR_H} x2={x} y2={y - 4} stroke={STATUS_COLOR[reader.status]} strokeWidth="1" opacity="0.6" />
-              <circle cx={x} cy={y} r={5} fill={STATUS_COLOR[reader.status]} stroke={focused ? '#ee0000' : '#111214'} strokeWidth={focused ? 2.5 : 1} />
-              <text x={x} y={y} fill="#111214" fontSize="6.5" fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
-                {i + 1}
+              <line x1={x} y1={barY + BAR_H} x2={x} y2={y - 4} stroke={markerStyle(reader.status, focused).fill} strokeWidth="1" opacity="0.6" />
+              <polygon points={pointerPoints(x, y, 11)} fill={markerStyle(reader.status, focused).fill} />
+              <text x={x} y={y + 1.2} fill={markerStyle(reader.status, focused).text} fontSize="5.5" fontWeight="700" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
+                R{i + 1}
               </text>
               <title>{readerTitle(reader, labelByNodeId)}</title>
             </g>
@@ -370,12 +426,12 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
               className={`writer-ring__row${parked ? ' writer-ring__row--parked' : ''}${focused ? ' writer-ring__row--focused' : ''}`}
               onClick={() => onFocusNode?.(reader.readerNodeId)}
             >
-              <span className="writer-ring__dot" style={{ background: STATUS_COLOR[reader.status] }}>
-                {i + 1}
+              <span className="writer-ring__dot" style={{ background: markerStyle(reader.status, focused).fill, color: markerStyle(reader.status, focused).text }}>
+                R{i + 1}
               </span>
               <span className="writer-ring__name">{labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId}</span>
               <span className="writer-ring__detail">
-                {barOnly || audio ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms · ${reader.windowGrains * ring.grainDurationMs >= 1 ? `${Math.round(reader.windowGrains * ring.grainDurationMs)}ms window` : '1 batch'}` : `${reader.ringSlot === null ? 'overwritten' : `slot ${reader.ringSlot + 1}`} · −${reader.behindNowGrains} gr`}
+                {barOnly || audio ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms · ${audioWindowText(reader, ring.grainDurationMs, media.audioSampleRate)}` : `${reader.ringSlot === null ? 'overwritten' : `slot ${reader.ringSlot + 1}`} · −${reader.behindNowGrains} gr`}
               </span>
               <span className="writer-ring__status" style={{ color: STATUS_COLOR[reader.status] }}>
                 {parked ? 'parked' : STATUS_LABEL[reader.status]}

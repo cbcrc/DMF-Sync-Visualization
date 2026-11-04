@@ -1,4 +1,4 @@
-/* Media Function node — dark, manim-inspired canvas block per AI_RULES.md branding. */
+/* Media Function node — themed card that sits above the canvas. */
 
 .mf-node {
   display: flex;
@@ -8,10 +8,12 @@
   gap: 2px;
   box-sizing: border-box;
   padding: 8px;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  color: #ffffff;
+  background: var(--ui-elevated);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--ui-node-shadow);
+  transition: border-color var(--ui-ease), box-shadow var(--ui-ease), background var(--ui-ease);
+  color: var(--ui-text);
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   text-align: center;
 }
@@ -28,9 +30,9 @@
   content: '';
   position: absolute;
   inset: -5px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ui-border);
+  border-radius: 17px;
+  background: var(--ui-tint-1);
   pointer-events: none;
   z-index: -1;
 }
@@ -42,26 +44,72 @@
   gap: 6px;
 }
 
-.mf-block__handle {
+/* Connector dots: centred on the node edge, with a grow-on-hover micro-interaction. */
+.react-flow__handle {
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ui-elevated);
+  border: 2px solid var(--ui-text-faint);
+  border-radius: 50%;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.react-flow__handle-left {
+  left: -5px;
+}
+
+.react-flow__handle-right {
+  right: -5px;
+}
+
+.react-flow__handle.mf-block__handle {
   background: #1a73e8;
+  border-color: var(--ui-elevated);
+}
+
+.react-flow__handle:hover {
+  transform: translate(0, -50%) scale(1.4);
+  border-color: var(--ui-text);
+  box-shadow: 0 0 0 4px var(--ui-tint-3);
+  cursor: crosshair;
+}
+
+.react-flow__handle.connectingfrom,
+.react-flow__handle.connectingto {
+  transform: translate(0, -50%) scale(1.4);
+  border-color: var(--ui-text);
+  box-shadow: 0 0 0 4px var(--ui-tint-3);
+}
+
+.react-flow__handle.valid {
+  border-color: var(--ui-ok);
+  box-shadow: 0 0 0 4px rgba(76, 208, 138, 0.25);
+}
+
+.react-flow__handle.mf-block__handle:hover {
+  border-color: var(--ui-elevated);
+  box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.35);
 }
 
 .mf-node__mode {
   max-width: 100%;
   font: inherit;
   font-size: 0.5rem;
-  color: #cfcfcf;
-  background: #1c1d20;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--ui-text-dim);
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 3px;
 }
 
 .mf-node--selected {
   border-color: #ee0000;
-  box-shadow: 0 0 0 1px #ee0000;
+  box-shadow: 0 0 0 1px #ee0000, var(--ui-node-shadow);
 }
 
-/* Live Ring Buffer zone highlighting (Task 4) — mirrors RingBufferGauge's colors. */
+/* Live Ring Buffer zone highlighting (Task 4). */
 .mf-node--zone-green {
   border-color: #4caf50;
 }
@@ -79,7 +127,7 @@
 
 /* Held-grain state: a subtle static tint, so it can't fight the zone border colour. */
 .mf-node--processing {
-  background: #26282c;
+  background: var(--ui-active);
 }
 
 .mf-node__glyph {
@@ -99,7 +147,7 @@
 }
 
 .mf-node__label--editable:hover {
-  border-bottom-color: rgba(255, 255, 255, 0.5);
+  border-bottom-color: var(--ui-border-strong);
 }
 
 .mf-node__label-input {
@@ -108,8 +156,8 @@
   font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
-  color: #ffffff;
-  background: #1a1b1e;
+  color: var(--ui-text);
+  background: var(--ui-input);
   border: 1px solid #f5a623;
   border-radius: 4px;
   padding: 1px 2px;
@@ -245,7 +293,7 @@
   height: 11px;
   border-radius: 50%;
   background: #ffffff;
-  border: 1px solid #1a1b1e;
+  border: 1px solid var(--ui-input);
   cursor: ew-resize;
 }
 
@@ -254,7 +302,7 @@
   height: 11px;
   border-radius: 50%;
   background: #ffffff;
-  border: 1px solid #1a1b1e;
+  border: 1px solid var(--ui-input);
   cursor: ew-resize;
 }
 
@@ -315,7 +363,7 @@
   align-items: center;
   gap: 3px;
   font-size: 0.6rem;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
   cursor: pointer;
 }
 
@@ -327,12 +375,12 @@
 
 .mf-node__delay-label {
   font-size: 0.55rem;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
 }
 
 .mf-node__delay-bar {
   height: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -351,9 +399,9 @@
   font: inherit;
   font-size: 0.5rem;
   line-height: 1.5;
-  color: #cfcfcf;
-  background: #1c1d20;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: var(--ui-text-dim);
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 7px;
   cursor: pointer;
 }

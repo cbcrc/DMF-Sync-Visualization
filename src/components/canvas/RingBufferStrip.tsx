@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { WriterRing } from '../../game/writerRings';
-import { readerTitle } from '../../game/writerRings';
+import { readerTitle, videoGrainSpanOf } from '../../game/writerRings';
 import { grainIndexLabel, grainIndexToRingBufferIndex, slotColor } from '../../engine/mxlGrainIndex';
 import { CELL_H, LANE_H, NOW_W, OVERWRITTEN_W, RING_STRIP_W, STRIP_W } from './ringStripLayout';
 import './RingBufferStrip.css';
@@ -29,7 +29,7 @@ export interface RingBufferStripProps {
  * function writes into it whether or not anything reads, and every reader's
  * link starts at the card's right edge.
  *
- * The strip is a timeline of the grains the ring holds: the write head is
+ * The strip is a timeline of the grains the ring holds: the head is
  * always the rightmost box, and each box shows the grain index (time) it holds.
  * As time advances the indices flow right to left from box to box. Each reader
  * is a pointer under the box it reads, so its distance from the head is the
@@ -63,12 +63,21 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
     if (reader.ringAge === null) return OVERWRITTEN_W / 2;
     return OVERWRITTEN_W + (n - 1 - reader.ringAge + 0.5) * slotPx;
   };
-  // "Now" sits `lagGrains` boxes right of the head's centre, to scale but
-  // never closer than 6px (so a tiny lag stays visible) or past the zone.
+  // "Now" sits `lagMs` right of the head's centre, to scale but never closer
+  // than 6px (so a tiny lag stays visible) or past the zone. It uses the steady
+  // lag in ms, not the whole-grain `lagGrains`, which flips between two values
+  // as the clock crosses grain boundaries and made the marker jump.
   const headX = OVERWRITTEN_W + ((n - 0.5) / n) * STRIP_W;
-  const nowOffset = Math.min(NOW_W - 6, Math.max(6, ring.lagGrains * slotPx));
+  const lagGrains = ring.lagMs / ring.grainDurationMs;
+  const nowOffset = Math.min(NOW_W - 6, Math.max(6, lagGrains * slotPx));
   const extra = showNow ? NOW_W : 0;
   const overwritten = lateKeys.length;
+  // Video grain boundaries, only while a reader of this audio ring is time-aligned to video.
+  const videoSpan = videoGrainSpanOf(ring);
+  const videoTicks: number[] = [];
+  if (videoSpan !== null) {
+    for (let age = 0; age < n; age += 1) if ((ring.publishedGrainIndex - age) % videoSpan === 0) videoTicks.push(n - 1 - age);
+  }
   // Audio has no slots: faint ticks mark the commit batches (at least 4px apart) and, when selected, the
   // same slot colours as the circular ring run along the readable samples.
   const audioBackground = () => {
@@ -93,8 +102,8 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
         {overwritten > 0 && <span className="ws__alert"> ✕ {overwritten} too late</span>}
       </div>
       <div className="ws__track" style={{ width: STRIP_W + OVERWRITTEN_W + extra, height: CELL_H + (maxLane + 1) * LANE_H }}>
-        <div className="ws__write" style={{ left: headX }} title="Write head">
-          Write
+        <div className="ws__write" style={{ left: headX }} title="Head: the latest committed grain (MXL headIndex)">
+          Head
         </div>
         {showNow && (
           <>
@@ -102,7 +111,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
             <div
               className="ws__now"
               style={{ left: headX + nowOffset, height: CELL_H + 4 }}
-              title={`Now — the writer is ${ring.lagMs.toFixed(0)}ms (${ring.lagGrains} grain${ring.lagGrains === 1 ? '' : 's'}) behind`}
+              title={`Now — the writer is ${ring.lagMs.toFixed(0)}ms (${Math.round(lagGrains)} grain${Math.round(lagGrains) === 1 ? '' : 's'}) behind`}
             >
               <span>Now</span>
             </div>
@@ -147,6 +156,9 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
               <div className="ws__bar ws__bar--head" style={{ flexGrow: 1 }} title="Being written — cannot be read" />
             </>
           )}
+          {videoTicks.map((c) => (
+            <div key={c} className="ws__vtick" style={{ left: c * slotPx }} title="Video grain boundary (aligned by timestamp)" />
+          ))}
         </div>
         {audio &&
           ring.readers.map((reader) => {
@@ -180,7 +192,7 @@ export function RingBufferStrip({ ring, labelByNodeId, focusedNodeId, showNow = 
                 <span>now</span> by {fmt(nowMs)}
               </div>
               <div>
-                <span>write head</span> by {fmt(headMs)}
+                <span>head</span> by {fmt(headMs)}
               </div>
             </div>
           );

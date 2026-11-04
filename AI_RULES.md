@@ -39,14 +39,15 @@ playback modes, the side panel (MXL clock, plus ring telemetry for the
 selected function), the Scenarios page and persistence, the canvas editing and
 ring-buffer blocks, the grouped "Add media function" palette, the Profanity
 Delay, per-function sync groups (A, B, live) on mixers, the end-to-end timeline,
-minimizable and dockable panes with a top toolbar, and the Workload Config (domain
+minimizable and dockable panes with a top toolbar, Light and Dark themes, and the Workload Config (domain
 size, frame rate, resolution, audio sample rate).
 
 Open work lives in `TO-DO.md`. Check any changes in a browser (`npm run dev`)
 as well as with the checks above. The recent canvas and docking work (node
 layouts, aligned Linear out lanes, reader bubbles, palette, timeline, top
-toolbar, docks, R# input tags) has only been checked by typecheck, lint and
-tests, not looked at in a browser yet.
+toolbar, docks, R# input tags) and the theming, dock-collapse, pane-header and
+ring-marker work have only been checked by typecheck, lint and tests, not looked
+at in a browser yet.
 
 UI shell (`App.tsx`): a full-width top bar (the canvas toolbar, portalled in
 by `FlowCanvas`) above a row of left dock, canvas and right dock, with a bottom
@@ -55,6 +56,23 @@ layout (dock and order, `dmf-sync-viz:docks:v2`) and the minimized panes
 (`dmf-sync-viz:minimized:v1`). `game/mediaConfig.ts` holds the A/V workload
 format (`dmf-sync-viz:media:v1`, default 1080p50, 48 kHz). Menus are in
 `ToolbarMenus.tsx`; playback controls in `PlaybackPane.tsx`.
+
+Panes and themes:
+- Every pane sits in a `DockItem` with a header bar: drag grip, pane title, and
+  the left/bottom/right dock buttons. Panes have no heading of their own; the
+  bar carries the name (`PANE_NAMES` in `App.tsx`). **Clock** and **Ring
+  Buffers** are separate panes (`RingBufferPanel` renders one or the other via
+  `showClock` / `showRings`).
+- Each dock can collapse to a rail of pane names (`collapsedDocks`,
+  `dmf-sync-viz:collapsed-docks:v1`); the toolbar's **Hide Panes** collapses all.
+  Collapsing only hides, so layout and pane state are kept. Side docks size to
+  their content (200-360px).
+- Themes: semantic `--ui-*` CSS variables in `index.css` for Dark (default) and
+  Light, set by `data-theme` on `<html>` (`src/theme.ts`, `ThemeToggle.tsx`,
+  saved as `dmf-theme`, first visit follows the OS). Use the tokens, not
+  hard-coded greys. Status and alert colours (red, green, ring zones) are fixed
+  and their light-mode contrast is unchecked.
+- Menus and buttons use Title Case.
 
 ## Core model — read this before touching timing logic
 
@@ -92,14 +110,13 @@ src/
                              with reader pointers), nodeDefaults (palette presets, latency
                              ranges, palette groups, outputModeOf), nodeSizing, GrainOverlay (grain dots, tags),
                              LinearBoundaryOverlay (Ingress/Egress linear tick trains)
-    ui/                      RingBufferPanel (closable TAI clock, plus a WriterRing per ring the
-                             selected function writes or reads), WriterRing (circular ring
+    ui/                      RingBufferPanel (the Clock pane, or a WriterRing per ring the
+                             selected function writes or reads in the Ring Buffers pane), WriterRing (circular ring
                              per writer flow), ClockStrip (domain TAI clock), EndToEndTimeline
-                             (bottom timeline, one lane per output), GrainSlotStrip and
-                             ContinuousBufferTrack (per-reader slot/continuous views),
-                             RingBufferGauge, GameHud (Status pane), InfoPanel (Help),
+                             (bottom timeline, one lane per output), GameHud (Status pane), InfoPanel (Help),
                              ScenariosPage, ToolbarMenus (Canvas, Workload Config),
-                             PlaybackPane, PaneToolbar, DockItem (+ Dock.css)
+                             PlaybackPane, PaneToolbar, DockItem (+ Dock.css), ThemeToggle, ToolbarIcons
+                             (theme.ts holds the theme state)
   game/                      graphLatency (per-input evaluation + writerFlows), writerRings
                              (readings grouped per writer, one ring per output flow),
                              connectionRules (which track an input may read), levels and
@@ -128,7 +145,7 @@ src/
 - **Index preservation.** A function writes the grain index it read, so each
   non-source function adds one read-behind grain (`READ_BEHIND_WRITE_GRAINS`)
   to its lag; delays and repeaters handle this themselves.
-- **Reader pointers.** The strip is a timeline: the write head is always the
+- **Reader pointers.** The strip is a timeline: the head is always the
   rightmost box and each box shows the grain index it holds (simplified count
   or last digits of the real index), so indices flow right to left as time
   advances. Strips show no static slot numbers; the side-panel ring still does
@@ -177,7 +194,7 @@ src/
   per-input sync group (`inputGroups`, `syncInputs.ts`): sync A (default), sync
   B or live (`LIVE_GROUP` = 0, `MAX_SYNC_GROUPS` = 2). Each group is aligned at its
   own slowest member and released on its own; the function writes once every group
-  is ready. A "live" input is read as close to its write head as possible (one
+  is ready. A "live" input is read as close to its head as possible (one
   grain behind) and no longer holds the function back. If every wired input is
   live they all fall back to group A. Saved scenarios with the old
   `ignoreSyncInputs` load as live. Checked against dmf-mxl/mxl
@@ -235,10 +252,9 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   derives `parkedInputKeys` (keyed `${nodeId}:${inputIndex}`, same keying as
   `statusByInputKey`) from the live grain list and reports it up via
   `onParkedInputsChange`; `App` passes it to `RingBufferPanel`, which
-  highlights the matching reader row (`.rb-panel__entry--parked` pulse) and,
-  for audio inputs, pulses the `ContinuousBufferTrack` read marker
-  (`.cb-track__marker--parked`) too — so a user sees the canvas parking and
-  the buffer's "waiting" telemetry light up together as one correlated event.
+  highlights the matching reader marker on the ring (`WriterRing`) — so a user
+  sees the canvas parking and the buffer's "waiting" telemetry light up
+  together as one correlated event.
 - **Stream color:** each grain carries a `streamIndex` (its producer's output
   branch index) end to end, purely for color-coding distinct flows (video vs.
   audio) as they diverge/reconverge.
@@ -261,28 +277,20 @@ feed back into ring-buffer evaluation. Implemented in `grainFlow.ts`:
   reflects the right rate for its own track automatically. Only
   `RingBufferPanel`'s top-level "Domain clock" line stays video-rate, since
   it has no single input to key off of.
-- **Audio-specific visualization (`ContinuousBufferTrack.tsx`):** video/data
-  inputs keep the discrete `GrainSlotStrip` slot view, but
-  audio inputs render this component instead — a smooth, time-based strip
-  with no discrete cells (matching MXL's Continuous, not Discrete, ring
-  buffer), a fill meter that grows from empty-at-the-head to full-at-the-
-  retention-boundary as `occupancyRatio` rises (the single "how close to
-  TOO_LATE" signal), and a read marker that is *always* rendered — clamped
-  to the strip and pinned with a direction arrow when the real position is
-  actually out of bounds, rather than scrolling off and disappearing the way
-  a fixed-width discrete-cell strip does once a track's grains get much
-  finer than the window can show. (`GrainSlotStrip` itself also gained a
-  similar never-vanishes fallback — a compressed, dashed "still retained but
-  off-window" cell — as a safety net for video in extreme cases.)
+- **Audio visualization.** MXL audio is a Continuous ring (samples, no
+  discrete slots). The app draws it as an unbroken ring and bar in 1 ms units
+  (`AUDIO_GRAIN_RATE`, a display simplification), with reader windows as arcs
+  or spans. The old per-reader gauge, slot strip and continuous-track
+  components were removed; `WriterRing` and `RingBufferStrip` cover audio now.
 - **Audio/video alignment highlight (D2):** at a true sync point (a reader
   node with both a video and an audio input), `computeGraphLatency` works
   out the absolute time span of the one video grain being read at the
   aligned instant and attaches it to the audio sibling's `InputReading` as
-  `alignmentSpanMs`. `ContinuousBufferTrack` draws that span as a bordered
-  highlight band on the audio strip (plus a legend line) — a direct, literal
-  answer to "which audio grains line up with this video frame," since
-  audio's 1ms grains make that span visibly many grains wide against
-  video's single one (item #10.ii).
+  `alignmentSpanMs`. A reader with an `alignmentSpanMs` is "video-aligned": its
+  window is drawn blue in the circular ring, its row reads "1 video grain = N
+  ms · N smp", its marker steps one video grain at a time, and blue video-grain
+  ticks (`videoGrainSpanOf`) cross the audio ring and strip. MXL aligns by
+  timestamp, so the ticks are derived from the video rate, not an MXL object.
 - **Origin-timestamp visualization (Canvas menu option "Show grain origin tags",
   off by default):** each grain carries `originTs`, a real (`Date.now()`-
   based) capture timestamp set once when a producer spawns it and preserved

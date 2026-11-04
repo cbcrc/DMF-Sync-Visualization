@@ -19,7 +19,6 @@ export function PlaybackPane(p: PlaybackPaneProps) {
   return (
     <div className="pb-pane">
       <div className="pb-pane__header">
-        <span className="pb-pane__title">Animation playback</span>
         <button type="button" className="pb-pane__min" onClick={p.onMinimize} aria-label="Minimize playback" title="Minimize">
           –
         </button>

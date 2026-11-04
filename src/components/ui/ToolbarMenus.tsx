@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LEVELS, type Level } from '../../game/levels';
 import { grainDurationMs, minDomainSizeMs, samplesPerAudioBatch, type MediaConfig } from '../../engine/mxlGrainIndex';
 import { FRAME_RATES, RESOLUTIONS, SAMPLE_RATES, rateId } from '../../game/mediaConfig';
+import { SaveIcon } from './ToolbarIcons';
 import './ToolbarMenus.css';
 
 /** A toolbar button that opens a dropdown panel; closes on outside click or Escape. */
@@ -77,23 +78,23 @@ export function ToolbarMenus(p: ToolbarMenusProps) {
           </button>
         ))}
         <button type="button" className="tb-menu__item" onClick={p.onOpenScenarios}>
-          Saved scenarios…
+          Saved Scenarios…
         </button>
         <button type="button" className="tb-menu__item" onClick={p.onSaveScenario} title="Save this canvas as a scenario">
-          💾 Save canvas as scenario…
+          <SaveIcon />Save Canvas as Scenario…
         </button>
         <label
           className="tb-menu__check"
           title="Tag each grain on the canvas with the origin timestamp it keeps from the writer, and flash nodes as they write"
         >
           <input type="checkbox" checked={p.showOriginTimestamps} onChange={(e) => p.onToggleOriginTimestamps(e.target.checked)} />
-          Show grain origin tags
+          Show Grain Origin Tags
         </label>
       </MenuButton>
 
       <MenuButton label="Workload Config" title="MXL Domain size and audio/video format">
         <label className="tb-menu__field">
-          MXL Domain size: <strong>{p.domainSizeMs}ms</strong>
+          MXL Domain Size: <strong>{p.domainSizeMs}ms</strong>
           <input
             type="range"
             min={minDomainSizeMs(media.videoRate)}
@@ -115,7 +116,7 @@ export function ToolbarMenus(p: ToolbarMenusProps) {
           </select>
         </label>
         <label className="tb-menu__field">
-          Frame rate (grain rate)
+          Frame Rate (Grain Rate)
           <select
             value={rateId(media.videoRate)}
             onChange={(e) => {
@@ -135,7 +136,7 @@ export function ToolbarMenus(p: ToolbarMenusProps) {
         <div className="tb-menu__note">1 video grain = 1 frame = {grainMs.toFixed(2)}ms</div>
         <div className="tb-menu__heading">Audio</div>
         <label className="tb-menu__field">
-          Sample rate
+          Sample Rate
           <select
             value={media.audioSampleRate}
             onChange={(e) => p.onMediaChange({ ...media, audioSampleRate: Number(e.target.value) })}

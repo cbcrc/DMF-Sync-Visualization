@@ -1,98 +1,120 @@
 .flow-canvas-root {
   width: 100%;
   height: 100%;
-  background: #1a1b1e;
+  background: var(--ui-bg);
 }
 
 .fc-palette {
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  padding: 10px;
-  color: #ffffff;
-  max-width: 200px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 8px 8px 6px;
+  color: var(--ui-text);
+  max-width: 240px;
 }
 
 .fc-palette__header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  padding: 0 4px;
 }
 
 .fc-palette__title {
-  font-size: 0.7rem;
-  color: #757575;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ui-text);
 }
 
 .fc-palette__min {
   font-family: inherit;
   font-size: 0.9rem;
   line-height: 1;
-  color: #757575;
+  color: var(--ui-text-faint);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 2px 4px;
+  border-radius: 6px;
 }
 
 .fc-palette__min:hover {
-  color: #ffffff;
+  color: var(--ui-text);
 }
 
 .fc-palette__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  padding: 0 4px;
 }
 
 .fc-palette__group + .fc-palette__group {
   margin-top: 8px;
 }
 
+/* Category label: Sources, Technical, Editorial... */
 .fc-palette__group-title {
-  font-size: 0.6rem;
-  color: #9aa0a6;
-  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ui-text-faint);
+  padding: 0 4px;
+  margin-bottom: 4px;
 }
 
 .fc-palette__btn {
   font-family: inherit;
-  font-size: 0.7rem;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: none;
   border-radius: 6px;
   padding: 4px 8px;
   cursor: pointer;
 }
 
 .fc-palette__btn:hover {
-  border-color: #ee0000;
+  background: var(--ui-control-hover);
+}
+
+.fc-palette__btn:active,
+.fc-palette__btn--active {
+  background: var(--ui-active);
 }
 
 .fc-palette__hint {
-  margin-top: 8px;
-  font-size: 0.6rem;
-  color: #757575;
+  margin: 8px 4px 0;
+  font-size: 0.62rem;
+  color: var(--ui-text-faint);
   line-height: 1.3;
+}
+
+.fc-palette__hint summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.fc-palette__hint p {
+  margin: 4px 0 0;
 }
 
 /* Flow names (V1, V1a, A1a...) rendered on edges — the preserved-index story. */
 .react-flow__edge-text {
-  fill: #ffffff;
+  fill: var(--ui-text);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 
 .react-flow__edge-textbg {
-  fill: #1a1b1e;
-  stroke: rgba(255, 255, 255, 0.35);
+  fill: var(--ui-elevated);
+  stroke: var(--ui-border-strong);
   stroke-width: 1px;
   rx: 4px;
 }
@@ -121,39 +143,43 @@
 .fc-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 4px 8px;
-  background: rgba(17, 18, 20, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  justify-content: space-between;
+  width: 100%;
+  gap: 20px;
+  padding: 0;
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
 }
 
 .fc-toolbar__section {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Pane selection: right-hand section, divided from the editing tools. */
 .fc-toolbar__section--panes {
-  padding-left: 16px;
-  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 20px;
+  border-left: 1px solid var(--ui-border);
 }
 
 .fc-toolbar__btn {
   font-family: inherit;
-  font-size: 0.7rem;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
-  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ui-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
   cursor: pointer;
 }
 
 .fc-toolbar__btn:hover:not(:disabled) {
-  border-color: #ee0000;
+  background: var(--ui-hover);
+}
+
+.fc-toolbar__btn:active:not(:disabled) {
+  background: var(--ui-active);
 }
 
 .fc-toolbar__btn:disabled {
@@ -161,7 +187,77 @@
   cursor: default;
 }
 
+/* Open menu / toggled-on tool: a background change, not an outline. */
 .fc-toolbar__btn--on {
-  border-color: #f5a623;
-  color: #f5a623;
+  background: var(--ui-active);
+  color: var(--ui-text);
+}
+
+.react-flow__minimap {
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  overflow: hidden;
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--ui-active);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__background-pattern {
+  fill: var(--ui-grid);
+  stroke: var(--ui-grid);
+}
+
+.react-flow__minimap-mask {
+  fill: var(--ui-tint-2);
+}
+
+.react-flow__minimap-node {
+  fill: var(--ui-text-faint);
+  stroke: none;
+}
+
+/* Each group stacks its buttons over a centred caption. */
+.fc-toolbar__section {
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: 2px;
+}
+
+.fc-toolbar__buttons {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Caption naming a group of toolbar buttons. */
+.fc-toolbar__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ui-text-faint);
+  white-space: nowrap;
+  text-align: center;
+  user-select: none;
 }

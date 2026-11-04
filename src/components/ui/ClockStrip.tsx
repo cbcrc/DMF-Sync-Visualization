@@ -1,7 +1,6 @@
 import {
   formatGrouped,
   grainIndexForDisplay,
-  grainIndexToRingBufferIndex,
   timestampToGrainIndex,
   timestampToTaiNs,
   timestampToTimecode,
@@ -13,29 +12,25 @@ export interface ClockStripProps {
   timestampMs: number;
   grainRate: GrainRate;
   grainDurationMs: number;
-  /** Slots in the domain's video-rate ring. */
-  grainCount: number;
   domainSizeMs: number;
   showRealGrainIndex: boolean;
 }
 
 /**
  * The domain's "now": TAI nanoseconds since the SMPTE epoch, its time of day,
- * and the grain index / ring slot it maps to. The slot shown here is the same
- * one the writer rings mark as "now". The sim clock stands in for TAI and
+ * and the grain index it maps to. Each function writes its own ring, so no single
+ * slot is shown here. The sim clock stands in for TAI and
  * pauses/steps with the playback mode (real TAI never would).
  */
 export function ClockStrip({
   timestampMs,
   grainRate,
   grainDurationMs,
-  grainCount,
   domainSizeMs,
   showRealGrainIndex,
 }: ClockStripProps) {
   const ns = timestampToTaiNs(timestampMs);
   const index = timestampToGrainIndex(timestampMs, grainRate);
-  const slot = grainIndexToRingBufferIndex(index, grainCount);
   const shownIndex = grainIndexForDisplay(timestampMs, grainRate, domainSizeMs, showRealGrainIndex);
   const grainNs = Math.round(grainDurationMs * 1e6);
 
@@ -53,17 +48,10 @@ export function ClockStrip({
         <div className="clock-strip__lab">Grain index now</div>
         <div className="clock-strip__val">{formatGrouped(shownIndex)}</div>
       </div>
-      <div className="clock-strip__cell">
-        <div className="clock-strip__lab">Ring slot now</div>
-        <div className="clock-strip__val">{slot}</div>
-      </div>
       <details className="clock-strip__formula">
-        <summary>formula</summary>
+        <summary>Formula</summary>
         <div>
           index = ⌊ {formatGrouped(ns)} / {formatGrouped(grainNs)} ⌋ = {formatGrouped(index)}
-        </div>
-        <div>
-          slot = index mod {grainCount} = {slot}
         </div>
       </details>
     </div>

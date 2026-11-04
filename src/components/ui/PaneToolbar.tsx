@@ -3,11 +3,11 @@ import './PaneToolbar.css';
 export type PaneId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help';
 
 const PANES: { id: PaneId; label: string }[] = [
-  { id: 'palette', label: 'Add function' },
+  { id: 'palette', label: 'Add Function' },
   { id: 'playback', label: 'Playback' },
   { id: 'controls', label: 'Status' },
   { id: 'clock', label: 'Clock' },
-  { id: 'rings', label: 'Ring buffers' },
+  { id: 'rings', label: 'Ring Buffers' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'help', label: 'Help' },
 ];
@@ -17,12 +17,24 @@ export interface PaneToolbarProps {
   onToggle: (id: PaneId) => void;
   /** Puts every pane back in its default dock and restores minimized ones. */
   onResetLayout: () => void;
+  /** True when every dock is collapsed; panes keep their layout while hidden. */
+  allDocksCollapsed: boolean;
+  onToggleAllDocks: () => void;
 }
 
 /** Row of buttons for every pane: minimized panes show as hollow chips, and clicking one restores it. */
-export function PaneToolbar({ minimized, onToggle, onResetLayout }: PaneToolbarProps) {
+export function PaneToolbar({ minimized, onToggle, onResetLayout, allDocksCollapsed, onToggleAllDocks }: PaneToolbarProps) {
   return (
     <div className="pane-toolbar" role="toolbar" aria-label="Panes">
+      <button
+        type="button"
+        className="pane-toolbar__btn"
+        aria-pressed={allDocksCollapsed}
+        title={allDocksCollapsed ? 'Show all panes' : 'Hide all panes (layout is kept)'}
+        onClick={onToggleAllDocks}
+      >
+        {allDocksCollapsed ? 'Show Panes' : 'Hide Panes'}
+      </button>
       {PANES.map(({ id, label }) => {
         const isMinimized = minimized.has(id);
         return (
@@ -39,7 +51,7 @@ export function PaneToolbar({ minimized, onToggle, onResetLayout }: PaneToolbarP
         );
       })}
       <button type="button" className="pane-toolbar__btn" title="Reset pane layout" onClick={onResetLayout}>
-        Reset layout
+        Reset Layout
       </button>
     </div>
   );

@@ -1,11 +1,11 @@
 .game-hud {
   position: relative;
   width: 300px;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #ffffff;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px 16px;
+  color: var(--ui-text);
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   box-sizing: border-box;
 }
@@ -17,14 +17,14 @@
   font-family: inherit;
   font-size: 0.9rem;
   line-height: 1;
-  color: #757575;
+  color: var(--ui-text-faint);
   background: none;
   border: none;
   cursor: pointer;
 }
 
 .game-hud__min:hover {
-  color: #ffffff;
+  color: var(--ui-text);
 }
 
 .game-hud__levels {
@@ -37,22 +37,23 @@
 .game-hud__level-btn {
   font-family: inherit;
   font-size: 0.65rem;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 4px 6px;
   cursor: pointer;
 }
 
 .game-hud__level-btn--active {
-  border-color: #ee0000;
-  color: #ee0000;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-control-hover);
+  color: var(--ui-text);
 }
 
 .game-hud__desc {
   font-size: 0.7rem;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
   line-height: 1.35;
   margin-bottom: 8px;
 }
@@ -87,7 +88,7 @@
 }
 
 .game-hud__late-row strong {
-  color: #ffffff;
+  color: var(--ui-text);
 }
 
 .game-hud__late-hint {
@@ -142,23 +143,24 @@
   font-family: inherit;
   font-size: 0.65rem;
   font-weight: 600;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 3px 8px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .game-hud__playback-btn:hover {
-  border-color: #ffffff;
+  border-color: var(--ui-text);
 }
 
 .game-hud__playback-btn--active {
   background: #2a2b30;
-  border-color: #4caf50;
-  color: #4caf50;
+  border-color: rgba(76, 208, 138, 0.55);
+  background: rgba(76, 208, 138, 0.14);
+  color: var(--ui-ok);
 }
 
 .game-hud__step-row {
@@ -173,10 +175,10 @@
   flex: 1;
   padding: 6px 14px !important;
   font-weight: 600;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 3px 8px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -184,8 +186,9 @@
 
 .game-hud__step-btn:hover {
   background: #2a2b30;
-  border-color: #4caf50;
-  color: #4caf50;
+  border-color: rgba(76, 208, 138, 0.55);
+  background: rgba(76, 208, 138, 0.14);
+  color: var(--ui-ok);
 }
 
 .game-hud__stats {
@@ -199,10 +202,10 @@
   font-family: inherit;
   font-size: 0.65rem;
   font-weight: 600;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 4px 8px;
   cursor: pointer;
   white-space: nowrap;
@@ -210,9 +213,9 @@
 }
 
 .game-hud__restart-btn:hover {
-  background: #2a2b30;
-  border-color: #ee0000;
-  color: #ee0000;
+  background: rgba(238, 0, 0, 0.14);
+  border-color: rgba(238, 0, 0, 0.55);
+  color: #ff6b6b;
 }
 
 .game-hud__stat {
@@ -222,7 +225,7 @@
 
 .game-hud__stat-label {
   font-size: 0.6rem;
-  color: #757575;
+  color: var(--ui-text-faint);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -238,9 +241,9 @@
 
 .game-hud__fail {
   margin-top: 8px;
-  background: #3a0000;
-  border: 1px solid #ee0000;
-  border-radius: 6px;
+  background: rgba(238, 0, 0, 0.12);
+  border: 1px solid rgba(238, 0, 0, 0.5);
+  border-radius: var(--ui-radius-sm);
   padding: 8px;
   font-size: 0.7rem;
   display: flex;
@@ -261,7 +264,7 @@
 }
 
 .game-hud__title {
-  font-weight: 700;
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: 0.85rem;
   margin-bottom: 4px;
 }

@@ -65,6 +65,16 @@ export interface WriterRing {
   readers: WriterReader[];
 }
 
+/**
+ * For an audio ring, the audio grains in one video grain when a reader is time-aligned to a video
+ * flow (MXL aligns by timestamp), otherwise `null` so no video boundaries are drawn.
+ */
+export function videoGrainSpanOf(ring: WriterRing): number | null {
+  if (ring.track !== 'audio') return null;
+  const aligned = ring.readers.find((r) => r.reading.alignmentSpanMs !== undefined);
+  return aligned && aligned.windowGrains > 1 ? aligned.windowGrains : null;
+}
+
 export function readableOldestAgeOf(grainCount: number, retainedGrains: number): number {
   return Math.min(Math.max(grainCount - 1, 0), retainedGrains + READ_BEHIND_WRITE_GRAINS);
 }

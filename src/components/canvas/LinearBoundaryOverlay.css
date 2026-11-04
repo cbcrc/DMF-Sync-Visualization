@@ -16,13 +16,13 @@
   flex-direction: column;
   gap: 2px;
   font-size: 9px;
-  color: #9aa0a6;
+  color: var(--ui-text-faint);
 }
 
 .lb-panel__title {
   font-size: 10px;
   font-weight: 600;
-  color: #d0d4d9;
+  color: var(--ui-text-dim);
   letter-spacing: 0.02em;
   margin-bottom: 2px;
 }
@@ -40,8 +40,8 @@
   position: relative;
   height: 18px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--ui-tint-1);
+  border: 1px solid var(--ui-border);
   border-radius: 3px;
   --lb-color: #4fc3f7;
 }

@@ -23,11 +23,13 @@ export interface DockItemProps {
   bodyRef?: (el: HTMLDivElement | null) => void;
   /** Panes that should stretch to fill spare room in the bottom dock. */
   grow?: boolean;
+  /** Pane name shown in the header between the grip and the dock buttons. */
+  title?: string;
   children?: ReactNode;
 }
 
 /** Wraps a pane in a dock: drag the grip to reorder or move it to another dock, or use the side buttons. */
-export function DockItem({ id, side, nextId, dragId, onDragId, onDropBefore, onDock, bodyRef, grow, children }: DockItemProps) {
+export function DockItem({ id, side, nextId, dragId, onDragId, onDropBefore, onDock, bodyRef, grow, title, children }: DockItemProps) {
   const [over, setOver] = useState<'before' | 'after' | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +67,7 @@ export function DockItem({ id, side, nextId, dragId, onDragId, onDropBefore, onD
       <div className="dock-item__bar">
         <span
           className="dock-item__grip"
+          aria-label="Drag handle"
           draggable
           title="Drag to reorder or move to another dock"
           onDragStart={(e) => {
@@ -75,8 +78,9 @@ export function DockItem({ id, side, nextId, dragId, onDragId, onDropBefore, onD
           }}
           onDragEnd={() => onDragId(null)}
         >
-          ⋮⋮ drag
+          ⠿
         </span>
+        {title && <span className="dock-item__title">{title}</span>}
         <div className="dock-item__btns" role="group" aria-label="Dock position">
           {SIDES.map((s) => (
             <button

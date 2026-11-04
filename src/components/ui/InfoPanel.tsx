@@ -9,7 +9,6 @@ export function InfoPanel({ onMinimize }: { onMinimize: () => void }) {
   return (
     <div className="info-panel">
       <div className="info-panel__header">
-        <span className="info-panel__title">How MXL timestamps drive this</span>
         <button type="button" className="info-panel__close" onClick={onMinimize} aria-label="Minimize" title="Minimize">
           –
         </button>
@@ -49,7 +48,7 @@ export function InfoPanel({ onMinimize }: { onMinimize: () => void }) {
       </div>
 
       <div className="info-panel__text info-panel__footnote">
-        <strong>Rings</strong> mark the Write head and each reader (<strong>R1</strong>, <strong>R2</strong>…,
+        <strong>Rings</strong> mark the Head and each reader (<strong>R1</strong>, <strong>R2</strong>…,
         also tagged on the reader's inputs). Click one to focus it. <strong>Sync A / B</strong> on a mixer input
         groups inputs that wait for each other; <strong>live</strong> reads at the head and never waits.
         A dashed ring is a grain paused for its group. Use <strong>Show Now</strong> to see wall-clock lag.

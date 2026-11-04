@@ -61,7 +61,7 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
    * *Role:* Pure consumers/readers. Records signals to disk.
 5. **Grain Repeaters (Artificial Buffer Nodes):**
    * *Role:* Special utility node inserted by the user when a read head is about to overrun (turn Red). Repeats MXL grains into a brand-new sub-ring buffer. Modelled with no latency of its own (0ms), resets the boundary limit.
-   * *Implementation note:* a repeater reads the last available (oldest retained) grain, at the far end of the ring from the write head, and re-writes it into a fresh ring buffer keeping the same grain index, so that index sits at its new write head. Its output therefore lags by the age it read, which counts toward workload latency. It adds no extra capacity.
+   * *Implementation note:* a repeater reads the last available (oldest retained) grain, at the far end of the ring from the head, and re-writes it into a fresh ring buffer keeping the same grain index, so that index sits at its new write head. Its output therefore lags by the age it read, which counts toward workload latency. It adds no extra capacity.
 
 ### C. Multi-Input & Multi-Output Behaviors
 * **Multi-Input Nodes (e.g., Video Switcher, Audio Mixer):** Multiple read heads ($R_1, R_2$). Must align incoming streams before processing.
@@ -73,17 +73,17 @@ Media functions process grains and introduce processing delay ($\Delta t_{proc}$
 * **Definition:** A grouping mechanism for multiple signals (e.g., Audio + Video) that must arrive aligned at a common node or output.
 * **Alignment Constraint:** Low-latency signals (e.g., Audio: 2ms) inside a Sync Group with high-latency signals (e.g., Video: 33ms) MUST be artificially delayed to match the highest-latency signal in the group.
 * **Per-function sync groups:** like an MXL flow synchronization group, a group belongs to one consuming function. Each input of a mixer is in group A (default), B, or "live". Every group is read at its own slowest member and releases on its own; the function writes once all its groups are ready, so its output lags by the latest group.
-* **Live:** an input in no group reads as close to its write head as possible and does not hold the function back. Older saved scenarios that set an input to ignore sync load as live.
+* **Live:** an input in no group reads as close to its head as possible and does not hold the function back. Older saved scenarios that set an input to ignore sync load as live.
 * **Risk:** Artificially delaying a stream to maintain sync pushes its Read Head ($R$) closer to the back edge of the Ring Buffer ($W - T_{domain}$), risking an overrun (Red state).
 
 ---
 
 ## 3. Visual UI & Read Head Representation Mechanics
 
-### The Ring Buffer Gauge Component
-For every active consumer node/reader, render an interactive **Circular Gauge** or **Linear Track** representing the MXL Domain Ring Buffer:
-1. **Green Zone (Optimal):** Reader is safely behind the Write head ($0.2 \times T_{domain} < W - R < 0.8 \times T_{domain}$).
-2. **Yellow Zone (Near Underflow):** Reader is too close to the Write head ($W - R < 0.2 \times T_{domain}$). Show a "Waiting..." badge.
+### The Ring Buffer Visualization
+For every active consumer node/reader, render a marker on a **circular ring** (side pane) and a **linear strip** (on the canvas) representing the MXL Domain Ring Buffer:
+1. **Green Zone (Optimal):** Reader is safely behind the Head ($0.2 \times T_{domain} < W - R < 0.8 \times T_{domain}$).
+2. **Yellow Zone (Near Underflow):** Reader is too close to the Head ($W - R < 0.2 \times T_{domain}$). Show a "Waiting..." badge.
 3. **Red Zone (Too late / Overrun):** Reader fell older than the retained history. Highlight node in **Red** with pulsing hazard state.
 
 ### Telemetry Readouts
@@ -123,7 +123,7 @@ the original game framing.
 - [x] Implement custom node renders for Inputs, Technical, Editorial, Synthetic, Recording, Repeater, and Outputs.
 
 ### Task 3: Interactive Ring Buffer Visualizer (`src/components/ui/`)
-- [x] Create `RingBufferGauge` component showing real-time $W$ vs $R$ marker positions.
+- [x] Create `WriterRing` (circular) and `RingBufferStrip` (linear) showing the head and reader marker positions.
 - [x] Color-code status: Yellow for too early (future grain), Red for too late
   / overflow (grain outside retained history).
 

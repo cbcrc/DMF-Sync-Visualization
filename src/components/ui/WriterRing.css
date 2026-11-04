@@ -2,11 +2,11 @@
 
 .writer-ring {
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 8px 0 6px;
-  color: #ffffff;
+  color: var(--ui-text);
   width: 220px;
   box-sizing: border-box;
   pointer-events: auto;
@@ -34,7 +34,7 @@
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-.writer-ring__reader--parked circle {
+.writer-ring__reader--parked polygon {
   animation: writer-ring-blink 1s ease-in-out infinite;
 }
 
@@ -49,7 +49,7 @@
 
 .writer-ring__row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
   gap: 6px;
   align-items: center;
   font-size: 0.6rem;
@@ -75,11 +75,10 @@
 }
 
 .writer-ring__dot {
-  width: 13px;
+  min-width: 20px;
   height: 13px;
-  border-radius: 50%;
-  color: #111214;
-  font-size: 0.55rem;
+  border-radius: 4px;
+  font-size: 0.5rem;
   font-weight: 700;
   display: inline-grid;
   place-items: center;
@@ -92,7 +91,7 @@
 }
 
 .writer-ring__detail {
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
 }
 
 .writer-ring__status {

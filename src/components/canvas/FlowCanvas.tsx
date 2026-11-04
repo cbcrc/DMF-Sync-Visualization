@@ -18,6 +18,7 @@ import {
   type NodeTypes,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { PasteIcon } from '../ui/ToolbarIcons';
 import { nextCopyLabel } from '../../game/copyLabel';
 import type { RingBufferStatus } from '../../types';
 import { MediaFunctionNode, type MediaFunctionNodeData } from './MediaFunctionNode';
@@ -611,9 +612,9 @@ function FlowCanvasInner({
       fitViewOptions={{ padding: 0.3 }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background color="#333" gap={24} />
+      <Background gap={24} />
       <Controls />
-      <MiniMap pannable zoomable style={{ background: '#111214' }} />
+      <MiniMap pannable zoomable />
       <GrainOverlay
         nodes={nodes}
         grains={grains}
@@ -632,7 +633,8 @@ function FlowCanvasInner({
       />
       {toolbarHost && createPortal(
       <div className="fc-toolbar" role="toolbar" aria-label="Canvas toolbar">
-        <div className="fc-toolbar__section">
+        <div className="fc-toolbar__section" role="group" aria-label="Toolbar">
+        <div className="fc-toolbar__buttons">
         {menus}
         <button
           type="button"
@@ -668,7 +670,7 @@ function FlowCanvasInner({
           disabled={!canPaste}
           title="Paste the copied function with the next free number (Ctrl+V)"
         >
-          📋 Paste
+          <PasteIcon />Paste
         </button>
         <button
           type="button"
@@ -680,13 +682,19 @@ function FlowCanvasInner({
           ◔ Show Now
         </button>
         </div>
-        {paneToolbar && <div className="fc-toolbar__section fc-toolbar__section--panes">{paneToolbar}</div>}
+        <span className="fc-toolbar__title">Toolbar</span>
+        </div>
+        {paneToolbar && (
+          <div className="fc-toolbar__section fc-toolbar__section--panes" role="group" aria-label="Pane View">
+            <div className="fc-toolbar__buttons">{paneToolbar}</div>
+            <span className="fc-toolbar__title">Pane View</span>
+          </div>
+        )}
       </div>,
       toolbarHost)}
       {paletteHost && createPortal(
       <div className="fc-palette">
         <div className="fc-palette__header">
-          <div className="fc-palette__title">Add media function</div>
           <button type="button" className="fc-palette__min" onClick={onMinimizePalette} aria-label="Minimize add media function" title="Minimize">
             –
           </button>
@@ -703,12 +711,15 @@ function FlowCanvasInner({
             </div>
           </div>
         ))}
-        <div className="fc-palette__hint">
+        <details className="fc-palette__hint">
+          <summary>Tips</summary>
+          <p>
           Drag between handles to connect · drag a link's end to move it, or drop a link on an occupied input to replace it · Ctrl+Z undoes · Ctrl+C / Ctrl+V copies a function · select + Backspace to delete · drag a media function's slider to
           retune its processing latency · grain indices are kept end to end, so a grain shatters (✕)
           only on the input whose slot was already overwritten (READ TOO LATE), and pales/wobbles
           (?) while an input waits on a not-yet-written grain
-        </div>
+          </p>
+        </details>
       </div>,
       paletteHost)}
     </ReactFlow>

@@ -1,7 +1,7 @@
 // Where each pane is docked and in what order, and its persistence.
 
 export type DockSide = 'left' | 'bottom' | 'right';
-export type DockItemId = 'palette' | 'playback' | 'controls' | 'rings' | 'timeline' | 'help';
+export type DockItemId = 'palette' | 'playback' | 'controls' | 'clock' | 'rings' | 'timeline' | 'help';
 
 /** `order` is one global list; a dock shows its panes in that relative order. */
 export interface DockLayout {
@@ -10,8 +10,8 @@ export interface DockLayout {
 }
 
 export const DEFAULT_LAYOUT: DockLayout = {
-  docks: { palette: 'left', playback: 'left', controls: 'left', rings: 'right', help: 'right', timeline: 'bottom' },
-  order: ['palette', 'playback', 'controls', 'rings', 'timeline', 'help'],
+  docks: { palette: 'left', playback: 'left', controls: 'left', clock: 'right', rings: 'right', help: 'right', timeline: 'bottom' },
+  order: ['palette', 'playback', 'controls', 'clock', 'rings', 'timeline', 'help'],
 };
 
 export const DOCKS_KEY = 'dmf-sync-viz:docks:v2';
@@ -43,6 +43,19 @@ export function movePane(layout: DockLayout, id: DockItemId, side: DockSide, bef
   if (at >= 0) order.splice(at, 0, id);
   else order.push(id);
   return { docks: { ...layout.docks, [id]: side }, order };
+}
+
+export const COLLAPSED_DOCKS_KEY = 'dmf-sync-viz:collapsed-docks:v1';
+
+/** Saved collapsed docks. Collapsing only hides a dock; pane placement and order are untouched. */
+export function loadCollapsedDocks(storage: Pick<Storage, 'getItem'>): Set<DockSide> {
+  try {
+    const raw: unknown = JSON.parse(storage.getItem(COLLAPSED_DOCKS_KEY) ?? 'null');
+    if (!Array.isArray(raw)) return new Set();
+    return new Set(raw.filter((s): s is DockSide => SIDES.includes(s as DockSide)));
+  } catch {
+    return new Set();
+  }
 }
 
 export const MINIMIZED_KEY = 'dmf-sync-viz:minimized:v1';

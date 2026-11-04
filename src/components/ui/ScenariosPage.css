@@ -3,8 +3,8 @@
   inset: 0;
   z-index: 100;
   overflow-y: auto;
-  background: #1a1b1e;
-  color: #ffffff;
+  background: var(--ui-bg);
+  color: var(--ui-text);
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
 }
 
@@ -31,20 +31,20 @@
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9a9a9a;
+  color: var(--ui-text-faint);
 }
 
 .scn-empty {
-  color: #757575;
+  color: var(--ui-text-faint);
   font-size: 0.85rem;
   margin: 0;
 }
 
 .scn-save {
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
-  padding: 12px 14px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px 16px;
 }
 
 .scn-save h3 {
@@ -61,7 +61,7 @@
 .scn-save__hint {
   margin: 8px 0 0;
   font-size: 0.7rem;
-  color: #9a9a9a;
+  color: var(--ui-text-faint);
 }
 
 .scn-msg {
@@ -77,10 +77,10 @@
 .scn-input {
   font: inherit;
   font-size: 0.85rem;
-  color: #ffffff;
-  background: #1a1b1e;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 4px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 6px 8px;
   min-width: 180px;
 }
@@ -92,16 +92,16 @@
 .scn-btn {
   font: inherit;
   font-size: 0.8rem;
-  color: #ffffff;
+  color: var(--ui-text);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  padding: 6px 12px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 6px 14px;
   cursor: pointer;
 }
 
 .scn-btn:hover:not(:disabled) {
-  border-color: #ffffff;
+  border-color: var(--ui-text);
 }
 
 .scn-btn:disabled {
@@ -110,8 +110,8 @@
 }
 
 .scn-btn--primary {
-  background: #ffffff;
-  color: #111214;
+  background: var(--ui-text);
+  color: var(--ui-bg);
   font-weight: 600;
 }
 
@@ -127,9 +127,10 @@
 .scn-card {
   display: flex;
   flex-direction: column;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
   overflow: hidden;
 }
 
@@ -141,14 +142,14 @@
   width: 100%;
   height: auto;
   display: block;
-  background: #0b0c0e;
+  background: var(--ui-bg);
 }
 
 .scn-card__thumb--empty {
   height: 110px;
   display: grid;
   place-items: center;
-  color: #757575;
+  color: var(--ui-text-faint);
   font-size: 0.75rem;
 }
 
@@ -168,7 +169,7 @@
 .scn-card__desc {
   margin: 0;
   font-size: 0.72rem;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 4;
@@ -178,7 +179,7 @@
 
 .scn-card__meta {
   font-size: 0.65rem;
-  color: #9a9a9a;
+  color: var(--ui-text-faint);
 }
 
 .scn-card__actions {

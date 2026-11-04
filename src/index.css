@@ -23,6 +23,81 @@
 :root {
   font-family: 'Radio Canada', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   color-scheme: dark;
+
+  /* Theme-independent tokens. */
+  --ui-accent: #ee0000;
+  --ui-radius: 12px;
+  --ui-radius-sm: 8px;
+  --ui-ease: 0.15s ease;
+}
+
+/* Semantic theme tokens. Dark is the default; `data-theme` switches them. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ui-bg: #09090b; /* canvas */
+  --ui-panel: #18181b; /* sidebars, top bar, panes */
+  --ui-surface: #18181b;
+  --ui-surface-solid: #18181b;
+  --ui-elevated: #1f1f23; /* nodes, menus */
+  --ui-input: #111113;
+  --ui-border: rgba(255, 255, 255, 0.08);
+  --ui-border-strong: rgba(255, 255, 255, 0.16);
+  --ui-text: #f4f4f5;
+  --ui-text-dim: #a1a1aa;
+  --ui-text-faint: #71717a;
+  --ui-hover: rgba(255, 255, 255, 0.05);
+  --ui-control: rgba(255, 255, 255, 0.04);
+  --ui-control-hover: rgba(255, 255, 255, 0.09);
+  --ui-active: #27272a;
+  --ui-tint-1: rgba(255, 255, 255, 0.04);
+  --ui-tint-2: rgba(255, 255, 255, 0.08);
+  --ui-tint-3: rgba(255, 255, 255, 0.16);
+  --ui-grid: #27272a;
+  --ui-ok: #4cd08a;
+  --ui-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --ui-node-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --ui-bg: #f4f4f5;
+  --ui-panel: #ffffff;
+  --ui-surface: #ffffff;
+  --ui-surface-solid: #ffffff;
+  --ui-elevated: #ffffff;
+  --ui-input: #f4f4f5;
+  --ui-border: rgba(0, 0, 0, 0.08);
+  --ui-border-strong: rgba(0, 0, 0, 0.16);
+  --ui-text: #09090b;
+  --ui-text-dim: #52525b;
+  --ui-text-faint: #64748b;
+  --ui-hover: rgba(0, 0, 0, 0.04);
+  --ui-control: rgba(0, 0, 0, 0.04);
+  --ui-control-hover: rgba(0, 0, 0, 0.08);
+  --ui-active: #e4e4e7;
+  --ui-tint-1: rgba(0, 0, 0, 0.03);
+  --ui-tint-2: rgba(0, 0, 0, 0.06);
+  --ui-tint-3: rgba(0, 0, 0, 0.12);
+  --ui-grid: #d4d4d8;
+  --ui-ok: #16a34a;
+  --ui-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --ui-node-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+button {
+  transition: background var(--ui-ease), border-color var(--ui-ease), color var(--ui-ease), box-shadow var(--ui-ease);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 2px;
+}
+
+/* Slim, unobtrusive scrollbars to match the panes. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 html,
@@ -32,6 +107,7 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #1a1b1e;
+  background: var(--ui-bg);
+  color: var(--ui-text);
   overflow: hidden;
 }

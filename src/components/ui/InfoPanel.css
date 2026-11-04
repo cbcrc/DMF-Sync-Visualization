@@ -1,17 +1,17 @@
 .info-panel {
   width: 320px;
-  background: #111214;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #ffffff;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px 16px;
+  color: var(--ui-text);
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
   box-sizing: border-box;
 }
 
 .info-panel__header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: baseline;
   margin-bottom: 8px;
 }
@@ -24,7 +24,7 @@
 .info-panel__close {
   font-family: inherit;
   font-size: 0.9rem;
-  color: #757575;
+  color: var(--ui-text-faint);
   background: none;
   border: none;
   cursor: pointer;
@@ -33,20 +33,20 @@
 }
 
 .info-panel__close:hover {
-  color: #ffffff;
+  color: var(--ui-text);
 }
 
 .info-panel__intro {
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .info-panel__footnote {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  color: #9a9a9a;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text-faint);
 }
 
 .info-panel__row {
@@ -86,8 +86,8 @@
 .info-panel__text code {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 0.6rem;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--ui-text);
+  background: var(--ui-tint-2);
   border-radius: 3px;
   padding: 0 3px;
 }
@@ -100,7 +100,7 @@
 
 .info-panel__text {
   font-size: 0.65rem;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
   line-height: 1.4;
 }
 

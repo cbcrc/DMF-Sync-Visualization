@@ -10,8 +10,9 @@
   z-index: 30;
   display: flex;
   justify-content: center;
-  padding: 6px 8px;
-  background: #0b0b0d;
+  padding: 6px 16px;
+  background: var(--ui-panel);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .app-body {
@@ -35,18 +36,21 @@
 
 .dock {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px;
   box-sizing: border-box;
   overflow: auto;
-  background: #0b0b0d;
+  background: var(--ui-panel);
 }
 
 /* An empty dock stays as a slim strip so it is still visible as a place to dock. */
 .dock:empty {
   flex-basis: 28px !important;
+  width: 28px;
+  min-width: 0;
   padding: 0;
-  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   box-sizing: border-box;
 }
 
@@ -54,13 +58,26 @@
   height: 28px;
 }
 
+/* Side docks size to their widest pane instead of a fixed width. */
 .dock--left,
 .dock--right {
-  flex: 0 0 332px;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 200px;
+  max-width: 360px;
   flex-direction: column;
 }
 
+.dock--left {
+  border-right: 1px solid var(--ui-border);
+}
+
+.dock--right {
+  border-left: 1px solid var(--ui-border);
+}
+
 .dock--bottom {
+  border-top: 1px solid var(--ui-border);
   flex: 0 0 auto;
   max-height: 45vh;
   flex-direction: row;
@@ -97,23 +114,55 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 16px;
+  height: 22px;
+  margin-bottom: 4px;
 }
 
 .dock-item__btns {
   display: flex;
-  gap: 2px;
+  gap: 1px;
+  padding: 1px;
+  background: var(--ui-control);
+  border-radius: 6px;
 }
 
 .dock-item__grip {
-  font-size: 0.6rem;
-  color: #757575;
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--ui-text-faint);
   cursor: grab;
   user-select: none;
+  border-radius: 6px;
 }
 
 .dock-item__grip:hover {
-  color: #ffffff;
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.dock-item__grip:active {
+  cursor: grabbing;
+}
+
+.dock-item__title {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-dim);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
 }
 
 .dock-item--dragging {
@@ -121,7 +170,7 @@
 }
 
 .dock--droppable {
-  outline: 1px dashed rgba(76, 175, 80, 0.6);
+  outline: 1px dashed var(--ui-ok);
   outline-offset: -2px;
 }
 
@@ -157,24 +206,124 @@
 
 
 .dock-item__btn {
+  font-family: inherit;
   font-size: 0.7rem;
   line-height: 1;
-  padding: 0 4px;
-  color: #757575;
+  padding: 3px 5px;
+  color: var(--ui-text-faint);
   background: none;
   border: none;
+  border-radius: 5px;
   cursor: pointer;
 }
 
 .dock-item__btn:hover {
-  color: #ffffff;
+  color: var(--ui-text);
+  background: var(--ui-control-hover);
 }
 
 .dock-item__btn--active {
-  color: #4caf50;
+  color: var(--ui-text);
+  background: var(--ui-active);
 }
 
 .app-canvas .flow-canvas-root {
   position: absolute;
   inset: 0;
+}
+
+/* Collapse a whole dock: panes stay mounted (so layout and state survive), only hidden. */
+.dock__toggle {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--ui-text-faint);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dock--right > .dock__toggle {
+  align-self: flex-start;
+}
+
+.dock--bottom > .dock__toggle {
+  position: sticky;
+  left: 0;
+  align-self: flex-start;
+}
+
+.dock__toggle:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text);
+}
+
+.dock--collapsed > .dock-item {
+  display: none;
+}
+
+.dock--collapsed.dock--left,
+.dock--collapsed.dock--right {
+  flex-basis: 44px !important;
+  width: 44px;
+  min-width: 0;
+  padding: 10px 10px;
+  overflow: hidden;
+}
+
+.dock--collapsed.dock--left > .dock__toggle,
+.dock--collapsed.dock--right > .dock__toggle {
+  align-self: center;
+}
+
+.dock--collapsed.dock--bottom {
+  padding: 4px 10px;
+  overflow: hidden;
+}
+
+/* Pinned pane names shown on a collapsed dock; clicking one expands the dock. */
+.dock__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+}
+
+.dock--bottom > .dock__rail {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dock__rail-name {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ui-text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 6px;
+  cursor: pointer;
+}
+
+.dock--left > .dock__rail .dock__rail-name,
+.dock--right > .dock__rail .dock__rail-name {
+  writing-mode: vertical-rl;
+}
+
+.dock--bottom > .dock__rail .dock__rail-name {
+  padding: 4px 10px;
+}
+
+.dock__rail-name:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text);
 }

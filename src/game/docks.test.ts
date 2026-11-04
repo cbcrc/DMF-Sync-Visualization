@@ -11,7 +11,7 @@ describe('movePane', () => {
 
   it('moves to another dock before a given pane, or last when none', () => {
     const before = movePane(DEFAULT_LAYOUT, 'palette', 'right', 'help');
-    expect(inDock(before, 'right')).toEqual(['rings', 'palette', 'help']);
+    expect(inDock(before, 'right')).toEqual(['clock', 'rings', 'palette', 'help']);
     const last = movePane(DEFAULT_LAYOUT, 'palette', 'bottom', null);
     expect(inDock(last, 'bottom')).toEqual(['timeline', 'palette']);
   });

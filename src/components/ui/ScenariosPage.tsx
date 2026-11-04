@@ -115,7 +115,7 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
         <header className="scn-page__header">
           <h2>Scenarios</h2>
           <button type="button" className="scn-btn" onClick={onClose}>
-            ← Back to canvas
+            ← Back to Canvas
           </button>
         </header>
 
@@ -137,7 +137,7 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
               onChange={(e) => setDescription(e.target.value)}
             />
             <button type="button" className="scn-btn scn-btn--primary" onClick={handleSave} disabled={!title.trim()}>
-              {existing ? 'Replace saved scenario' : 'Save scenario'}
+              {existing ? 'Replace Saved Scenario' : 'Save Scenario'}
             </button>
           </div>
           <p className="scn-save__hint">

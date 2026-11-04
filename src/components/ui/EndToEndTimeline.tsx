@@ -39,7 +39,6 @@ export function EndToEndTimeline({ graph, nodes, edges, focusedNodeId, onFocusNo
   return (
     <div className="e2e">
       <div className="e2e__header">
-        <div className="e2e__title">End-to-end timeline · input → output</div>
         <button type="button" className="e2e__close" onClick={onMinimize} aria-label="Minimize timeline" title="Minimize">
           –
         </button>

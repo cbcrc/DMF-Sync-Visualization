@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { DockItem } from './components/ui/DockItem';
-import { DEFAULT_LAYOUT, DOCKS_KEY, MINIMIZED_KEY, loadLayout, loadMinimized, movePane, type DockItemId, type DockSide } from './game/docks';
+import { COLLAPSED_DOCKS_KEY, DEFAULT_LAYOUT, DOCKS_KEY, MINIMIZED_KEY, loadCollapsedDocks, loadLayout, loadMinimized, movePane, type DockItemId, type DockSide } from './game/docks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
@@ -28,8 +28,26 @@ import { useHashRoute } from './game/useHashRoute';
 import { groupReadingsByWriter } from './game/writerRings';
 import { PlaybackPane } from './components/ui/PlaybackPane';
 import { ToolbarMenus } from './components/ui/ToolbarMenus';
+import { ThemeToggle } from './components/ui/ThemeToggle';
 import { MediaConfigContext, loadMediaConfig, persistMediaConfig } from './game/mediaConfig';
 import './App.css';
+
+/** [expanded, collapsed] chevrons pointing toward where the dock goes / comes from. */
+const DOCK_CHEVRON: Record<DockSide, [string, string]> = {
+  left: ['«', '»'],
+  right: ['»', '«'],
+  bottom: ['⌄', '⌃'],
+};
+
+const PANE_NAMES: Record<DockItemId, string> = {
+  palette: 'Add Function',
+  playback: 'Playback',
+  controls: 'Status',
+  clock: 'Clock',
+  rings: 'Ring Buffers',
+  timeline: 'Timeline',
+  help: 'Help',
+};
 
 function App() {
   const [layout, setLayout] = useState(() => loadLayout(localStorage));
@@ -50,7 +68,20 @@ function App() {
       return next;
     });
   }, []);
+  const [collapsedDocks, setCollapsedDocks] = useState<Set<DockSide>>(() => loadCollapsedDocks(localStorage));
+  useEffect(() => localStorage.setItem(COLLAPSED_DOCKS_KEY, JSON.stringify([...collapsedDocks])), [collapsedDocks]);
+  const toggleDock = useCallback((side: DockSide) => {
+    setCollapsedDocks((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(side)) next.add(side);
+      return next;
+    });
+  }, []);
+  const toggleAllDocks = useCallback(() => {
+    setCollapsedDocks((prev) => (prev.size >= 3 ? new Set() : new Set<DockSide>(['left', 'bottom', 'right'])));
+  }, []);
   const resetLayout = useCallback(() => {
+    setCollapsedDocks(new Set());
     setLayout(DEFAULT_LAYOUT);
     setMinimizedPanes(new Set(DEFAULT_MINIMIZED));
   }, []);
@@ -231,7 +262,7 @@ function App() {
         nodeLabelById={nodeLabelById}
       />
     ),
-    rings: minimizedPanes.has('clock') && minimizedPanes.has('rings') ? null : (
+    clock: minimizedPanes.has('clock') ? null : (
       <RingBufferPanel
         nodes={graphNodes}
         graph={graph}
@@ -240,8 +271,24 @@ function App() {
         parkedInputKeys={parkedInputKeys}
         focusedNodeId={focusedNodeId}
         onFocusNode={setFocusedNodeId}
-        showClock={!minimizedPanes.has('clock')}
-        showRings={!minimizedPanes.has('rings')}
+        showClock
+        showRings={false}
+        onMinimizeClock={minimize('clock')}
+        onMinimizeRings={minimize('rings')}
+        getNow={clock.getNow}
+      />
+    ),
+    rings: minimizedPanes.has('rings') ? null : (
+      <RingBufferPanel
+        nodes={graphNodes}
+        graph={graph}
+        domainSizeMs={domainSizeMs}
+        showRealGrainIndex={showRealGrainIndex}
+        parkedInputKeys={parkedInputKeys}
+        focusedNodeId={focusedNodeId}
+        onFocusNode={setFocusedNodeId}
+        showClock={false}
+        showRings
         onMinimizeClock={minimize('clock')}
         onMinimizeRings={minimize('rings')}
         getNow={clock.getNow}
@@ -261,10 +308,13 @@ function App() {
   };
 
   const renderDock = (side: DockSide) => {
-    const ids = layout.order.filter((id) => layout.docks[id] === side && paneNodes[id]);
+    // Falls back to defaults for panes missing from an older in-memory layout (e.g. after a hot reload).
+    const order = [...layout.order, ...DEFAULT_LAYOUT.order.filter((id) => !layout.order.includes(id))];
+    const ids = order.filter((id) => (layout.docks[id] ?? DEFAULT_LAYOUT.docks[id]) === side && paneNodes[id]);
+    const collapsed = collapsedDocks.has(side);
     return (
       <div
-        className={`dock dock--${side}${dragId ? ' dock--droppable' : ''}`}
+        className={`dock dock--${side}${collapsed ? ' dock--collapsed' : ''}${dragId ? ' dock--droppable' : ''}`}
         title={ids.length === 0 ? `${side[0].toUpperCase()}${side.slice(1)} dock (empty): drag a pane here` : undefined}
         onDragOver={(e) => dragId && e.preventDefault()}
         onDrop={(e) => {
@@ -272,8 +322,35 @@ function App() {
           e.preventDefault();
           dockPane(dragId, side);
           setDragId(null);
+          setCollapsedDocks((prev) => {
+            if (!prev.has(side)) return prev;
+            const next = new Set(prev);
+            next.delete(side);
+            return next;
+          });
         }}
       >
+        {ids.length > 0 && (
+          <button
+            type="button"
+            className="dock__toggle"
+            onClick={() => toggleDock(side)}
+            aria-expanded={!collapsed}
+            title={`${collapsed ? 'Expand' : 'Collapse'} ${side} panes`}
+            aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${side} panes`}
+          >
+            {DOCK_CHEVRON[side][collapsed ? 1 : 0]}
+          </button>
+        )}
+        {collapsed && ids.length > 0 && (
+          <div className="dock__rail">
+            {ids.map((id) => (
+              <button key={id} type="button" className="dock__rail-name" onClick={() => toggleDock(side)} title={`Expand ${side} panes`}>
+                {PANE_NAMES[id]}
+              </button>
+            ))}
+          </div>
+        )}
         {ids.map((id, i) => (
           <DockItem
             key={id}
@@ -284,6 +361,7 @@ function App() {
             dragId={dragId}
             onDragId={setDragId}
             onDropBefore={(from, before) => dockPane(from, side, before)}
+            title={PANE_NAMES[id]}
             grow={id === 'timeline'}
             bodyRef={id === 'palette' ? setPaletteHost : undefined}
           >
@@ -310,6 +388,8 @@ function App() {
         writerRings={writerRings}
         focusedNodeId={focusedNodeId}
         menus={
+          <>
+          <ThemeToggle />
           <ToolbarMenus
             level={level}
             onSelectLevel={handleSelectLevel}
@@ -322,8 +402,9 @@ function App() {
             media={media}
             onMediaChange={setMedia}
           />
+          </>
         }
-        paneToolbar={<PaneToolbar minimized={minimizedPanes} onToggle={togglePane} onResetLayout={resetLayout} />}
+        paneToolbar={<PaneToolbar minimized={minimizedPanes} onToggle={togglePane} onResetLayout={resetLayout} allDocksCollapsed={collapsedDocks.size >= 3} onToggleAllDocks={toggleAllDocks} />}
         toolbarHost={toolbarHost}
         paletteHost={minimizedPanes.has('palette') ? null : paletteHost}
         onMinimizePalette={minimize('palette')}

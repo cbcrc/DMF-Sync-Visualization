@@ -4,9 +4,6 @@ import type { GraphBufferState } from '../../game/graphLatency';
 import { groupReadingsByWriter } from '../../game/writerRings';
 import { ClockStrip } from './ClockStrip';
 import { WriterRing } from './WriterRing';
-import { RingBufferGauge } from './RingBufferGauge';
-import { GrainSlotStrip } from './GrainSlotStrip';
-import { ContinuousBufferTrack } from './ContinuousBufferTrack';
 import './RingBufferPanel.css';
 
 export interface RingBufferPanelProps {
@@ -39,11 +36,7 @@ export interface RingBufferPanelProps {
  * selected function only (the flows it writes), one block per *writer* flow: a ring is a
  * property of the writer, and every function reading it is a marker on that
  * one ring (`WriterRing`), so several readers at different points in time can
- * be compared against the same head and "now". Each reader keeps its own
- * detail below: the linear gauge plus, for video/data, the grain-slot strip.
- * Audio writers are MXL Continuous buffers, so they get only the
- * now-bar (no slot ring), and each reader's detail is the slot-free
- * `ContinuousBufferTrack`.
+ * be compared against the same head and "now".
  */
 export function RingBufferPanel({
   nodes,
@@ -70,9 +63,8 @@ export function RingBufferPanel({
   return (
     <div className="rb-panel">
       {showClock && (
-        <>
+        <div className="rb-panel__card">
           <div className="rb-panel__header">
-            <div className="rb-panel__title">MXL Clock · TAI (live)</div>
             <button type="button" className="rb-panel__close" onClick={onMinimizeClock} aria-label="Minimize clock" title="Minimize">
               –
             </button>
@@ -81,31 +73,29 @@ export function RingBufferPanel({
             timestampMs={graph.timestampMs}
             grainRate={graph.grainRate}
             grainDurationMs={graph.grainDurationMs}
-            grainCount={graph.grainCount}
             domainSizeMs={domainSizeMs}
             showRealGrainIndex={showRealGrainIndex}
           />
           <div className="rb-panel__clock">
-            {graph.grainDurationMs}ms grains · {graph.grainCount} slots/window
+            {graph.grainDurationMs}ms grains
             <span className="rb-panel__clock-note"> (each flow's ring buffer uses its own track's grain rate)</span>
           </div>
-        </>
-      )}
-      {showRings && (
-        <div className="rb-panel__header">
-          <div className="rb-panel__title">Ring buffers</div>
-          <button type="button" className="rb-panel__close" onClick={onMinimizeRings} aria-label="Minimize ring buffers" title="Minimize">
-            –
-          </button>
         </div>
       )}
-      {showRings && focusedNodeId === null && (
+      {showRings && (
+        <div className="rb-panel__card">
+      <div className="rb-panel__header">
+        <button type="button" className="rb-panel__close" onClick={onMinimizeRings} aria-label="Minimize ring buffers" title="Minimize">
+          –
+        </button>
+      </div>
+      {focusedNodeId === null && (
         <div className="rb-panel__empty">Select a media function on the canvas to see its ring buffers.</div>
       )}
-      {showRings && focusedNodeId !== null && writers.length === 0 && (
+      {focusedNodeId !== null && writers.length === 0 && (
         <div className="rb-panel__empty">This function has no ring buffers to show yet — connect an input or an output.</div>
       )}
-      {showRings && writers.map((ring) => {
+      {writers.map((ring) => {
         const writerLabel = labelByNodeId.get(ring.writerNodeId) ?? ring.writerNodeId;
         const holdsFocus = ring.readers.some((r) => r.readerNodeId === focusedNodeId);
         return (
@@ -125,31 +115,11 @@ export function RingBufferPanel({
               getNow={getNow}
               snapshotMs={graph.timestampMs}
             />
-            {ring.readers.map((reader, i) => {
-              const { reading } = reader;
-              const readerLabel = labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId;
-              const label = `${i + 1} → ${readerLabel}`;
-              const isParked = parkedInputKeys?.has(reader.key) ?? false;
-              return (
-                <div key={reader.key} className={`rb-panel__entry${isParked ? ' rb-panel__entry--parked' : ''}`}>
-                  <RingBufferGauge label={label} buffer={reading.buffer} evaluation={reading.evaluation} />
-                  {reading.track === 'audio' ? (
-                    <ContinuousBufferTrack
-                      label={label}
-                      buffer={reading.buffer}
-                      evaluation={reading.evaluation}
-                      alignmentSpanMs={reading.alignmentSpanMs}
-                      parked={isParked}
-                    />
-                  ) : (
-                    <GrainSlotStrip buffer={reading.buffer} evaluation={reading.evaluation} />
-                  )}
-                </div>
-              );
-            })}
           </div>
         );
       })}
+        </div>
+      )}
     </div>
   );
 }

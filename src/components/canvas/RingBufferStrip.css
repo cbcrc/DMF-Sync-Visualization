@@ -1,7 +1,7 @@
 .ws {
   font-family: 'Radio Canada', Inter, system-ui, sans-serif;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--ui-tint-1);
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
   padding: 3px 8px 4px;
   box-sizing: border-box;
@@ -16,7 +16,7 @@
 .ws__title {
   font-size: 0.55rem;
   font-weight: 700;
-  color: #cfcfcf;
+  color: var(--ui-text-dim);
   text-transform: capitalize;
   margin-bottom: 14px;
 }
@@ -39,8 +39,9 @@
 }
 
 .ws__cells {
+  position: relative;
   display: flex;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -94,7 +95,7 @@
 .ws__cell--unreadable,
 .ws__bar--unreadable {
   background: repeating-linear-gradient(135deg, #3a3d42, #3a3d42 3px, #2a2c30 3px, #2a2c30 6px);
-  color: #9a9a9a;
+  color: var(--ui-text-faint);
 }
 
 .ws__bar {
@@ -206,8 +207,8 @@
   white-space: nowrap;
   font-size: 0.62rem;
   line-height: 1.35;
-  color: #ffffff;
-  background: #1a1b1e;
+  color: var(--ui-text);
+  background: var(--ui-input);
   border: 1px solid #f5a623;
   border-radius: 6px;
   padding: 3px 7px;
@@ -246,4 +247,15 @@
 
 .ws__win--focused {
   background: #ee0000;
+}
+
+/* Video grain boundary across an audio strip (blue = the video-aligned colour). */
+.ws__vtick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: #3b8fe0;
+  opacity: 0.9;
+  pointer-events: none;
 }
