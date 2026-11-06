@@ -29,20 +29,36 @@ latency maths. It never feeds back into ring-buffer evaluation.
 
 ## Per-track grain rate
 
-Audio uses 1 ms grains (`AUDIO_GRAIN_RATE`), video 20 ms (`DEFAULT_GRAIN_RATE`).
+Audio is counted in 10 ms commit batches (`AUDIO_GRAIN_RATE`, MXL's default
+batch), video in 20 ms grains (`DEFAULT_GRAIN_RATE`).
 `graphLatency.ts` resolves each input's track by walking back to its producer
 (`trackForEdge`) and derives grain duration, count and index from
 `grainRateForTrack`. Only the Clock pane's top line stays at video rate.
-MXL audio is a Continuous ring; the app draws it as an unbroken ring in 1 ms units
-(a display simplification, see AI_RULES.md).
+MXL audio is a Continuous ring of samples, twice the domain history (rounded up to
+a page), of which readers may use the newer half. The app draws it in batches
+and judges reads by MXL's continuous rule (`continuousGeometry`; see AI_RULES.md).
 
 ## Audio/video alignment
 
-At a sync point with both a video and an audio input, `computeGraphLatency`
-attaches `alignmentSpanMs` (the time span of the video grain being read) to the
-audio reading. That reader is "video-aligned": its window is blue, its row reads
-"1 video grain = N ms · N smp", and blue ticks (`videoGrainSpanOf`) cross the
-audio ring. MXL aligns by timestamp, so the ticks are a visual aid.
+At a sync point with both a video and an audio input, the video input is read
+first and the audio input then reads exactly that grain's samples, the way MXL
+aligns flows: the grain's timestamp `T_k` and the next one `T_k+1` are converted
+to sample indices (`sampleIndexAt`, MXL's `timestampToIndex`), and the reader asks
+for `S(T_k)` … `S(T_k+1) - 1` (`AlignedRead` on the buffer). It is judged per
+sample: too early while the last sample is past the head, too late once the window
+no longer fits in the readable half. At 29.97 fps the window alternates 1602/1601
+samples (8008 per 5 grains). Both readings carry `alignmentSpanMs`.
+
+On screen, the pair is blue everywhere:
+
+- **Audio strip and ring:** the exact sample window, drawn at sample precision
+  (it can start mid-batch), and ticks where each video grain starts, placed at its
+  timestamp's sample index (uneven at 1001-based rates).
+- **Video strip and ring:** the grain being read with the audio.
+- **Ring Buffers pane:** under the aligned audio reader, the conversion itself:
+  `T` (the grain's timestamp), `V fps → grain k`, `A kHz → samples first … last
+  (count)`. Simplified labels count samples from simplified grain 100 and wrap
+  with it; TAI Time shows the real indices.
 
 ## Origin tags (Canvas menu, off by default)
 

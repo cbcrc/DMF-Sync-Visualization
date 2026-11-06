@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { safeStorage } from './safeStorage';
 import { DockItem } from './components/ui/DockItem';
 import { COLLAPSED_DOCKS_KEY, DEFAULT_LAYOUT, DOCKS_KEY, MINIMIZED_KEY, loadCollapsedDocks, loadLayout, loadMinimized, movePane, type DockItemId, type DockSide } from './game/docks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -54,17 +55,17 @@ const PANE_NAMES: Record<DockItemId, string> = {
 };
 
 function App() {
-  const [layout, setLayout] = useState(() => loadLayout(localStorage));
+  const [layout, setLayout] = useState(() => loadLayout(safeStorage));
   const dockPane = useCallback(
     (id: DockItemId, side: DockSide, beforeId: DockItemId | null = null) => setLayout((l) => movePane(l, id, side, beforeId)),
     [],
   );
-  useEffect(() => localStorage.setItem(DOCKS_KEY, JSON.stringify(layout)), [layout]);
+  useEffect(() => { safeStorage.setItem(DOCKS_KEY, JSON.stringify(layout)); }, [layout]);
   const [dragId, setDragId] = useState<DockItemId | null>(null);
   const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
-  const [minimizedPanes, setMinimizedPanes] = useState<Set<PaneId>>(() => loadMinimized(localStorage, ALL_PANES, DEFAULT_MINIMIZED));
-  useEffect(() => localStorage.setItem(MINIMIZED_KEY, JSON.stringify([...minimizedPanes])), [minimizedPanes]);
+  const [minimizedPanes, setMinimizedPanes] = useState<Set<PaneId>>(() => loadMinimized(safeStorage, ALL_PANES, DEFAULT_MINIMIZED));
+  useEffect(() => { safeStorage.setItem(MINIMIZED_KEY, JSON.stringify([...minimizedPanes])); }, [minimizedPanes]);
   const togglePane = useCallback((id: PaneId) => {
     setMinimizedPanes((prev) => {
       const next = new Set(prev);
@@ -72,8 +73,8 @@ function App() {
       return next;
     });
   }, []);
-  const [collapsedDocks, setCollapsedDocks] = useState<Set<DockSide>>(() => loadCollapsedDocks(localStorage));
-  useEffect(() => localStorage.setItem(COLLAPSED_DOCKS_KEY, JSON.stringify([...collapsedDocks])), [collapsedDocks]);
+  const [collapsedDocks, setCollapsedDocks] = useState<Set<DockSide>>(() => loadCollapsedDocks(safeStorage));
+  useEffect(() => { safeStorage.setItem(COLLAPSED_DOCKS_KEY, JSON.stringify([...collapsedDocks])); }, [collapsedDocks]);
   const toggleDock = useCallback((side: DockSide) => {
     setCollapsedDocks((prev) => {
       const next = new Set(prev);
@@ -93,10 +94,10 @@ function App() {
   const [graphNodes, setGraphNodes] = useState<Node<MediaFunctionNodeData>[]>([]);
   const [graphEdges, setGraphEdges] = useState<Edge[]>([]);
   const [route, navigate] = useHashRoute();
-  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>(() => loadSavedScenarios(localStorage));
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>(() => loadSavedScenarios(safeStorage));
   const scenarios = useMemo<Scenario[]>(() => [...BUILTIN_SCENARIOS, ...savedScenarios], [savedScenarios]);
   // The autosaved canvas from the last session, if any, so a refresh keeps edits.
-  const [restored] = useState(() => loadWorkingGraph(localStorage));
+  const [restored] = useState(() => loadWorkingGraph(safeStorage));
   const [levelId, setLevelId] = useState(restored?.scenarioId ?? DEFAULT_SCENARIO_ID);
   const level = useMemo(
     () => scenarios.find((s) => s.id === levelId) ?? BUILTIN_SCENARIOS[0],
@@ -104,8 +105,8 @@ function App() {
   );
   const [domainSizeMs, setDomainSizeMs] = useState(restored?.domainSizeMs ?? level.domainSizeMs);
   const [initialGraph, setInitialGraph] = useState<{ nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] }>(() => restored ?? level);
-  const [media, setMedia] = useState(() => loadMediaConfig(localStorage));
-  useEffect(() => persistMediaConfig(localStorage, media), [media]);
+  const [media, setMedia] = useState(() => loadMediaConfig(safeStorage));
+  useEffect(() => persistMediaConfig(safeStorage, media), [media]);
   const [graphLoadKey, setGraphLoadKey] = useState(0);
   const [showOriginTimestamps, setShowOriginTimestamps] = useState(false);
   // Grain index mode: simplified count from 100 (default) vs. the real MXL index —
@@ -129,7 +130,11 @@ function App() {
     manualBackRef.current = back;
   }, []);
 
+  // Set once the canvas has reported its graph, so autosave never writes App's
+  // initial empty placeholder over the graph being restored.
+  const graphReportedRef = useRef(false);
   const onGraphChange = useCallback((nodes: Node<MediaFunctionNodeData>[], edges: Edge[]) => {
+    graphReportedRef.current = true;
     setGraphNodes(nodes);
     setGraphEdges(edges);
   }, []);
@@ -200,7 +205,7 @@ function App() {
         nodes: graphNodes,
         edges: graphEdges,
       });
-      if (!persistSavedScenarios(localStorage, list)) return false;
+      if (!persistSavedScenarios(safeStorage, list)) return false;
       setSavedScenarios(list);
       setLevelId(saved.id);
       return true;
@@ -218,9 +223,12 @@ function App() {
   const handleDeleteScenario = useCallback(
     (id: string) => {
       const list = savedScenarios.filter((s) => s.id !== id);
-      if (persistSavedScenarios(localStorage, list)) setSavedScenarios(list);
+      if (!persistSavedScenarios(safeStorage, list)) return;
+      setSavedScenarios(list);
+      // The canvas keeps the graph as unsaved work; it just no longer belongs to a saved scenario.
+      if (id === levelId) setLevelId(DEFAULT_SCENARIO_ID);
     },
-    [savedScenarios],
+    [savedScenarios, levelId],
   );
 
   const handleImportScenarios = useCallback(
@@ -228,7 +236,7 @@ function App() {
       const parsed = parseScenarioFile(text);
       if (!parsed.ok) return { ok: false, text: parsed.error };
       const list = mergeImported(savedScenarios, parsed.scenarios);
-      if (!persistSavedScenarios(localStorage, list)) {
+      if (!persistSavedScenarios(safeStorage, list)) {
         return { ok: false, text: 'Could not import: browser storage is full or unavailable.' };
       }
       setSavedScenarios(list);
@@ -238,11 +246,11 @@ function App() {
     [savedScenarios],
   );
 
-  // Autosave the working canvas (debounced) so new functions survive a refresh.
+  // Autosave the working canvas (debounced) so edits, including clearing it, survive a refresh.
   useEffect(() => {
-    if (graphNodes.length === 0) return;
+    if (!graphReportedRef.current) return;
     const timer = window.setTimeout(() => {
-      persistWorkingGraph(localStorage, {
+      persistWorkingGraph(safeStorage, {
         scenarioId: levelId,
         domainSizeMs,
         nodes: graphNodes,
@@ -445,6 +453,8 @@ function App() {
         onParkedInputsChange={setParkedInputKeys}
         stepClockBy={clock.step}
         onManualStepReady={registerManualStep}
+        clockTickMs={graph.timestampMs}
+        keyboardEnabled={route !== 'scenarios'}
       />
         </div>
         {renderDock('bottom')}

@@ -69,17 +69,33 @@ and "live" a reader outside it (checked against `6e654e2`).
 - Reads are evaluated instantaneously, not by deadline-based blocking/retry.
 - **Grain Repeater** reads the oldest retained grain (`readsTail`) and writes it
   into a fresh standard-size ring with the same index (`originTs` kept). Its output
-  head lags by the age it read (`oldestReadableAgeMs`), which counts as workload
+  head lags by the age it read (the oldest readable age of the ring it reads,
+  discrete for video and continuous for audio), which counts as workload
   latency.
-- Invalid-grain publication and per-slice validity are not modelled. Audio is
-  approximated as a very fine-grained Discrete ring (1 ms grains, AES67's default
-  packet time) rather than MXL's Continuous ring (per-sample, half-buffer
-  writer/reader split).
-- The writer-reserved margin (real MXL: exactly 2 physical slots at any grain
-  rate) is pinned to a fixed *time* budget (`WRITER_RESERVED_MS`, video's 2 grains
-  = 40 ms) and re-derived into each track's grain count (never fewer than 2). This
-  keeps scenario outcomes consistent between coarse video and fine audio, at the
-  cost of diverging from MXL's fixed-slot behaviour.
+- Invalid-grain publication and per-slice validity are not modelled.
+- Audio is counted in 10 ms commit batches (MXL's default `maxCommitBatchSizeHint`,
+  `Instance.cpp`), not single samples: indices, slots, the read-behind and each
+  audio function's added latency move one batch at a time. Whether an audio read
+  is too late follows MXL's Continuous rule (`continuousGeometry`): the buffer is
+  twice the history rounded up to a 4 KiB page (`Instance.cpp`), and a read of
+  `count` samples is OK while it fits in the newer half
+  (`PosixContinuousFlowReader.cpp`). Video keeps the discrete rule: exactly 2
+  writer-reserved slots. Checked against `6e654e2`.
+- **A/V alignment is by timestamp, per sample** (`AlignedRead`). An audio input
+  synced with a video input reads exactly the samples of the video grain `k` read
+  alongside: `S(T_k)` to `S(T_k+1) - 1`, where `S` is MXL's `timestampToIndex` at
+  the sample rate (round to nearest, `IndexConversion.hpp`), and is judged per
+  sample. So 1001-based rates follow the real cadence (29.97: 1602/1601 samples,
+  8008 per 5 grains). When audio is the slower flow, the video input pairs the
+  latest grain whose audio is fully committed, as a sync group's
+  `waitForDataAt` would wait for it. Pairing a grain with the samples from its own
+  timestamp up to the next one is this app's choice; MXL leaves it to the
+  consumer (`mxl-gst` stamps audio by its first sample's timestamp, `sink.cpp`).
+  Other audio reads take one batch.
+- Head positions round down (`timestampToGrainIndex`: the grain whose span
+  contains now is being written); conversions between flows round to nearest
+  (`timestampToIndex`), like MXL. Rounding heads too would count a grain as
+  complete halfway through it, before its audio exists.
 - The linear-side Origin Time Stamp is not implemented (timeline `leadInMs` is 0).
 
 ## Working agreements

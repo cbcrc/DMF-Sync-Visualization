@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Scenario } from '../../game/scenarios';
 import { ringBufferLength } from '../../engine/mxlGrainIndex';
 import { buildScenarioFile } from '../../game/scenarioStorage';
@@ -66,6 +66,19 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
   const [description, setDescription] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  // Escape returns to the canvas, like the toolbar menus; focus starts inside the page.
+  // `onClose` is read from a ref: the parent passes a new one on every render.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    pageRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   const existing = scenarios.find((s) => !s.builtIn && s.title.toLowerCase() === title.trim().toLowerCase());
 
   const handleSave = () => {
@@ -88,13 +101,18 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Revoking at once can cancel the download in Firefox and Safari.
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
   const fileName = (title: string) => `${title.replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || 'scenario'}.dmfsync.json`;
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    setMessage(onImport(await file.text()));
+    try {
+      setMessage(onImport(await file.text()));
+    } catch {
+      setMessage({ ok: false, text: 'Could not read that file.' });
+    }
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -137,7 +155,7 @@ export function ScenariosPage({ scenarios, activeScenarioId, onOpen, onSave, onD
   );
 
   return (
-    <div className="scn-page" role="dialog" aria-label="Scenarios">
+    <div className="scn-page" role="dialog" aria-modal="true" aria-label="Scenarios" tabIndex={-1} ref={pageRef}>
       <div className="scn-page__inner">
         <header className="scn-page__header">
           <h2>Scenarios</h2>

@@ -110,3 +110,18 @@
     opacity: 0.45;
   }
 }
+
+/* How an aligned audio read pairs with its video grain: one timestamp, each flow's own index. */
+.writer-ring__aligned {
+  margin: 0 0 2px 26px;
+  padding: 2px 6px;
+  border-left: 2px solid #3b8fe0;
+  font-family: monospace;
+  font-size: 0.55rem;
+  line-height: 1.5;
+  color: var(--ui-text);
+}
+
+.writer-ring__aligned span {
+  color: var(--ui-text-dim);
+}

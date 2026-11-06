@@ -379,7 +379,7 @@ export function GrainOverlay({
     >
       <div>⏱ shared origin · V#{sharedOrigin.videoIdx} · A#{sharedOrigin.audioIdx}</div>
       <div className="shared-origin-chip__note">
-        Same instant, different grain sizes — video (~20ms) and audio (~1ms) count it in their own grains, so the
+        Same instant, different units — video counts frames (~20ms) and audio counts 10ms commit batches, so the
         numbers differ.
       </div>
     </div>

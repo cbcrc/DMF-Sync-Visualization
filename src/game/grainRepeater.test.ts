@@ -3,6 +3,7 @@ import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import { computeGraphLatency } from './graphLatency';
 import { timestampToGrainIndex } from '../engine/mxlGrainIndex';
+import { continuousGeometry } from '../engine/ringBufferEngine';
 
 const node = (id: string, kind: MediaFunctionNodeData['kind'], latencyMs: number, inputCount: number, outputCount: number): Node<MediaFunctionNodeData> => ({
   id,
@@ -41,5 +42,18 @@ describe('grain repeater', () => {
     expect(read.buffer.stalenessMs).toBe(read.buffer.retainedMs);
     expect(g.totalWorkloadLatencyMs).toBe(60 + 20 + read.buffer.retainedMs + read.buffer.grainDurationMs);
     expect(g.inputsByNodeId.get('out')![0].evaluation.status).toBe('OK');
+  });
+
+  it('measures an audio repeater tail read in its continuous ring', () => {
+    const nodes = [node('in', 'input', 0, 0, 2), node('rep', 'repeater', 0, 1, 1)];
+    const edges = [{ ...edge('e1', 'in', 'rep'), sourceHandle: 'out-1' }];
+    const g = computeGraphLatency(nodes, edges, 200, 0);
+    const read = g.inputsByNodeId.get('rep')![0];
+    expect(read.track).toBe('audio');
+    // 200 ms at 48 kHz: 19'456 samples, 9'728 readable; a 480-sample batch read
+    // may lag 19 batches, plus the batch behind the head = 200 ms.
+    expect(continuousGeometry(200).retainedGrains).toBe(19);
+    expect(g.latencyByNodeId.get('rep')!.outputLatencyMs).toBe(200);
+    expect(read.buffer.retainedMs + read.buffer.grainDurationMs).toBe(200);
   });
 });

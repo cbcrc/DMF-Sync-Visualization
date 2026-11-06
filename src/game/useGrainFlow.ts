@@ -6,7 +6,6 @@ import { stepGrains, edgeTravelDurationMs, type Grain } from './grainFlow';
 import { grainDurationMs } from '../engine/mxlGrainIndex';
 import { useMediaConfig } from './mediaConfig';
 
-const TICK_MS = 40;
 const RESPAWN_GAP_MS = 350;
 const DRAIN_KEY = '__drained__';
 
@@ -48,11 +47,20 @@ export function useGrainFlow(
    *  used by `stepToNextRead` to move the clock in lockstep with the grains it
    *  resolves, instead of the HUD's Step button applying its own fixed quantum. */
   stepClockBy?: (incrementMs: number) => void,
+  /**
+   * Simulated time of the game loop's latest tick (`useGameLoop`, the app's only
+   * tick runner). Grains step whenever it, the graph or the statuses change, so
+   * they always use that tick's statuses, and nothing re-renders while the clock
+   * is frozen (Manual mode).
+   */
+  clockTickMs = 0,
 ): GrainFlowResult {
   const stepMs = grainDurationMs(useMediaConfig().videoRate);
   const stepMsRef = useRef(stepMs);
   stepMsRef.current = stepMs;
   const [grains, setGrains] = useState<Grain[]>([]);
+  /** Bumped by `restartWave` so a wave restarted while the clock is frozen still spawns at once. */
+  const [restartEpoch, setRestartEpoch] = useState(0);
   const grainsRef = useRef<Grain[]>(grains);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -80,6 +88,7 @@ export function useGrainFlow(
     // Allow immediate injection on the next tick
     lastSpawnByNode.current.set(DRAIN_KEY, getNowRef.current() - RESPAWN_GAP_MS);
     setGrains([]);
+    setRestartEpoch((e) => e + 1);
   }, []);
 
   // When parent signals a wave reset (level change, manual restart button, or reset after fail):
@@ -117,32 +126,31 @@ export function useGrainFlow(
     prevSignatureRef.current = currentSignature;
   }, [currentSignature, restartWave]);
 
+  // Step on the game loop's tick rather than a timer of our own. One call per
+  // change is enough: at an unchanged time `stepGrains` is already settled.
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = getNowRef.current();
-      const next = stepGrains(
-        grainsRef.current,
-        now,
-        nodesRef.current,
-        edgesRef.current,
-        lastSpawnByNode.current,
-        statusRef.current,
-        droppedHandlesByNode.current,
-      );
-      grainsRef.current = next;
-      // A grain in 'traveling' phase this tick is a flow currently (or just)
-      // moving from its source node's output buffer into the target node's
-      // input — record the moment so the canvas can highlight that edge
-      // (see `GrainFlowResult.edgeActivity`'s doc comment).
-      for (const g of next) {
-        if (g.phase === 'traveling' && g.edgeId) {
-          edgeActivityRef.current.set(g.edgeId, now);
-        }
+    const now = getNowRef.current();
+    const next = stepGrains(
+      grainsRef.current,
+      now,
+      nodes,
+      edges,
+      lastSpawnByNode.current,
+      statusByInputKey,
+      droppedHandlesByNode.current,
+    );
+    grainsRef.current = next;
+    // A grain in 'traveling' phase this tick is a flow currently (or just)
+    // moving from its source node's output buffer into the target node's
+    // input — record the moment so the canvas can highlight that edge
+    // (see `GrainFlowResult.edgeActivity`'s doc comment).
+    for (const g of next) {
+      if (g.phase === 'traveling' && g.edgeId) {
+        edgeActivityRef.current.set(g.edgeId, now);
       }
-      setGrains(next);
-    }, TICK_MS);
-    return () => clearInterval(interval);
-  }, []);
+    }
+    setGrains(next);
+  }, [clockTickMs, nodes, edges, statusByInputKey, restartEpoch]);
 
   // Manual mode's "Step ▶" advances the clock to the next grain boundary, so
   // the displayed index moves exactly one slot per click. The grains are

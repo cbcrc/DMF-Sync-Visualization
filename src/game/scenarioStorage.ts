@@ -8,11 +8,14 @@ import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNo
 import type { MediaConfig } from '../engine/mxlGrainIndex';
 import { mediaFromJson, mediaToJson, type MediaJson } from './mediaConfig';
 import type { Scenario } from './scenarios';
+import { DELAY_MAX_MS, LATENCY_RANGE } from '../components/canvas/nodeDefaults';
+import { withoutCycles } from './connectionRules';
 
 export const SAVED_SCENARIOS_KEY = 'dmf-sync-viz:scenarios:v1';
 export const WORKING_GRAPH_KEY = 'dmf-sync-viz:working:v1';
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+/** `setItem` may report failure by returning false (see `safeStorage`) or by throwing (plain `Storage`). */
+type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): unknown };
 
 export interface SavedScenario extends Omit<Scenario, 'builtIn'> {
   builtIn: false;
@@ -32,6 +35,17 @@ const KINDS: MediaFunctionKind[] = ['input', 'synthetic', 'editorial', 'technica
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Most connectors any function has (the palette's largest is 4); guards against absurd counts in files. */
+export const MAX_PORTS = 8;
+const isPortCount = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_PORTS;
+
+/** Clamps a stored latency to what the function's own slider allows (never negative). */
+function clampLatency(kind: MediaFunctionKind, ms: number): number {
+  if (kind === 'repeater') return 0; // Grain Repeaters are fixed at 0ms, including in scenarios saved earlier.
+  const range = LATENCY_RANGE[kind];
+  return Math.min(range?.max ?? DELAY_MAX_MS, Math.max(range?.min ?? 0, ms));
+}
+
 /** Reads per-input sync groups, upgrading the older `ignoreSyncInputs` list (those inputs were live). */
 function sanitizeInputGroups(d: Record<string, unknown>, inputCount: number): { inputGroups?: number[] } {
   const groups = Array.from({ length: inputCount }, (_, i) => {
@@ -47,7 +61,7 @@ export function sanitizeNode(raw: unknown): Node<MediaFunctionNodeData> | null {
   if (!isRecord(raw) || typeof raw.id !== 'string' || !isRecord(raw.data) || !isRecord(raw.position)) return null;
   const d = raw.data;
   if (!KINDS.includes(d.kind as MediaFunctionKind) || typeof d.label !== 'string') return null;
-  if (!isNum(d.latencyMs) || !isNum(d.inputCount) || !isNum(d.outputCount)) return null;
+  if (!isNum(d.latencyMs) || !isPortCount(d.inputCount) || !isPortCount(d.outputCount)) return null;
   if (!isNum(raw.position.x) || !isNum(raw.position.y)) return null;
   return {
     id: raw.id,
@@ -56,8 +70,7 @@ export function sanitizeNode(raw: unknown): Node<MediaFunctionNodeData> | null {
     data: {
       kind: d.kind as MediaFunctionKind,
       label: d.label,
-      // Grain Repeaters are fixed at 0ms, including in scenarios saved earlier.
-      latencyMs: d.kind === 'repeater' ? 0 : d.latencyMs,
+      latencyMs: clampLatency(d.kind as MediaFunctionKind, d.latencyMs),
       inputCount: d.inputCount,
       outputCount: d.outputCount,
       ...(d.audioOnly === true ? { audioOnly: true } : {}),
@@ -79,17 +92,22 @@ export function sanitizeEdge(raw: unknown): Edge | null {
   return edge;
 }
 
-/** Sanitizes a graph and drops edges whose endpoints are missing. */
+/**
+ * Sanitizes a graph: drops nodes that repeat an earlier id, edges whose
+ * endpoints are missing, and edges that would close a loop.
+ */
 export function sanitizeGraph(
   rawNodes: unknown,
   rawEdges: unknown,
 ): { nodes: Node<MediaFunctionNodeData>[]; edges: Edge[] } | null {
   if (!Array.isArray(rawNodes) || !Array.isArray(rawEdges)) return null;
-  const nodes = rawNodes.map(sanitizeNode).filter((n): n is Node<MediaFunctionNodeData> => n !== null);
-  const ids = new Set(nodes.map((n) => n.id));
-  const edges = rawEdges
-    .map(sanitizeEdge)
-    .filter((e): e is Edge => e !== null && ids.has(e.source) && ids.has(e.target));
+  const ids = new Set<string>();
+  const nodes = rawNodes
+    .map(sanitizeNode)
+    .filter((n): n is Node<MediaFunctionNodeData> => n !== null && !ids.has(n.id) && Boolean(ids.add(n.id)));
+  const edges = withoutCycles(
+    rawEdges.map(sanitizeEdge).filter((e): e is Edge => e !== null && ids.has(e.source) && ids.has(e.target)),
+  );
   return { nodes, edges };
 }
 
@@ -104,8 +122,7 @@ function readJson(storage: StorageLike, key: string): unknown {
 
 function writeJson(storage: StorageLike, key: string, value: unknown): boolean {
   try {
-    storage.setItem(key, JSON.stringify(value));
-    return true;
+    return storage.setItem(key, JSON.stringify(value)) !== false;
   } catch {
     return false; // storage full or unavailable
   }
@@ -178,7 +195,7 @@ export function loadWorkingGraph(storage: StorageLike): WorkingGraph | null {
   const raw = readJson(storage, WORKING_GRAPH_KEY);
   if (!isRecord(raw) || typeof raw.scenarioId !== 'string' || !isNum(raw.domainSizeMs)) return null;
   const graph = sanitizeGraph(raw.nodes, raw.edges);
-  if (!graph || graph.nodes.length === 0) return null;
+  if (!graph) return null;
   return { scenarioId: raw.scenarioId, domainSizeMs: raw.domainSizeMs, ...graph };
 }
 

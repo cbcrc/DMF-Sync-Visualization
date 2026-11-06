@@ -371,6 +371,7 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
             focusedNodeId={data.focusedNodeId ?? null}
             showNow={data.showNow}
             showRealGrainIndex={data.showRealGrainIndex}
+            domainSizeMs={data.domainSizeMs ?? 100}
             onFocusNode={data.onFocusNode ?? (() => undefined)}
           >
             <Handle id={ring.handleId} type="source" position={Position.Right} className="mf-block__handle" />

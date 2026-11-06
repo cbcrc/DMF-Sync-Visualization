@@ -29,3 +29,37 @@ export function requiredTrack(
   if (node.kind === 'output' || node.kind === 'delay') return node.inputCount >= 2 && inputIndex !== 0 ? 'audio' : 'video';
   return otherConnectedTracks[0];
 }
+
+/** A link, reduced to the two nodes it joins. */
+type Link = { source: string; target: string };
+
+/**
+ * True when a link `source → target` would close a loop: `target` already
+ * reaches `source` (or they are the same node). A loop has no first writer, so
+ * its flows have no defined head lag.
+ */
+export function createsCycle(links: Link[], source: string, target: string): boolean {
+  if (source === target) return true;
+  const next = new Map<string, string[]>();
+  for (const l of links) {
+    if (!next.has(l.source)) next.set(l.source, []);
+    next.get(l.source)!.push(l.target);
+  }
+  const seen = new Set<string>();
+  const stack = [target];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (id === source) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    stack.push(...(next.get(id) ?? []));
+  }
+  return false;
+}
+
+/** Keeps links in order, dropping each one that would close a loop with those kept before it. */
+export function withoutCycles<T extends Link>(links: T[]): T[] {
+  const kept: T[] = [];
+  for (const l of links) if (!createsCycle(kept, l.source, l.target)) kept.push(l);
+  return kept;
+}

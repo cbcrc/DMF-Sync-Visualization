@@ -1,5 +1,5 @@
-import type { GrainRate, RingBufferStatus } from '../types';
-import { grainIndexToRingBufferIndex, timestampToGrainIndex } from '../engine/mxlGrainIndex';
+import type { AlignedRead, GrainRate, RingBufferStatus } from '../types';
+import { grainDurationMs, grainIndexToRingBufferIndex, grainIndexToTimestampMs, sampleIndexAt, timestampToGrainIndex } from '../engine/mxlGrainIndex';
 import { READ_BEHIND_WRITE_GRAINS } from '../engine/ringBufferEngine';
 import type { GraphBufferState, InputReading, Track } from './graphLatency';
 
@@ -38,6 +38,14 @@ export interface WriterReader {
    * of audio at a sync point, otherwise one batch.
    */
   windowGrains: number;
+  /**
+   * An audio read aligned to a video grain (`AlignedRead`): its exact samples,
+   * as fractional ages behind the write head (`from` = older edge, `to` =
+   * newer edge; a batch at age `a` spans `a` to `a - 1`).
+   */
+  exactWindow?: { fromAge: number; toAge: number };
+  /** A video reader whose grain an audio sibling reads alongside, by timestamp. */
+  pairedWithAudio: boolean;
   reading: InputReading;
 }
 
@@ -66,22 +74,47 @@ export interface WriterRing {
 }
 
 /**
- * For an audio ring, the audio grains in one video grain when a reader is time-aligned to a video
- * flow (MXL aligns by timestamp), otherwise `null` so no video boundaries are drawn.
+ * Where video grains begin on an audio ring, as fractional batch indices, while a
+ * reader is time-aligned to video. Each boundary is the video grain's timestamp
+ * converted to a sample index (`sampleIndexAt`), so at 1001-based frame rates
+ * the spacing follows the real 1602/1601-sample cadence.
  */
-export function videoGrainSpanOf(ring: WriterRing): number | null {
-  if (ring.track !== 'audio') return null;
-  const aligned = ring.readers.find((r) => r.reading.alignmentSpanMs !== undefined);
-  return aligned && aligned.windowGrains > 1 ? aligned.windowGrains : null;
+export function videoBoundaryGrains(ring: WriterRing): number[] {
+  const read = alignedReadOf(ring);
+  if (!read) return [];
+  const perBatch = (read.sampleRate * ring.grainDurationMs) / 1000;
+  const frameMs = grainDurationMs(read.videoRate);
+  const oldestMs = grainIndexToTimestampMs(ring.publishedGrainIndex - ring.grainCount, ring.grainRate);
+  const newestMs = grainIndexToTimestampMs(ring.publishedGrainIndex + 1, ring.grainRate);
+  const out: number[] = [];
+  for (let j = Math.ceil(oldestMs / frameMs); j * frameMs <= newestMs; j += 1) {
+    out.push(sampleIndexAt(grainIndexToTimestampMs(j, read.videoRate), read.sampleRate) / perBatch);
+  }
+  return out;
+}
+
+function alignedReadOf(ring: WriterRing): AlignedRead | undefined {
+  if (ring.track !== 'audio') return undefined;
+  return ring.readers.find((r) => r.reading.buffer.alignedRead)?.reading.buffer.alignedRead;
 }
 
 export function readableOldestAgeOf(grainCount: number, retainedGrains: number): number {
   return Math.min(Math.max(grainCount - 1, 0), retainedGrains + READ_BEHIND_WRITE_GRAINS);
 }
 
-function windowGrainsOf(reading: InputReading, grainDurationMs: number): number {
-  const span = reading.alignmentSpanMs;
-  return span ? Math.max(1, Math.round((span.endMs - span.startMs) / grainDurationMs)) : 1;
+function windowGrainsOf(reading: InputReading, batchMs: number): number {
+  const read = reading.buffer.alignedRead;
+  if (!read) return 1;
+  const perBatch = (read.sampleRate * batchMs) / 1000;
+  return Math.floor(read.lastSample / perBatch) - Math.floor(read.firstSample / perBatch) + 1;
+}
+
+function exactWindowOf(reading: InputReading, batchMs: number): WriterReader['exactWindow'] {
+  const read = reading.buffer.alignedRead;
+  if (!read) return undefined;
+  const perBatch = (read.sampleRate * batchMs) / 1000;
+  const head = reading.buffer.publishedGrainIndex;
+  return { fromAge: head - read.firstSample / perBatch, toAge: head - (read.lastSample + 1) / perBatch };
 }
 
 const mod = (a: number, n: number) => ((a % n) + n) % n;
@@ -131,6 +164,8 @@ export function groupReadingsByWriter(graph: GraphBufferState): WriterRing[] {
         lane,
         ringAge,
         windowGrains: windowGrainsOf(reading, buffer.grainDurationMs),
+        ...(reading.buffer.alignedRead ? { exactWindow: exactWindowOf(reading, buffer.grainDurationMs) } : {}),
+        pairedWithAudio: reading.track === 'video' && reading.alignmentSpanMs !== undefined,
         ringSlot: ringAge === null ? null : mod(buffer.publishedRingBufferIndex - ringAge, buffer.grainCount),
         reading,
       };

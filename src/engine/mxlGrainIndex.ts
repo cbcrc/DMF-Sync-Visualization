@@ -20,24 +20,35 @@ import type { GrainRate } from '../types';
 export const DEFAULT_GRAIN_RATE: GrainRate = { numerator: 50, denominator: 1 };
 
 /**
- * Audio track rate used for visualization: real MXL audio flows are
- * "Continuous" ring buffers of individual samples (`docs/Architecture.md`
- * §"Continuous Ringbuffer I/O"), not discrete video-sized grains — a 48kHz
- * stream has a new sample every ~0.02ms, far too fine-grained to render as
- * individual slots here. As a teaching approximation we keep audio on the
- * same discrete grain-index math as video but at AES67's default 1ms
- * packet time (1000 "grains"/sec) — 20x finer than the 20ms default video
- * grain, which is the point: audio must never be shown as the same size as
- * a video grain. This does not model the Continuous buffer's distinct
- * writer/reader half-buffer split (`docs/Architecture.md`); see
- * `AI_RULES.md`'s Known Simplifications.
+ * Rate of audio commit batches, the unit audio is drawn and indexed in. Real
+ * MXL audio flows are Continuous ring buffers of individual samples
+ * (`docs/Architecture.md` §"Continuous Ringbuffer I/O"); a writer commits them
+ * in batches, by default 10 ms of samples (`Instance.cpp`, `batchSizeDefault`
+ * = sample rate / 100, the `maxCommitBatchSizeHint`). A batch is the smallest
+ * step an audio head moves by, so the app counts audio in batches. Whether a
+ * read is too late follows MXL's per-sample continuous rule instead (see
+ * `continuousBufferSamples` and `ringBufferEngine.ts`).
  */
-export const AUDIO_GRAIN_RATE: GrainRate = { numerator: 1000, denominator: 1 };
+export const AUDIO_GRAIN_RATE: GrainRate = { numerator: 100, denominator: 1 };
+
+/** MXL rounds a continuous buffer up to a 4 KiB page (`Instance.cpp`); this many `audio/float32` samples. */
+export const CONTINUOUS_PAGE_SAMPLES = 4096 / 4;
+
+/**
+ * Samples in each channel of an MXL continuous (audio) ring buffer for a domain
+ * history of `domainSizeMs`: twice the history, because only half of it is
+ * readable at any time, rounded up to a page (`Instance.cpp`,
+ * `createOrOpenContinuousFlowData`).
+ */
+export function continuousBufferSamples(domainSizeMs: number, sampleRate: number): number {
+  const raw = Math.floor((domainSizeMs * 1e6 * sampleRate) / 500_000_000 + 1e-9);
+  return Math.ceil(raw / CONTINUOUS_PAGE_SAMPLES) * CONTINUOUS_PAGE_SAMPLES;
+}
 
 /**
  * The media format the simulated domain carries. Frame rate sets the video
  * grain rate (and so the grain duration and slot counts); the audio sample rate
- * sets how many samples each 1 ms audio commit batch holds. Resolution is a
+ * sets how many samples each 10 ms audio commit batch holds. Resolution is a
  * label, shown for context.
  */
 export interface MediaConfig {
@@ -83,9 +94,34 @@ export function minDomainSizeMs(rate: GrainRate = DEFAULT_GRAIN_RATE, stepMs = 1
   return Math.ceil((MIN_USABLE_GRAINS * grainDurationMs(rate)) / stepMs) * stepMs;
 }
 
-/** `GrainIndex = Timestamp / GrainDurationNs` (integer division; here `timestampMs` stands in for TAI ns/1e6). */
+/**
+ * The grain (or audio batch) whose span contains `timestampMs`:
+ * `floor(Timestamp / GrainDurationNs)`. Used for head positions: a live writer
+ * at time T is filling this grain, and everything before it is committed. Here
+ * `timestampMs` stands in for TAI ns/1e6.
+ */
 export function timestampToGrainIndex(timestampMs: number, rate: GrainRate = DEFAULT_GRAIN_RATE): number {
-  return Math.floor(timestampMs / grainDurationMs(rate));
+  return Math.floor(timestampMs / grainDurationMs(rate) + 1e-9);
+}
+
+/**
+ * MXL's `timestampToIndex` (`IndexConversion.hpp`): the index nearest to a
+ * media timestamp, rounding half up. Used to convert one flow's timestamp into
+ * another flow's index, as a Flow Synchronization Group does; e.g. a video
+ * grain's timestamp into an audio sample index.
+ */
+export function timestampToIndex(timestampMs: number, rate: GrainRate): number {
+  return Math.floor((timestampMs * rate.numerator) / (1000 * rate.denominator) + 0.5);
+}
+
+/** The audio sample index at a media timestamp (`timestampToIndex` at the sample rate). */
+export function sampleIndexAt(timestampMs: number, sampleRate: number): number {
+  return timestampToIndex(timestampMs, { numerator: sampleRate, denominator: 1 });
+}
+
+/** `indexToTimestamp`: the nominal timestamp (ms) of grain `index` (`IndexConversion.hpp`). */
+export function grainIndexToTimestampMs(index: number, rate: GrainRate = DEFAULT_GRAIN_RATE): number {
+  return index * grainDurationMs(rate);
 }
 
 /** `RingBufferIndex = GrainIndex mod RingBufferLength` — always normalized to [0, length). */
@@ -180,4 +216,24 @@ export function timestampToTimecode(timestampMs: number, rate: GrainRate = DEFAU
   const tod = ((totalSeconds % 86400) + 86400) % 86400;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(Math.floor(tod / 3600))}:${pad(Math.floor(tod / 60) % 60)}:${pad(tod % 60)}:${pad(frame)}`;
+}
+
+/** A rate as people say it: `50`, `29.97`, `23.976`. */
+export function rateLabel(rate: GrainRate): string {
+  return String(Number((rate.numerator / rate.denominator).toFixed(3)));
+}
+
+/**
+ * A sample index for display. The real MXL index (samples since the SMPTE epoch)
+ * runs to 14 digits. The simplified one counts from the timestamp of simplified
+ * video grain 100 and wraps with it (`simplifiedGrainIndex`), so a grain and its
+ * samples always read together: simplified grain 100 + n starts n grains of
+ * samples in.
+ */
+export function sampleIndexLabel(sample: number, sampleRate: number, useRealIndex: boolean, videoRate: GrainRate): string {
+  if (useRealIndex) return formatGrouped(sample);
+  const firstGrain = timestampToGrainIndex(TAI_EPOCH_OFFSET_MS, videoRate);
+  const base = sampleIndexAt(grainIndexToTimestampMs(firstGrain, videoRate), sampleRate);
+  const wrap = sampleIndexAt((SIMPLIFIED_INDEX_END - SIMPLIFIED_INDEX_START + 1) * grainDurationMs(videoRate), sampleRate);
+  return formatGrouped((((sample - base) % wrap) + wrap) % wrap);
 }

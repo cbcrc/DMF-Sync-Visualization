@@ -114,8 +114,8 @@ function Lane({
   const isVideo = track === 'video';
   const statusClass = status === 'TOO_LATE' ? ' lb-lane--lost' : status === 'TOO_EARLY' ? ' lb-lane--early' : '';
 
-  // Video: one labeled tick per 20ms frame. Audio's 1ms grains (20 per frame)
-  // are far too fine to draw as separate ticks at this slow, readable speed,
+  // Video: one labeled tick per 20ms frame. Audio's samples (committed in
+  // 10 ms batches) are far too fine to draw as separate ticks at this speed,
   // so audio is a continuous band with the shared frame boundaries marked on it.
   const videoTicks = tickTimes(now, direction, lagMs);
   const leading = videoTicks.length
@@ -133,7 +133,14 @@ function Lane({
       {flashing && (
         <div className="lb-lane__trigger" style={{ opacity: 1 - triggerAge / TRIGGER_FLASH_MS }} />
       )}
-      {waitingFor && <div className="lb-lane__wait">⏳ arrived — waiting for {waitingFor}</div>}
+      {waitingFor && (
+        <div
+          className="lb-lane__wait"
+          title={`Arrived, held for ${waitingFor}: this instant is released only when every synced input has it (MXL flow synchronization group). Nothing is lost unless the wait outgrows this flow's ring history.`}
+        >
+          Waiting for {waitingFor}
+        </div>
+      )}
       {videoTicks.map((t) => {
         const isLeading = isVideo && leading === t;
         return (
@@ -154,7 +161,7 @@ function Lane({
 
 const TRACK_LABEL: Record<'video' | 'audio', string> = {
   video: 'V · video frames',
-  audio: 'A · audio (fine 1ms grains, continuous)',
+  audio: 'A · audio (continuous samples)',
 };
 
 export function LinearBoundaryOverlay({

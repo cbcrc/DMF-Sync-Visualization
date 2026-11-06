@@ -1,8 +1,8 @@
 // Core Ring Buffer evaluation logic.
 // See SPEC.md §2.A and §3 for the MXL too-early/too-late rules.
 
-import type { GrainRate, RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
-import { DEFAULT_GRAIN_RATE, grainDurationMs, ringBufferLength } from './mxlGrainIndex';
+import type { AlignedRead, RingBuffer, RingBufferEvaluation, RingBufferStatus } from '../types';
+import { DEFAULT_MEDIA_CONFIG, type MediaConfig, continuousBufferSamples, samplesPerAudioBatch } from './mxlGrainIndex';
 
 /**
  * MXL's discrete reader keeps the head slot plus its alias out of reach so a
@@ -18,20 +18,6 @@ export const WRITER_RESERVED_SLOTS = 2;
  */
 export const READ_BEHIND_WRITE_GRAINS = 1;
 
-/**
- * The writer-reserved margin above, expressed as *time* rather than a grain
- * count. MXL's real reader always reserves exactly `WRITER_RESERVED_SLOTS`
- * slots regardless of a flow's own grain rate — for a fine-grained audio
- * flow (D1's 1ms grains) that is a negligible ~2ms safety margin, while for
- * video's 20ms grains it's 40ms. Pinning the margin to video's grain size
- * and re-deriving each track's reserved *grain count* from that fixed time
- * budget keeps the existing levels' pass/fail balance intact across tracks
- * of differing rates — a deliberate teaching simplification documented in
- * `AI_RULES.md`'s Known Simplifications, diverging from MXL's literal
- * fixed-slot-count reader behavior.
- */
-export const WRITER_RESERVED_MS = WRITER_RESERVED_SLOTS * grainDurationMs(DEFAULT_GRAIN_RATE);
-
 /** Warning thresholds expressed as a fraction of the *retained* history. */
 export const RING_BUFFER_ZONES = {
   /**
@@ -42,32 +28,62 @@ export const RING_BUFFER_ZONES = {
 } as const;
 
 /**
- * How far behind the head (ms) the oldest readable grain of a video-rate flow
- * sits in a domain window of `domainSizeMs`: the retained history plus the
- * grain being written.
+ * Usable history (in whole grains) of a discrete (video) ring of `grainCount`
+ * slots: all but MXL's two writer-reserved slots, at any grain rate.
+ *
+ * A Grain Repeater re-writes into a fresh ring, so it needs no special
+ * capacity here; it resets lag instead (see `graphLatency.ts`).
  */
-export function oldestReadableAgeMs(domainSizeMs: number, videoRate: GrainRate = DEFAULT_GRAIN_RATE): number {
-  const dur = grainDurationMs(videoRate);
-  return (retainedGrainsFor(ringBufferLength(domainSizeMs, videoRate), dur) + READ_BEHIND_WRITE_GRAINS) * dur;
+export function retainedGrainsFor(grainCount: number): number {
+  return Math.max(0, grainCount - WRITER_RESERVED_SLOTS);
+}
+
+/** Geometry of an audio ring, counted in commit batches (`AUDIO_GRAIN_RATE`). */
+export interface ContinuousGeometry {
+  /** Batches in the whole MXL buffer; the newer half is readable, the rest is the writer's. */
+  grainCount: number;
+  /** Batches a reader may lag behind the newest readable one and still read its window. */
+  retainedGrains: number;
+  /** Samples per channel in the MXL buffer (`continuousBufferSamples`). */
+  bufferSamples: number;
+  /** Samples the reader asks for in one read (its window). */
+  windowSamples: number;
 }
 
 /**
- * Usable history (in whole grains, at `trackDurationMs` per grain) for a
- * branch.
+ * MXL's continuous (audio) rule, in commit batches. The buffer is twice the
+ * history (`Instance.cpp`), and a read of `windowSamples` ending at sample
+ * `index` succeeds while `index - windowSamples >= headIndex - bufferLength/2`
+ * (`PosixContinuousFlowReader.cpp`, `getSamplesImpl`). So a reader can lag the
+ * head by up to `bufferLength/2 - windowSamples` samples: about the whole
+ * domain, less the window. There is no two-slot reserve as in a discrete ring.
  *
- * A Grain Repeater re-writes into a fresh ring, so it needs no special
- * capacity here; it resets lag instead (see `graphLatency.ts`). The writer-reserved margin (see `WRITER_RESERVED_MS`) is
- * deducted once, at the buffer the reader actually reads from, converted to
- * this track's own grain size so the *time* margin stays constant across
- * tracks of differing rates.
+ * `windowSamples` defaults to one batch; a reader aligned to video reads one
+ * video grain of samples (see `graphLatency.ts`).
  */
-export function retainedGrainsFor(
-  grainCount: number,
-  trackDurationMs: number = grainDurationMs(DEFAULT_GRAIN_RATE),
-): number {
-  // Never fewer than MXL's own two slots, even when a slow frame rate makes 40ms less than that.
-  const reservedGrains = Math.max(WRITER_RESERVED_SLOTS, Math.round(WRITER_RESERVED_MS / trackDurationMs));
-  return Math.max(0, grainCount - reservedGrains);
+export function continuousGeometry(
+  domainSizeMs: number,
+  media: MediaConfig = DEFAULT_MEDIA_CONFIG,
+  windowSamples: number = samplesPerAudioBatch(media),
+): ContinuousGeometry {
+  const bufferSamples = continuousBufferSamples(domainSizeMs, media.audioSampleRate);
+  const perBatch = samplesPerAudioBatch(media);
+  const window = Math.max(1, Math.round(windowSamples));
+  return {
+    grainCount: Math.max(1, Math.floor(bufferSamples / perBatch)),
+    retainedGrains: Math.max(0, Math.floor((bufferSamples / 2 - window) / perBatch)),
+    bufferSamples,
+    windowSamples: window,
+  };
+}
+
+/**
+ * For an aligned audio read: how many samples its last sample sits behind the
+ * head (negative: not yet written), and how far behind it may sit while its
+ * whole window still fits in the readable half of the buffer.
+ */
+export function alignedReadSlack(a: AlignedRead): { behind: number; room: number } {
+  return { behind: a.headSample - a.lastSample, room: a.bufferSamples / 2 - a.sampleCount };
 }
 
 /**
@@ -88,17 +104,25 @@ export function evaluateRingBuffer(buffer: RingBuffer): RingBufferEvaluation {
   const deltaGrains = buffer.publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - buffer.requestedGrainIndex;
 
   let status: RingBufferStatus;
-  if (deltaGrains < 0) {
-    status = 'TOO_EARLY';
-  } else if (deltaGrains > buffer.retainedGrains) {
-    status = 'TOO_LATE';
+  let occupancyRatio: number;
+  const aligned = buffer.alignedRead;
+  if (aligned) {
+    // MXL's continuous rule, per sample (`PosixContinuousFlowReader.cpp`, `getSamplesImpl`).
+    const { behind, room } = alignedReadSlack(aligned);
+    status = behind < 0 ? 'TOO_EARLY' : behind > room ? 'TOO_LATE' : 'OK';
+    occupancyRatio = room > 0 ? Math.max(0, behind) / room : behind > 0 ? 1 : 0;
   } else {
-    status = 'OK';
+    if (deltaGrains < 0) {
+      status = 'TOO_EARLY';
+    } else if (deltaGrains > buffer.retainedGrains) {
+      status = 'TOO_LATE';
+    } else {
+      status = 'OK';
+    }
+    occupancyRatio = buffer.readsTail
+      ? 0
+      : buffer.retainedMs > 0 ? buffer.stalenessMs / buffer.retainedMs : buffer.stalenessMs > 0 ? 1 : 0;
   }
-
-  const occupancyRatio = buffer.readsTail
-    ? 0
-    : buffer.retainedMs > 0 ? buffer.stalenessMs / buffer.retainedMs : buffer.stalenessMs > 0 ? 1 : 0;
 
   return {
     status,

@@ -74,7 +74,7 @@ export function WorkloadPane({ onMinimize, domainSizeMs, onDomainSizeChange, med
           ))}
         </select>
       </label>
-      <div className="wl-pane__note">1ms audio commit batch = {Number.isInteger(samples) ? samples : samples.toFixed(1)} samples</div>
+      <div className="wl-pane__note">10 ms audio commit batch (MXL default) = {Number.isInteger(samples) ? samples : samples.toFixed(1)} samples</div>
       <button
         type="button"
         className="wl-pane__reset"

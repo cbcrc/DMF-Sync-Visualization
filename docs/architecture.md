@@ -8,8 +8,9 @@ original game framing and are not renamed.
 
 - `src/types.ts`: Signal, MediaFunction, RingBuffer, SyncGroup, MXLDomain.
 - `src/engine/`: `ringBufferEngine.ts` (OK / TOO_EARLY / TOO_LATE evaluation,
-  `READ_BEHIND_WRITE_GRAINS`, `WRITER_RESERVED_MS`) and `mxlGrainIndex.ts`
-  (MXL grain index and ring index math, per-track grain rate).
+  `READ_BEHIND_WRITE_GRAINS`, `WRITER_RESERVED_SLOTS` for video,
+  `continuousGeometry` for audio) and `mxlGrainIndex.ts` (MXL grain index and
+  ring index math, per-track grain rate, `continuousBufferSamples`).
 - `src/components/canvas/`: `FlowCanvas` (graph editing, undo, connection rules,
   palette), `MediaFunctionNode` (function body plus ring column),
   `RingBufferStrip` / `ringStripLayout`, `nodeDefaults` (palette presets, latency
@@ -20,7 +21,9 @@ original game framing and are not renamed.
 - `src/game/`: `graphLatency` (per-input evaluation, `writerFlows`),
   `writerRings`, `connectionRules`, `scenarios`, `scenarioStorage`,
   `endToEndTimeline`, `syncInputs`, `docks`, `mediaConfig`, `useGameLoop` (the
-  only tick runner), `grainFlow` / `useGrainFlow`, `useSimClock`, `useHashRoute`.
+  only tick runner), `grainFlow` / `useGrainFlow` (steps grains on the game
+  loop's tick, passed down as `clockTickMs`, so nothing re-renders while the
+  clock is frozen), `useSimClock`, `useHashRoute`.
 
 Structural graph state is lifted to `App.tsx` through `FlowCanvas`'s
 `onGraphChange`.
@@ -45,8 +48,9 @@ Structural graph state is lifted to `App.tsx` through `FlowCanvas`'s
   `FlowSynchronizationGroup::waitForDataAt(originTime)`, which converts one origin
   time to each flow's grain index and waits for every flow's `headIndex` to reach
   it. Grey boxes on the left are writer-reserved. A TOO_EARLY reader waits hollow;
-  a TOO_LATE reader sits in the hatched box, flagged ✕. Audio and video share this
-  logic (`WRITER_RESERVED_MS`).
+  a TOO_LATE reader sits in the hatched box, flagged ✕. Video rings reserve MXL's
+  two slots; audio rings are MXL continuous buffers, twice the history, with the
+  older half reserved for the writer (`continuousGeometry`).
 - **Multiple outputs.** CG has two video outputs, Fill (top) and Key (bottom). A
   source with several same-track outputs writes one flow per output handle
   (`flowKeyOf`, `multiOutput`); both are spawned in the same tick with the same
@@ -69,6 +73,11 @@ Structural graph state is lifted to `App.tsx` through `FlowCanvas`'s
 
 Sources, Synthetic, Technical, Editorial, Outputs, each with a Generic entry.
 The Grain Repeater is fixed at 0 ms latency (`sanitizeNode` forces this on load).
+
+All browser storage goes through `safeStorage` (`src/safeStorage.ts`), which never
+throws: when storage is blocked or full it keeps values in memory for the session.
+`ErrorBoundary` wraps the app; its fallback can discard the autosaved canvas in
+case that is what crashes on load.
 
 ## Special functions
 

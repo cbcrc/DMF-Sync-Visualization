@@ -26,19 +26,24 @@
 
 import type { Edge, Node } from 'reactflow';
 import type {
+  AlignedRead,
   GrainRate,
   MediaFunctionKind,
   RingBuffer,
   RingBufferEvaluation,
 } from '../types';
-import { evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, oldestReadableAgeMs, statusSeverity } from '../engine/ringBufferEngine';
+import { alignedReadSlack, continuousGeometry, evaluateRingBuffer, READ_BEHIND_WRITE_GRAINS, retainedGrainsFor, statusSeverity } from '../engine/ringBufferEngine';
 import {
   DEFAULT_MEDIA_CONFIG,
   type MediaConfig,
   grainDurationMs,
   grainIndexToRingBufferIndex,
+  grainIndexToTimestampMs,
+  continuousBufferSamples,
   grainRateForTrack,
   ringBufferLength,
+  sampleIndexAt,
+  samplesPerAudioBatch,
   timestampToGrainIndex,
 } from '../engine/mxlGrainIndex';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
@@ -239,6 +244,8 @@ function trackForEdge(
     // output handle this specific edge left from.
     track = indexToTrack(parseHandleIndex(edge.sourceHandle, 'out-'));
   } else {
+    // Placeholder first, so a loop in the graph ends here instead of recursing forever.
+    memo.set(edge.id, 'data');
     const inbound = (inboundEdgesByTarget.get(edge.source) ?? [])
       .slice()
       .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
@@ -288,6 +295,24 @@ export function computeGraphLatency(
   }
   const trackMemo = new Map<string, Track>();
 
+  /**
+   * The ring a reader of `track` reads from. Video (and data) rings are
+   * discrete: MXL reserves two slots. Audio rings are continuous: MXL allocates
+   * twice the history and a read must fit its window inside the newer half
+   * (`continuousGeometry`); here a one-batch read. A read aligned to video is
+   * judged per sample instead (`AlignedRead`).
+   */
+  function ringGeometry(track: Track) {
+    const rate = grainRateForTrack(track, media);
+    const durationMs = grainDurationMs(rate);
+    if (track === 'audio') {
+      const c = continuousGeometry(domainSizeMs, media);
+      return { rate, durationMs, grainCount: c.grainCount, retainedGrains: c.retainedGrains };
+    }
+    const count = ringBufferLength(domainSizeMs, rate);
+    return { rate, durationMs, grainCount: count, retainedGrains: retainedGrainsFor(count) };
+  }
+
   function resolveBranch(id: string): BranchInfo {
     const cached = branchByNodeId.get(id);
     if (cached) return cached;
@@ -325,21 +350,26 @@ export function computeGraphLatency(
     }
 
     const alignedWorkloadMs = parents.length > 0 ? Math.max(...parents.map((p) => p.workloadMs)) : 0;
+    // Track this node reads (its lowest-index input), which sets the grain size
+    // of the ring it reads from.
+    const firstInbound = (inboundEdgesByTarget.get(node.id) ?? [])
+      .slice()
+      .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
+    const inputTrack: Track = node.fixedTrack ?? (firstInbound ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo) : 'video');
+    const inputRing = ringGeometry(inputTrack);
     // A Grain Repeater reads the oldest grain still retained (the far end of
     // the ring from the write head) and writes it into a fresh ring with the
     // same grain index, so its output head sits that far behind its input's.
-    const tailReadMs = node.kind === 'repeater' && parents.length > 0 ? oldestReadableAgeMs(domainSizeMs, media.videoRate) : 0;
+    // Measured in the ring it reads: discrete for video, continuous for audio.
+    const tailReadMs =
+      node.kind === 'repeater' && parents.length > 0 ? (inputRing.retainedGrains + READ_BEHIND_WRITE_GRAINS) * inputRing.durationMs : 0;
     // A reader can only consume the grain behind its input's write head, so a
     // function (other than a repeater, which already counts it in `tailReadMs`,
     // or a delay, which restarts; sinks write nothing) writes that same grain index one grain
     // later: its head carries the index it read.
     let readBehindMs = 0;
     if (wired.length > 0 && node.kind !== 'repeater' && node.kind !== 'delay' && node.kind !== 'output' && node.kind !== 'recording') {
-      const firstInbound = (inboundEdgesByTarget.get(node.id) ?? [])
-        .slice()
-        .sort((a, b) => parseHandleIndex(a.targetHandle, 'in-') - parseHandleIndex(b.targetHandle, 'in-'))[0];
-      const track: Track = node.fixedTrack ?? (firstInbound ? trackForEdge(firstInbound, byId, inboundEdgesByTarget, trackMemo) : 'video');
-      readBehindMs = READ_BEHIND_WRITE_GRAINS * grainDurationMs(grainRateForTrack(track, media));
+      readBehindMs = READ_BEHIND_WRITE_GRAINS * inputRing.durationMs;
     }
     const workloadMs = alignedWorkloadMs + node.latencyMs + tailReadMs + readBehindMs;
 
@@ -404,32 +434,100 @@ export function computeGraphLatency(
       graphNode,
       graphNode.inputSourceIds.flatMap((p, i) => (p ? [i] : [])),
     );
-    graphNode.inputSourceIds.forEach((sourceId, inputIndex) => {
+    // Track of each wired input, and the first synced video input: audio in its
+    // sync group is read by timestamp alongside it, one video grain at a time.
+    const trackOfInput = new Map<number, Track>();
+    graphNode.inputSourceIds.forEach((sourceId, i) => {
       if (!sourceId) return;
+      const e = edgeByTargetIndex.get(`${node.id}:${i}`);
+      trackOfInput.set(i, graphNode.fixedTrack ?? (e ? trackForEdge(e, byId, inboundEdgesByTarget, trackMemo) : 'video'));
+    });
+    const videoInput = [...trackOfInput].find(([i, t]) => t === 'video' && groupOf.get(i) !== LIVE_GROUP)?.[0];
+    const alignedToVideo = (i: number) =>
+      videoInput !== undefined && trackOfInput.get(i) === 'audio' && groupOf.get(i) === groupOf.get(videoInput);
+
+    const alignedAudioInputs = [...trackOfInput.keys()].filter(alignedToVideo);
+
+    /** Reads one wired input; `videoReading` is the synced video input's reading, read first. */
+    const readInput = (sourceId: string, inputIndex: number, videoReading?: InputReading): InputReading => {
       const branch = resolveBranch(sourceId);
 
       // The flow's published head carries the newest grain index it has
       // written; this reader asks for the aligned (slowest-branch) index.
       const group = groupOf.get(inputIndex) ?? 1;
       const alignedLagMs = group === LIVE_GROUP ? branch.lagMs : (info.groupLagMs.get(group) ?? info.inputLatencyMs);
-      const stalenessMs = alignedLagMs - branch.lagMs;
+      let stalenessMs = alignedLagMs - branch.lagMs;
 
-      // This input's own track/grain rate (item #10.i): audio gets a much
-      // finer grain duration than video, derived from the same timing math
-      // (`mxlGrainIndex.ts`) but with its own geometry.
+      // This input's own track and ring (item #10.i): audio is counted in
+      // commit batches and judged by MXL's continuous rule (`ringGeometry`).
       const inputEdge = edgeByTargetIndex.get(`${node.id}:${inputIndex}`);
-      const track: Track = graphNode.fixedTrack ?? (inputEdge ? trackForEdge(inputEdge, byId, inboundEdgesByTarget, trackMemo) : 'video');
-      const trackRate = grainRateForTrack(track, media);
-      const trackDurationMs = grainDurationMs(trackRate);
-      const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
+      const track = trackOfInput.get(inputIndex) ?? 'video';
+      const ring = ringGeometry(track);
+      const trackRate = ring.rate;
+      const trackDurationMs = ring.durationMs;
+      const trackGrainCount = ring.grainCount;
 
       const readsTail = graphNode.kind === 'repeater';
-      const retainedGrains = retainedGrainsFor(trackGrainCount, trackDurationMs);
+      let retainedGrains = ring.retainedGrains;
       const deltaGrains = readsTail ? retainedGrains : Math.round(stalenessMs / trackDurationMs);
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
       // MXL readers can't read the grain being written, so a zero-lag read
       // lands one grain behind the write head.
-      const requestedGrainIndex = publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - deltaGrains;
+      let requestedGrainIndex = publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - deltaGrains;
+      let requestedTimestampMs = readsTail
+        ? timestampMs - branch.lagMs - (retainedGrains + READ_BEHIND_WRITE_GRAINS) * trackDurationMs
+        : timestampMs - alignedLagMs;
+      let alignedRead: AlignedRead | undefined;
+
+      if (!readsTail && inputIndex === videoInput && alignedAudioInputs.length > 0) {
+        // A sync group releases a video grain only once its audio is in too:
+        // the grain must end (T_k+1) by the time every synced audio flow has
+        // committed. When audio is the slower flow, that is an earlier grain.
+        const committedMs = Math.min(
+          ...alignedAudioInputs.map((i) => {
+            const lag = resolveBranch(graphNode.inputSourceIds[i]!).lagMs;
+            const audioRate = grainRateForTrack('audio', media);
+            return grainIndexToTimestampMs(timestampToGrainIndex(timestampMs - lag, audioRate), audioRate);
+          }),
+        );
+        const latestComplete = timestampToGrainIndex(committedMs, trackRate) - 1;
+        if (latestComplete < requestedGrainIndex) {
+          requestedGrainIndex = latestComplete;
+          stalenessMs = (publishedGrainIndex - READ_BEHIND_WRITE_GRAINS - requestedGrainIndex) * trackDurationMs;
+          requestedTimestampMs = grainIndexToTimestampMs(requestedGrainIndex, trackRate);
+        }
+      }
+
+      if (!readsTail && videoReading && alignedToVideo(inputIndex)) {
+        // MXL aligns by timestamp: the video grain k read alongside has
+        // timestamp T_k; its audio is every sample from S(T_k) up to S(T_k+1) - 1.
+        const k = videoReading.buffer.requestedGrainIndex;
+        const videoRate = videoReading.buffer.grainRate;
+        const fs = media.audioSampleRate;
+        const startMs = grainIndexToTimestampMs(k, videoRate);
+        const endMs = grainIndexToTimestampMs(k + 1, videoRate);
+        const firstSample = sampleIndexAt(startMs, fs);
+        const lastSample = sampleIndexAt(endMs, fs) - 1;
+        const sampleCount = lastSample - firstSample + 1;
+        const perBatch = samplesPerAudioBatch(media);
+        alignedRead = {
+          videoGrainIndex: k,
+          videoRate,
+          timestampMs: startMs,
+          endTimestampMs: endMs,
+          sampleRate: fs,
+          firstSample,
+          lastSample,
+          sampleCount,
+          // Everything before the batch being written is committed.
+          headSample: publishedGrainIndex * perBatch - 1,
+          bufferSamples: continuousBufferSamples(domainSizeMs, fs),
+        };
+        requestedGrainIndex = Math.floor(lastSample / perBatch);
+        retainedGrains = continuousGeometry(domainSizeMs, media, sampleCount).retainedGrains;
+        stalenessMs = ((alignedRead.headSample - lastSample) * 1000) / fs;
+        requestedTimestampMs = startMs;
+      }
 
       const buffer: RingBuffer = {
         id: `${node.id}:${inputIndex}`,
@@ -447,44 +545,49 @@ export function computeGraphLatency(
         stalenessMs: readsTail ? retainedGrains * trackDurationMs : stalenessMs,
         readsTail,
         publishedTimestampMs: timestampMs - branch.lagMs,
-        requestedTimestampMs: readsTail ? timestampMs - branch.lagMs - (retainedGrains + READ_BEHIND_WRITE_GRAINS) * trackDurationMs : timestampMs - alignedLagMs,
+        requestedTimestampMs,
         publishedGrainIndex,
         requestedGrainIndex,
         publishedRingBufferIndex: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),
         requestedRingBufferIndex: grainIndexToRingBufferIndex(requestedGrainIndex, trackGrainCount),
         retainedFromGrainIndex: publishedGrainIndex - retainedGrains,
+        ...(alignedRead ? { alignedRead } : {}),
       };
 
       const evaluation = evaluateRingBuffer(buffer);
       const sourceHandleId = inputEdge?.sourceHandle ?? 'out-0';
       const flowKey = flowKeyOf(sourceId, track, sourceHandleId, byId.get(sourceId)?.multiOutput ?? false);
-      readings.push({ readerNodeId: node.id, sourceNodeId: sourceId, flowKey, inputIndex, buffer, evaluation, track });
-      // Measured in whole grains so the margin flips negative exactly when a
-      // read flips to TOO_LATE, instead of disagreeing with the status.
-      if (!readsTail) {
-        stabilityMarginMs = Math.min(
-          stabilityMarginMs,
-          (retainedGrains - evaluation.deltaGrains) * trackDurationMs,
-        );
+      // Measured so the margin flips negative exactly when a read flips to
+      // TOO_LATE, instead of disagreeing with the status.
+      if (alignedRead) {
+        const { behind, room } = alignedReadSlack(alignedRead);
+        stabilityMarginMs = Math.min(stabilityMarginMs, ((room - behind) * 1000) / alignedRead.sampleRate);
+      } else if (!readsTail) {
+        stabilityMarginMs = Math.min(stabilityMarginMs, (retainedGrains - evaluation.deltaGrains) * trackDurationMs);
       }
-    });
+      return { readerNodeId: node.id, sourceNodeId: sourceId, flowKey, inputIndex, buffer, evaluation, track };
+    };
+
+    // The synced video input first, so aligned audio can read the grain it read.
+    const wiredInputs = graphNode.inputSourceIds.flatMap((sourceId, i) => (sourceId ? [{ sourceId, i }] : []));
+    const videoFirst = [...wiredInputs].sort((a, b) => Number(b.i === videoInput) - Number(a.i === videoInput));
+    let videoReading: InputReading | undefined;
+    for (const { sourceId, i } of videoFirst) {
+      const reading = readInput(sourceId, i, videoReading);
+      if (i === videoInput) videoReading = reading;
+      readings.push(reading);
+    }
+    readings.sort((a, b) => a.inputIndex - b.inputIndex);
 
     if (readings.length > 0) {
-      // Alignment highlight (item #10.ii): at a true sync point — a node
-      // reading both a video and an audio sibling — the audio input's view
-      // should show *which slice* of its much finer grains lines up with
-      // the one video grain being read at the same aligned instant.
-      // Only inputs in the same sync group line up with each other.
-      const videoSibling = readings.find((r) => r.track === 'video' && groupOf.get(r.inputIndex) !== LIVE_GROUP);
-      if (videoSibling) {
-        const videoGrainMs = videoSibling.buffer.grainDurationMs;
-        const alignedInstantMs = videoSibling.buffer.requestedTimestampMs;
-        const startMs = Math.floor(alignedInstantMs / videoGrainMs) * videoGrainMs;
-        readings.forEach((r) => {
-          if (r.track === 'audio' && groupOf.get(r.inputIndex) === groupOf.get(videoSibling.inputIndex)) {
-            r.alignmentSpanMs = { startMs, endMs: startMs + videoGrainMs };
-          }
-        });
+      // Alignment highlight (item #10.ii): at a sync point reading both video
+      // and audio, both readings carry the span of the video grain read, by
+      // its MXL timestamp, so each view can show the pair. Only inputs in the
+      // same sync group line up with each other.
+      const aligned = readings.filter((r) => r.buffer.alignedRead);
+      if (videoReading && aligned.length > 0) {
+        const { timestampMs: startMs, endTimestampMs: endMs } = aligned[0].buffer.alignedRead!;
+        for (const r of [videoReading, ...aligned]) r.alignmentSpanMs = { startMs, endMs };
       }
 
       inputsByNodeId.set(node.id, readings);
@@ -531,9 +634,10 @@ export function computeGraphLatency(
       const flowKey = flowKeyOf(node.id, track, `out-${index}`, graphNode.multiOutput);
       if (seenFlows.has(flowKey)) continue;
       seenFlows.add(flowKey);
-      const trackRate = grainRateForTrack(track, media);
-      const trackDurationMs = grainDurationMs(trackRate);
-      const trackGrainCount = ringBufferLength(domainSizeMs, trackRate);
+      const ring = ringGeometry(track);
+      const trackRate = ring.rate;
+      const trackDurationMs = ring.durationMs;
+      const trackGrainCount = ring.grainCount;
       const publishedGrainIndex = timestampToGrainIndex(timestampMs - branch.lagMs, trackRate);
       writerFlows.push({
         writerNodeId: node.id,
@@ -543,7 +647,7 @@ export function computeGraphLatency(
         grainRate: trackRate,
         grainDurationMs: trackDurationMs,
         grainCount: trackGrainCount,
-        retainedGrains: retainedGrainsFor(trackGrainCount, trackDurationMs),
+        retainedGrains: ring.retainedGrains,
         lagMs: branch.lagMs,
         publishedGrainIndex,
         publishedSlot: grainIndexToRingBufferIndex(publishedGrainIndex, trackGrainCount),

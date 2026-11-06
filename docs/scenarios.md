@@ -10,7 +10,8 @@ scenarios.
 - **Saved Scenarios page:** a full-screen overlay at `#/scenarios` (opened from the
   Canvas menu); the canvas stays mounted underneath.
 - **Autosave:** the working graph is stored in `dmf-sync-viz:working:v1` and
-  restored on load. An empty graph is not autosaved.
+  restored on load, including an emptied canvas. Deleting the saved scenario
+  that is open keeps its graph on the canvas as unsaved work (on Blank Canvas).
 
 ## Sharing (export / import)
 
@@ -31,7 +32,10 @@ The Saved Scenarios page can export one scenario (card button) or all of them to
   optional. Opening a scenario with it sets the app's format; older scenarios
   without it keep the current format.
 - Import validates everything through the same sanitizers as localStorage, never
-  overwrites (a clashing name becomes "Name (2)"), and gives imports new ids.
+  overwrites (a clashing name becomes "Name (2)"), and gives imports new ids. The
+  sanitizers drop nodes with non-integer or out-of-range connector counts (0–8)
+  and repeated ids, clamp latency to the function's slider range, and drop any
+  link that would close a loop (the canvas also refuses to draw one).
 - Community scenarios live in [`shared-scenarios/`](../shared-scenarios/README.md).
 - Code: `buildScenarioFile`, `parseScenarioFile`, `mergeImported` in
   `src/game/scenarioStorage.ts`.
@@ -41,10 +45,11 @@ The Saved Scenarios page can export one scenario (card button) or all of them to
 Build this to see a too-late read. An Ingress writes video and audio with a shared
 origin. Chain two video functions (about 82 ms total) and one audio function
 (about 2 ms), then wire both into one Egress. The Egress must read the same point
-in time from both. By the time the slow video branch publishes that instant, audio
-has moved about 80 ms past it and recycled the slot. In a 100 ms domain both tracks
-keep the same ~60 ms of history (`WRITER_RESERVED_MS`), so audio goes TOO_LATE
-while video stays OK.
+in time from both. By the time the slow video branch publishes that instant (its
+82 ms plus a 20 ms read-behind per video function), audio has moved about 110 ms
+past it. In a 100 ms domain an audio reader can lag at most 80 ms: MXL keeps
+twice the history for audio, but the read (one video grain of samples) must fit
+in the readable half. So audio goes TOO_LATE while video stays OK.
 
-Fixes to try: grow the domain to 110 ms, remove the slow function, add a Grain
+Fixes to try: grow the domain to 140 ms, remove the slow function, add a Grain
 Repeater in the audio branch, or lower the slow function's latency.

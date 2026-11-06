@@ -13,7 +13,8 @@ describe('ring buffer sizing', () => {
     expect(ringBufferLength(minDomainSizeMs(rate), rate)).toBeGreaterThanOrEqual(3);
   });
 
-  it('always reserves at least MXL\'s two slots', () => {
-    expect(retainedGrainsFor(10, 1000 / 24)).toBe(8);
+  it('reserves exactly MXL\'s two slots in a discrete ring, at any rate', () => {
+    expect(retainedGrainsFor(10)).toBe(8);
+    expect(retainedGrainsFor(1)).toBe(0);
   });
 });

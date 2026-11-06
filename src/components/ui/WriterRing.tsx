@@ -1,8 +1,18 @@
 import { useMediaConfig } from '../../game/mediaConfig';
-import { grainIndexLabel, samplesPerAudioBatch, slotColor, slotHoldsGrainIndex } from '../../engine/mxlGrainIndex';
+import {
+  formatGrouped,
+  grainIndexLabel,
+  rateLabel,
+  sampleIndexLabel,
+  samplesPerAudioBatch,
+  simplifiedGrainIndex,
+  slotColor,
+  slotHoldsGrainIndex,
+  timestampToTimecode,
+} from '../../engine/mxlGrainIndex';
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import type { RingBufferStatus } from '../../types';
-import { readerTitle, videoGrainSpanOf, type WriterReader, type WriterRing as WriterRingModel } from '../../game/writerRings';
+import { readerTitle, videoBoundaryGrains, type WriterReader, type WriterRing as WriterRingModel } from '../../game/writerRings';
 import './WriterRing.css';
 
 export interface WriterRingProps {
@@ -184,10 +194,14 @@ function Arrow({ grainIndex, n, extraGrains, label, sweepSlots = 0 }: { grainInd
 
 /** A reader marker on a slot (rotates smoothly about the ring centre as its slot changes). */
 function SlotReader({
-  grainIndex, n, extraGrains, windowSlots = 0, videoAligned = false, stepGrains = 1, radius, markerR, color, status, label, className, focused, onClick, title,
+  grainIndex, n, extraGrains, windowSlots = 0, windowSpan, videoAligned = false, stepGrains = 1, radius, markerR, color, status, label, className, focused, onClick, title,
 }: {
-  grainIndex: number; n: number; extraGrains: ExtraGrains; windowSlots?: number; videoAligned?: boolean; stepGrains?: number; radius: number; markerR: number; color: string; status: RingBufferStatus; label: string; className: string; focused: boolean; onClick: () => void; title: string;
+  grainIndex: number; n: number; extraGrains: ExtraGrains; windowSlots?: number;
+  /** Exact window in slots relative to the marker's slot centre (newer is positive); overrides `windowSlots`. */
+  windowSpan?: { from: number; to: number };
+  videoAligned?: boolean; stepGrains?: number; radius: number; markerR: number; color: string; status: RingBufferStatus; label: string; className: string; focused: boolean; onClick: () => void; title: string;
 }) {
+  const span = windowSpan ?? (windowSlots > 0 ? { from: -(windowSlots - 0.5), to: 0.5 } : null);
   const target = useGrainAngle(grainIndex, n);
   const group = useRef<SVGGElement>(null);
   const labelRef = useRef<SVGGElement>(null);
@@ -197,11 +211,11 @@ function SlotReader({
   const style = markerStyle(status, focused);
   return (
     <g ref={group} className={className} onClick={onClick} style={{ transformOrigin: `${CX}px ${CY}px` }}>
-      {windowSlots > 0 && (
+      {span && span.to > span.from && (
         <path
-          d={`M${polar(-(2 * Math.PI * (windowSlots - 0.5)) / n, R_OUT - 2).x},${polar(-(2 * Math.PI * (windowSlots - 0.5)) / n, R_OUT - 2).y} A${R_OUT - 2},${R_OUT - 2} 0 ${windowSlots > n / 2 ? 1 : 0} 1 ${polar(Math.PI / n, R_OUT - 2).x},${polar(Math.PI / n, R_OUT - 2).y}`}
+          d={`M${polar((2 * Math.PI * span.from) / n, R_OUT - 2).x},${polar((2 * Math.PI * span.from) / n, R_OUT - 2).y} A${R_OUT - 2},${R_OUT - 2} 0 ${span.to - span.from > n / 2 ? 1 : 0} 1 ${polar((2 * Math.PI * span.to) / n, R_OUT - 2).x},${polar((2 * Math.PI * span.to) / n, R_OUT - 2).y}`}
           fill="none"
-          stroke={focused ? '#ee0000' : videoAligned ? VIDEO_ALIGNED_COLOR : color}
+          stroke={videoAligned ? VIDEO_ALIGNED_COLOR : focused ? '#ee0000' : color}
           strokeWidth="4"
           opacity="0.95"
         />
@@ -221,21 +235,18 @@ function SlotReader({
 
 /** Where video grains begin on an audio ring, drawn only while a reader is time-aligned to video. A slot is fixed by `index mod n`, so a boundary sits at the slot holding each grain index that is a multiple of the video span. */
 function VideoGrainTicks({ ring, n }: { ring: WriterRingModel; n: number }) {
-  const span = videoGrainSpanOf(ring);
-  if (span === null) return null;
-  const ticks = [];
-  for (let age = 0; age < n; age += 1) {
-    const grain = ring.publishedGrainIndex - age;
-    if (grain % span !== 0) continue;
-    const a = slotAngle(((ring.publishedSlot - age) % n + n) % n, n) - Math.PI / n;
-    const o = polar(a, R_OUT + 2);
-    const i = polar(a, R_IN - 2);
-    ticks.push(<line key={age} x1={i.x} y1={i.y} x2={o.x} y2={o.y} stroke={VIDEO_ALIGNED_COLOR} strokeWidth="1.5" opacity="0.9" />);
-  }
+  const boundaries = videoBoundaryGrains(ring).filter((g) => g > ring.publishedGrainIndex - n && g <= ring.publishedGrainIndex + 1);
+  if (boundaries.length === 0) return null;
   return (
     <g pointerEvents="none">
-      <title>Video grain boundaries (aligned by timestamp)</title>
-      {ticks}
+      <title>Video grain boundaries: each video timestamp as a sample index</title>
+      {boundaries.map((g) => {
+        // A fractional batch index sits at that fraction of its slot (slot = index mod n).
+        const a = slotAngle(((g % n) + n) % n, n) - Math.PI / n;
+        const o = polar(a, R_OUT + 2);
+        const i = polar(a, R_IN - 2);
+        return <line key={g} x1={i.x} y1={i.y} x2={o.x} y2={o.y} stroke={VIDEO_ALIGNED_COLOR} strokeWidth="1.5" opacity="0.9" />;
+      })}
     </g>
   );
 }
@@ -262,10 +273,43 @@ function AudioRing({ n }: { n: number }) {
  * readers on a time axis: oldest retained grain on the left, now on the right.
  */
 /** Audio read window: aligned to a video grain (by timestamp) when a video sibling is synced, otherwise a plain batch. */
-function audioWindowText(reader: WriterReader, grainMs: number, sampleRate: number): string {
+function audioWindowText(reader: WriterReader, grainMs: number): string {
+  const read = reader.reading.buffer.alignedRead;
+  if (read) return `1 video grain = ${((read.sampleCount * 1000) / read.sampleRate).toFixed(1).replace(/\.0$/, '')}ms · ${read.sampleCount.toLocaleString()} smp`;
   const windowMs = reader.windowGrains * grainMs;
-  if (reader.reading.alignmentSpanMs) return `1 video grain = ${Math.round(windowMs)}ms · ${Math.round((windowMs * sampleRate) / 1000).toLocaleString()} smp`;
   return windowMs >= 1 ? `${Math.round(windowMs)}ms window` : '1 batch';
+}
+
+/** Batches per video grain when it is a whole number (e.g. 2 at 50 fps), so a marker can step a grain at a time; else 1. */
+function wholeBatchesPerVideoGrain(ring: WriterRingModel): number {
+  const read = ring.readers.find((r) => r.reading.buffer.alignedRead)?.reading.buffer.alignedRead;
+  if (!read) return 1;
+  const ratio = (read.endTimestampMs - read.timestampMs) / ring.grainDurationMs;
+  return Math.abs(ratio - Math.round(ratio)) < 1e-6 ? Math.max(1, Math.round(ratio)) : 1;
+}
+
+/**
+ * How MXL pairs this audio read with its video grain: the grain's timestamp,
+ * converted to each flow's own index (`timestampToIndex`).
+ */
+function AlignedReadout({ reader, showRealGrainIndex }: { reader: WriterReader; showRealGrainIndex: boolean }) {
+  const read = reader.reading.buffer.alignedRead;
+  if (!read) return null;
+  const grain = showRealGrainIndex ? formatGrouped(read.videoGrainIndex) : String(simplifiedGrainIndex(read.videoGrainIndex, read.videoRate));
+  const smp = (i: number) => sampleIndexLabel(i, read.sampleRate, showRealGrainIndex, read.videoRate);
+  return (
+    <li className="writer-ring__aligned" title="MXL aligns by timestamp: one time, converted to each flow's own index (timestampToIndex)">
+      <div>
+        T = {timestampToTimecode(read.timestampMs, read.videoRate)} <span>(video grain timestamp)</span>
+      </div>
+      <div>
+        V {rateLabel(read.videoRate)} fps → grain {grain}
+      </div>
+      <div>
+        A {rateLabel({ numerator: read.sampleRate, denominator: 1000 })} kHz → samples {smp(read.firstSample)} … {smp(read.lastSample)} ({read.sampleCount.toLocaleString()})
+      </div>
+    </li>
+  );
 }
 
 export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, focusedNodeId = null, onFocusNode, barOnly = false, audio = false, showRealGrainIndex = false, getNow, snapshotMs }: WriterRingProps) {
@@ -360,9 +404,14 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
               grainIndex={ring.publishedGrainIndex - (reader.ringAge ?? 0)}
               n={n}
               extraGrains={extraGrains}
-              windowSlots={audio ? Math.min(reader.windowGrains, n) : 0}
-              videoAligned={audio && reader.reading.alignmentSpanMs !== undefined}
-              stepGrains={reader.windowGrains}
+              windowSlots={audio ? Math.min(reader.windowGrains, n) : reader.pairedWithAudio ? 1 : 0}
+              windowSpan={
+                reader.exactWindow && reader.ringAge !== null
+                  ? { from: reader.ringAge - 0.5 - reader.exactWindow.fromAge, to: reader.ringAge - 0.5 - reader.exactWindow.toAge }
+                  : undefined
+              }
+              videoAligned={reader.exactWindow !== undefined || reader.pairedWithAudio}
+              stepGrains={reader.exactWindow ? wholeBatchesPerVideoGrain(ring) : 1}
               radius={Math.max(markerR + 2, R_IN - 4 - markerR - reader.lane * (markerR * 2 + 1))}
               markerR={markerR}
               color={color}
@@ -379,7 +428,7 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
         {!barOnly && (
           <>
             <text x={CX} y={CY - 2} style={{ fill: 'var(--ui-text-dim)' }} fontSize="8" textAnchor="middle" fontWeight="700">
-              {audio ? `${samplesPerAudioBatch(media)} smp/ms` : `head slot ${ring.publishedSlot + 1}`}
+              {audio ? `${samplesPerAudioBatch(media)} smp/batch` : `head slot ${ring.publishedSlot + 1}`}
             </text>
           </>
         )}
@@ -420,7 +469,7 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
         {ring.readers.map((reader, i) => {
           const parked = parkedInputKeys?.has(reader.key) ?? false;
           const focused = reader.readerNodeId === focusedNodeId;
-          return (
+          return [
             <li
               key={reader.key}
               className={`writer-ring__row${parked ? ' writer-ring__row--parked' : ''}${focused ? ' writer-ring__row--focused' : ''}`}
@@ -431,13 +480,14 @@ export function WriterRing({ ring, writerLabel, labelByNodeId, parkedInputKeys, 
               </span>
               <span className="writer-ring__name">{labelByNodeId.get(reader.readerNodeId) ?? reader.readerNodeId}</span>
               <span className="writer-ring__detail">
-                {barOnly || audio ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms · ${audioWindowText(reader, ring.grainDurationMs, media.audioSampleRate)}` : `${reader.ringSlot === null ? 'overwritten' : `slot ${reader.ringSlot + 1}`} · −${reader.behindNowGrains} gr`}
+                {barOnly || audio ? `−${Math.round(reader.behindNowGrains * ring.grainDurationMs)}ms · ${audioWindowText(reader, ring.grainDurationMs)}` : `${reader.ringSlot === null ? 'overwritten' : `slot ${reader.ringSlot + 1}`} · −${reader.behindNowGrains} gr`}
               </span>
               <span className="writer-ring__status" style={{ color: STATUS_COLOR[reader.status] }}>
                 {parked ? 'parked' : STATUS_LABEL[reader.status]}
               </span>
-            </li>
-          );
+            </li>,
+            <AlignedReadout key={`${reader.key}-aligned`} reader={reader} showRealGrainIndex={showRealGrainIndex} />,
+          ];
         })}
       </ul>
     </div>

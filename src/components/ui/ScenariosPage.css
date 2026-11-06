@@ -188,3 +188,8 @@
   margin-top: auto;
   padding-top: 4px;
 }
+
+/* Focused programmatically when the page opens; no ring around the whole page. */
+.scn-page:focus {
+  outline: none;
+}

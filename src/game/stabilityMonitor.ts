@@ -21,7 +21,8 @@ export function createStabilityState(): StabilityState {
 /**
  * Advance the stability monitor by one tick (`dtMs`). `statusByNodeId` should
  * contain the current RingBufferStatus for every reader node this tick.
- * Returns a new StabilityState (does not mutate the input). Once failed, the
+ * Returns a new StabilityState (does not mutate the input), or `prev` itself
+ * when nothing changed. Once failed, the
  * state is sticky until explicitly reset via `createStabilityState()`.
  */
 export function tickStability(
@@ -40,6 +41,14 @@ export function tickStability(
     if (nextMs > 0) redDurationByNodeId.set(nodeId, nextMs);
     if (nextMs > FAIL_RED_DURATION_MS && !failedNodeId) failedNodeId = nodeId;
   }
+
+  // Same timers as before (nothing red, or the clock is frozen): keep the old
+  // object so React skips the re-render.
+  const unchanged =
+    failedNodeId === null &&
+    redDurationByNodeId.size === prev.redDurationByNodeId.size &&
+    [...redDurationByNodeId].every(([id, ms]) => prev.redDurationByNodeId.get(id) === ms);
+  if (unchanged) return prev;
 
   return { redDurationByNodeId, failed: failedNodeId !== null, failedNodeId };
 }

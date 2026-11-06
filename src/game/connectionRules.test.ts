@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requiredTrack } from './connectionRules';
+import { createsCycle, requiredTrack, withoutCycles } from './connectionRules';
 
 describe('requiredTrack', () => {
   it('limits audio-only functions to audio', () => {
@@ -21,5 +21,28 @@ describe('requiredTrack', () => {
     const mixer = { kind: 'editorial', inputCount: 2 };
     expect(requiredTrack(mixer, 1, [])).toBeUndefined();
     expect(requiredTrack(mixer, 1, ['audio'])).toBe('audio');
+  });
+});
+
+describe('createsCycle / withoutCycles', () => {
+  const chain = [
+    { source: 'a', target: 'b' },
+    { source: 'b', target: 'c' },
+  ];
+
+  it('rejects a link that closes a loop, including a self-link', () => {
+    expect(createsCycle(chain, 'c', 'a')).toBe(true);
+    expect(createsCycle(chain, 'b', 'a')).toBe(true);
+    expect(createsCycle(chain, 'a', 'a')).toBe(true);
+  });
+
+  it('allows forward links and fan-out', () => {
+    expect(createsCycle(chain, 'a', 'c')).toBe(false);
+    expect(createsCycle(chain, 'd', 'a')).toBe(false);
+  });
+
+  it('drops only the links that close a loop, keeping order', () => {
+    const links = [...chain, { source: 'c', target: 'a' }, { source: 'a', target: 'd' }];
+    expect(withoutCycles(links)).toEqual([...chain, { source: 'a', target: 'd' }]);
   });
 });

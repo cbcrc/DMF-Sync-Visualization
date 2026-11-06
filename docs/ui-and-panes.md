@@ -14,7 +14,15 @@ under the canvas. Docked panes never overlap.
   collapses all. Collapsing only hides, so layout and pane state are kept. Side
   docks size to their content (200-360 px).
 - **Toolbar:** Undo, Now, Save scenario, Copy/Paste, Canvas menu,
-  theme toggle.
+  theme toggle. Ctrl/Cmd+C and V copy and paste functions only when some are
+  selected or copied; otherwise they copy text as usual. While the Scenarios page
+  is open the canvas ignores its shortcuts (delete, undo, copy/paste), and Escape
+  returns to the canvas.
+- **Show Now** (toolbar) adds a Now marker to every ring strip on the canvas: how
+  far that function's output lags real time, to one scale on every strip (one
+  strip width = one MXL domain of delay) and printed on the tag ("Now −160ms").
+  The strip grows to fit; past 3 domains the delay line is broken (//) so long
+  delays such as a Profanity Delay chain stay compact (`ringStripLayout.ts`).
 - **Workload Config** pane (`WorkloadPane.tsx`, `game/mediaConfig.ts`; minimized by
   default, toggled from Pane View): domain size, frame rate, resolution,
   audio sample rate. Default 1080p50, 48 kHz.

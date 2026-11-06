@@ -104,6 +104,34 @@ export interface RingBuffer {
   requestedRingBufferIndex: number;
   /** Oldest grain index still retained (writer-reserved boundary applied). */
   retainedFromGrainIndex: number;
+  /** Audio read in step with a video grain: the exact samples it asks for (see `AlignedRead`). */
+  alignedRead?: AlignedRead;
+}
+
+/**
+ * An audio read aligned to a video grain the way MXL does it: the grain's
+ * timestamp `T_k` and the next one `T_k+1` are converted to sample indices
+ * (`timestampToIndex` at the sample rate), and the reader asks for every
+ * sample from `S(T_k)` to `S(T_k+1) - 1` (`getSamples(lastSample, sampleCount)`).
+ * Judged by MXL's continuous rule: too early while `lastSample` is past the
+ * head, too late once the window no longer fits in the newer half of the buffer.
+ */
+export interface AlignedRead {
+  videoGrainIndex: number;
+  videoRate: GrainRate;
+  /** `T_k`: the video grain's timestamp (ms). */
+  timestampMs: number;
+  /** `T_k+1`: the next video grain's timestamp (ms). */
+  endTimestampMs: number;
+  sampleRate: number;
+  firstSample: number;
+  lastSample: number;
+  /** `lastSample - firstSample + 1`; varies from grain to grain at 1001-based frame rates. */
+  sampleCount: number;
+  /** The audio flow's head: its newest committed sample. */
+  headSample: number;
+  /** Samples per channel in the MXL buffer; readers may use the newer half. */
+  bufferSamples: number;
 }
 
 /** Result of evaluating one reader input against the upstream flow's head. */

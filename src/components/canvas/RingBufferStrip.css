@@ -184,8 +184,25 @@
   z-index: 2;
 }
 
+/* Axis break on the delay line, past `NOW_MAX_DOMAINS` domains. */
+.ws__lag-break {
+  position: absolute;
+  width: 5px;
+  height: 12px;
+  border-left: 2px solid #f5a623;
+  border-right: 2px solid #f5a623;
+  transform: translate(-50%, -50%) skewX(-25deg);
+  z-index: 2;
+}
+
+/* Close to the head, lift the Now tag above the Head tag so they don't overlap. */
+.ws__now.ws__now--raised span {
+  top: -26px;
+}
+
 .ws__now span {
   position: absolute;
+  white-space: nowrap;
   top: -13px;
   left: 0;
   transform: translateX(-50%);
@@ -247,6 +264,17 @@
 
 .ws__win--focused {
   background: #ee0000;
+}
+
+/* Audio and video read together by timestamp: the same blue as the ring's aligned window. Stays
+   blue when focused (with a red outline) so the pair is still visible on the inspected reader. */
+.ws__win--aligned {
+  background: #3b8fe0;
+}
+
+.ws__win--aligned.ws__win--focused {
+  background: #3b8fe0;
+  box-shadow: 0 0 0 1px #ee0000;
 }
 
 /* Video grain boundary across an audio strip (blue = the video-aligned colour). */

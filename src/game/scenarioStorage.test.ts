@@ -55,10 +55,11 @@ describe('scenarioStorage', () => {
     expect(w?.edges).toHaveLength(0);
   });
 
-  it('rejects an empty working graph', () => {
+  it('restores an emptied working graph instead of an older one', () => {
     const storage = memoryStorage();
+    persistWorkingGraph(storage, { scenarioId: 's', domainSizeMs: 80, nodes: initialNodes, edges: initialEdges });
     persistWorkingGraph(storage, { scenarioId: 's', domainSizeMs: 80, nodes: [], edges: [] });
-    expect(loadWorkingGraph(storage)).toBeNull();
+    expect(loadWorkingGraph(storage)).toEqual({ scenarioId: 's', domainSizeMs: 80, nodes: [], edges: [] });
   });
 
   it('upgrades the older ignoreSyncInputs list to live sync groups', () => {
@@ -128,5 +129,46 @@ describe('shared-scenarios folder', () => {
       const parsed = parseScenarioFile(text as string);
       expect(parsed.ok, `${name}: ${parsed.ok ? '' : parsed.error}`).toBe(true);
     }
+  });
+});
+
+describe('import hardening', () => {
+  const node = (id: string, extra: object = {}) => ({
+    id,
+    position: { x: 0, y: 0 },
+    data: { kind: 'technical', label: id, latencyMs: 10, inputCount: 1, outputCount: 1, ...extra },
+  });
+  const file = (nodes: object[], edges: object[]) =>
+    JSON.stringify({ format: 'dmf-sync-viz.scenarios', version: 1, scenarios: [{ title: 't', domainSizeMs: 200, nodes, edges }] });
+  const importOne = (nodes: object[], edges: object[] = []) => {
+    const parsed = parseScenarioFile(file(nodes, edges));
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.scenarios[0];
+  };
+
+  it('drops the link that would close a loop', () => {
+    const s = importOne(
+      [node('a'), node('b')],
+      [
+        { id: 'ab', source: 'a', target: 'b', targetHandle: 'in-0' },
+        { id: 'ba', source: 'b', target: 'a', targetHandle: 'in-0' },
+      ],
+    );
+    expect(s.edges.map((e) => e.id)).toEqual(['ab']);
+  });
+
+  it('rejects nodes with fractional, negative or absurd connector counts', () => {
+    const s = importOne([node('frac', { inputCount: 1.5 }), node('neg', { outputCount: -1 }), node('huge', { inputCount: 1e9 }), node('ok')]);
+    expect(s.nodes.map((n) => n.id)).toEqual(['ok']);
+  });
+
+  it('clamps latency to the function slider range', () => {
+    const s = importOne([node('low', { latencyMs: -500 }), node('high', { latencyMs: 1e6 }), node('out', { kind: 'output', latencyMs: -5, outputCount: 0 })]);
+    expect(s.nodes.map((n) => n.data.latencyMs)).toEqual([1, 30, 0]);
+  });
+
+  it('keeps only the first node with a given id', () => {
+    const s = importOne([node('a', { label: 'first' }), node('a', { label: 'second' })]);
+    expect(s.nodes.map((n) => n.data.label)).toEqual(['first']);
   });
 });

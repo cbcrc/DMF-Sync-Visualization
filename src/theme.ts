@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { safeStorage } from './safeStorage';
 
 export type Theme = 'dark' | 'light';
 
 const THEME_KEY = 'dmf-theme';
 
 function initialTheme(): Theme {
-  const saved = localStorage.getItem(THEME_KEY);
+  const saved = safeStorage.getItem(THEME_KEY);
   if (saved === 'dark' || saved === 'light') return saved;
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
@@ -23,7 +24,7 @@ export function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   useEffect(() => {
     applyTheme(theme);
-    localStorage.setItem(THEME_KEY, theme);
+    safeStorage.setItem(THEME_KEY, theme);
   }, [theme]);
   const toggle = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);
   return [theme, toggle];

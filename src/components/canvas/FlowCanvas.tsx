@@ -26,7 +26,7 @@ import { GrainOverlay } from './GrainOverlay';
 import { LinearBoundaryOverlay } from './LinearBoundaryOverlay';
 import type { WriterRing } from '../../game/writerRings';
 import { type OutputMode } from './MediaFunctionNode';
-import { requiredTrack } from '../../game/connectionRules';
+import { createsCycle, requiredTrack } from '../../game/connectionRules';
 import { LATENCY_RANGE, PALETTE_GROUPS, PALETTE_PRESETS, type PalettePreset } from './nodeDefaults';
 import { useGrainFlow } from '../../game/useGrainFlow';
 import type { InputReading } from '../../game/graphLatency';
@@ -97,6 +97,13 @@ export interface FlowCanvasProps {
    * undo the last step) — this component owns the grain-flow state they act on.
    */
   onManualStepReady?: (stepToNextRead: () => void, stepBack: () => void) => void;
+  /** Simulated time of the game loop's latest tick; grains step on it (see `useGrainFlow`). */
+  clockTickMs?: number;
+  /**
+   * False while something covers the canvas (the Scenarios page): its keyboard
+   * shortcuts (delete, undo, copy/paste) must not act on a graph the user can't see.
+   */
+  keyboardEnabled?: boolean;
 }
 
 function FlowCanvasInner({
@@ -122,6 +129,8 @@ function FlowCanvasInner({
   onParkedInputsChange,
   stepClockBy,
   onManualStepReady,
+  clockTickMs = 0,
+  keyboardEnabled = true,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
   const storeApi = useStoreApi();
@@ -152,6 +161,7 @@ function FlowCanvasInner({
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      if (!keyboardEnabled) return;
       if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.key.toLowerCase() !== 'z') return;
       const t = ev.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
@@ -160,7 +170,7 @@ function FlowCanvasInner({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo]);
+  }, [undo, keyboardEnabled]);
 
   // Intentionally keyed only on `graphLoadKey`: `initialGraph` is a snapshot to
   // load, and must not clobber the player's edits when its identity changes.
@@ -222,6 +232,11 @@ function FlowCanvasInner({
       const others = edges.filter(
         (e) => e.target === c.target && (e.targetHandle ?? 'in-0') !== (c.targetHandle ?? 'in-0'),
       );
+      // No loops: the link's own target input is about to be replaced, so leave it out.
+      const kept = edges.filter(
+        (e) => !(e.target === c.target && (e.targetHandle ?? 'in-0') === (c.targetHandle ?? 'in-0')),
+      );
+      if (c.source && c.target && createsCycle(kept, c.source, c.target)) return false;
       return linkAllowed(node, inputIndex, others, c);
     },
     [nodes, edges, linkAllowed],
@@ -246,10 +261,13 @@ function FlowCanvasInner({
   // Drag either end of an existing link to move it to another connector.
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, connection: Connection) => {
+      // Moving a link must not close a loop either (the moved link itself no longer counts).
+      const rest = withoutLinksTo(edges, connection).filter((e) => e.id !== oldEdge.id);
+      if (!connection.source || !connection.target || createsCycle(rest, connection.source, connection.target)) return;
       pushHistory();
       setEdges((eds) => updateEdge(oldEdge, connection, withoutLinksTo(eds, connection, oldEdge.id)));
     },
-    [setEdges, pushHistory],
+    [edges, setEdges, pushHistory],
   );
 
   // New nodes land in the middle of what the user is looking at (pan/zoom
@@ -316,16 +334,19 @@ function FlowCanvasInner({
   const pasteCount = useRef(0);
   const [canPaste, setCanPaste] = useState(false);
 
-  const copySelected = useCallback(() => {
+  /** Copies the selected functions; false when nothing is selected. */
+  const copySelected = useCallback((): boolean => {
     const picked = graphRef.current.nodes.filter((n) => n.selected);
-    if (picked.length === 0) return;
+    if (picked.length === 0) return false;
     clipboardRef.current = structuredClone(picked.map(({ id, type, position, data }) => ({ id, type, position, data })));
     pasteCount.current = 0;
     setCanPaste(true);
+    return true;
   }, []);
 
-  const pasteCopied = useCallback(() => {
-    if (clipboardRef.current.length === 0) return;
+  /** Pastes copied functions; false when nothing has been copied. */
+  const pasteCopied = useCallback((): boolean => {
+    if (clipboardRef.current.length === 0) return false;
     const shift = 40 * ++pasteCount.current;
     const labels = graphRef.current.nodes.map((n) => n.data.label);
     const copies = clipboardRef.current.map((src, i) => {
@@ -341,22 +362,24 @@ function FlowCanvasInner({
     });
     pushHistory();
     setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...copies]);
+    return true;
   }, [pushHistory, setNodes]);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey) return;
       const key = ev.key.toLowerCase();
-      if (key !== 'c' && key !== 'v') return;
+      if (!keyboardEnabled || (key !== 'c' && key !== 'v')) return;
       const t = ev.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      ev.preventDefault();
-      if (key === 'c') copySelected();
-      else pasteCopied();
+      // Selected text (Help pane, timeline…) copies as usual.
+      if (key === 'c' && !(window.getSelection()?.isCollapsed ?? true)) return;
+      // Only take over the shortcut when it acted on functions.
+      if (key === 'c' ? copySelected() : pasteCopied()) ev.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [copySelected, pasteCopied]);
+  }, [copySelected, pasteCopied, keyboardEnabled]);
 
   const hasSelection = nodes.some((n) => n.selected) || edges.some((e) => e.selected);
   const deleteSelected = useCallback(() => {
@@ -455,6 +478,7 @@ function FlowCanvasInner({
     waveResetKey,
     getNow,
     stepClockBy,
+    clockTickMs,
   );
 
   useEffect(() => {
@@ -602,6 +626,7 @@ function FlowCanvasInner({
       onConnect={onConnect}
       isValidConnection={isValidConnection}
       onEdgeUpdate={onEdgeUpdate}
+      deleteKeyCode={keyboardEnabled ? 'Backspace' : null}
       onNodeDragStart={pushHistory}
       onNodesDelete={pushHistory}
       onEdgesDelete={pushHistory}
