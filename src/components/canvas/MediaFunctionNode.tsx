@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from 'reactflow';
 import type { MediaFunctionKind } from '../../types';
-import { nodeSizeForLatency } from './nodeSizing';
+import { nodeSizeFor } from './nodeSizing';
 import { LIVE_GROUP, MAX_SYNC_GROUPS, groupLabel, hasSyncChoice } from '../../game/syncInputs';
 import { DELAY_MAX_MS, LATENCY_RANGE, outputModeOf } from './nodeDefaults';
 import { grainRateForTrack, grainIndexForDisplay } from '../../engine/mxlGrainIndex';
 import { useMediaConfig } from '../../game/mediaConfig';
 import type { WriterRing } from '../../game/writerRings';
 import { RingBufferStrip } from './RingBufferStrip';
+import { ProcessingPipe } from './ProcessingPipe';
+import type { ProcessingPipe as ProcessingPipeModel } from '../../game/processingPipe';
 import './MediaFunctionNode.css';
 
 /** Which flows a producer writes: one ring for each. */
@@ -29,6 +31,12 @@ export interface MediaFunctionNodeData {
   videoOnly?: boolean;
   /** Live Ring Buffer zone for this node's input (Task 4), if it's a reader. */
   zone?: 'green' | 'yellow' | 'red';
+  /** Grains in flight inside this function (read, not yet written), from the ring snapshot. */
+  pipe?: ProcessingPipeModel;
+  /** Simulated clock, so the pipe can move between game ticks. */
+  getNow?: () => number;
+  /** Manual mode: the pipe replays each Step slowly. */
+  replaySteps?: boolean;
   /** True while a grain is currently "held" at this node, processing (Task 4 grain-flow viz). */
   processing?: boolean;
   /**
@@ -152,10 +160,10 @@ function EditableLabel({ id, label, onChange }: { id: string; label: string; onC
   );
 }
 
-/** Custom React Flow node rendering a Media Function, sized by its processing latency. */
+/** Custom React Flow node rendering a Media Function; its latency shows as the grains in its processing pipe. */
 export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctionNodeData>) {
   const media = useMediaConfig();
-  const size = nodeSizeForLatency(data.latencyMs);
+  const size = nodeSizeFor(data);
   const meta = KIND_META[data.kind];
   const zoneClass = data.zone ? ` mf-node--zone-${data.zone}` : '';
   const processingClass = data.processing ? ' mf-node--processing' : '';
@@ -294,7 +302,9 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
           being held here, and crosses the track exactly once over that hold —
           so the dot the user just watched arrive is visibly the dot being
           processed. Slow functions therefore crawl, fast ones dart across. */}
-      {data.inputCount > 0 && data.outputCount > 0 && (
+      {data.pipe && <ProcessingPipe pipe={data.pipe} showRealGrainIndex={data.showRealGrainIndex ?? false} getNow={data.getNow} replaySteps={data.replaySteps} />}
+
+      {!data.pipe && data.inputCount > 0 && data.outputCount > 0 && (
         <div className="mf-node__path" title={`${data.latencyMs}ms processing path`}>
           <div className="mf-node__path-track" />
           {data.processing && data.processingDurationMs !== undefined && (
@@ -311,7 +321,7 @@ export function MediaFunctionNode({ id, data, selected }: NodeProps<MediaFunctio
               style={{ animationDuration: `${data.processingDurationMs}ms` }}
             />
           )}
-          {data.processing && data.showOriginTimestamps && data.processingOriginTs !== undefined && (
+          {data.processing && data.kind !== 'delay' && data.showOriginTimestamps && data.processingOriginTs !== undefined && (
             <div
               className="mf-node__ref-badge"
               title="Grain time reference carried through processing unchanged — this node does not re-stamp it"

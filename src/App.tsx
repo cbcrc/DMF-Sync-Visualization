@@ -454,6 +454,7 @@ function App() {
         stepClockBy={clock.step}
         onManualStepReady={registerManualStep}
         clockTickMs={graph.timestampMs}
+        replaySteps={clock.mode === 'manual'}
         keyboardEnabled={route !== 'scenarios'}
       />
         </div>

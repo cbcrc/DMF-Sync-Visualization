@@ -54,6 +54,25 @@ describe('end-to-end timeline', () => {
     const [row] = timeline(nodes, [edge('in', 'pd'), edge('pd', 'out')]);
     expect(row.totalMs).toBe(1500);
     expect(row.steps[2].readAtMs).toBe(0);
+    expect(row.steps.map((s) => s.restamps)).toEqual([false, true, false]);
+    // New timestamps start where the delay ends; the output sees them fresh.
+    expect(row.stampedAtMs).toBe(1500);
+    expect(row.stampAgeMs).toBe(0);
+  });
+
+  it('ages the new timestamps through functions after a Profanity Delay', () => {
+    const nodes = [node('in', 'input', 0, 0, 1), node('pd', 'delay', 1500, 1, 1), node('a', 'editorial', 30, 1, 1), node('out', 'output', 0, 1, 0)];
+    const [row] = timeline(nodes, [edge('in', 'pd'), edge('pd', 'a'), edge('a', 'out')]);
+    expect(row.stampedAtMs).toBe(1500);
+    expect(row.stampAgeMs).toBe(row.totalMs - 1500);
+    expect(row.stampAgeMs).toBe(50); // 30ms processing + one 20ms grain read behind the head
+  });
+
+  it('keeps the input write as the timestamp origin when nothing re-stamps', () => {
+    const nodes = [node('in', 'input', 0, 0, 1), node('a', 'editorial', 30, 1, 1), node('out', 'output', 0, 1, 0)];
+    const [row] = timeline(nodes, [edge('in', 'a'), edge('a', 'out')]);
+    expect(row.stampedAtMs).toBe(0);
+    expect(row.stampAgeMs).toBe(row.totalMs);
   });
 
   it('shifts the axis by an OTS lead-in when one is supplied', () => {

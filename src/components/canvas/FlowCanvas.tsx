@@ -25,6 +25,7 @@ import { MediaFunctionNode, type MediaFunctionNodeData } from './MediaFunctionNo
 import { GrainOverlay } from './GrainOverlay';
 import { LinearBoundaryOverlay } from './LinearBoundaryOverlay';
 import type { WriterRing } from '../../game/writerRings';
+import { processingPipesByNode } from '../../game/processingPipe';
 import { type OutputMode } from './MediaFunctionNode';
 import { createsCycle, requiredTrack } from '../../game/connectionRules';
 import { LATENCY_RANGE, PALETTE_GROUPS, PALETTE_PRESETS, type PalettePreset } from './nodeDefaults';
@@ -99,6 +100,8 @@ export interface FlowCanvasProps {
   onManualStepReady?: (stepToNextRead: () => void, stepBack: () => void) => void;
   /** Simulated time of the game loop's latest tick; grains step on it (see `useGrainFlow`). */
   clockTickMs?: number;
+  /** Manual playback: processing pipes replay each Step slowly. */
+  replaySteps?: boolean;
   /**
    * False while something covers the canvas (the Scenarios page): its keyboard
    * shortcuts (delete, undo, copy/paste) must not act on a graph the user can't see.
@@ -130,6 +133,7 @@ function FlowCanvasInner({
   stepClockBy,
   onManualStepReady,
   clockTickMs = 0,
+  replaySteps = false,
   keyboardEnabled = true,
 }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<MediaFunctionNodeData>(initialGraph.nodes);
@@ -548,6 +552,9 @@ function FlowCanvasInner({
     }
     return map;
   }, [writerRings]);
+  // Grains in flight in each function, from the same snapshot as the rings, so
+  // the indices match the reader markers and output strips.
+  const pipeByNodeId = useMemo(() => processingPipesByNode(nodes, writerRings, clockTickMs), [nodes, writerRings, clockTickMs]);
   const labelByNodeId = useMemo(() => new Map(nodes.map((n) => [n.id, n.data.label])), [nodes]);
   // Reader tag ("R1", "R2", ...) of each input, matching the pointer on the writer's ring.
   const readerTagsByNode = useMemo(() => {
@@ -588,6 +595,9 @@ function FlowCanvasInner({
             onSyncInputChange: handleSyncInputChange,
             onOutputModeChange: handleOutputModeChange,
             rings: ringsByWriter.get(n.id),
+            pipe: pipeByNodeId.get(n.id),
+            getNow,
+            replaySteps,
             labelByNodeId,
             readerTags: readerTagsByNode.get(n.id),
             focusedNodeId,
@@ -596,7 +606,7 @@ function FlowCanvasInner({
           },
         };
       }),
-    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, handleLabelChange, handleSyncOutputsChange, handleSyncInputChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, labelByNodeId, readerTagsByNode, onFocusNode, showNow],
+    [nodes, zoneByNodeId, holdByNodeId, stalledNodeIds, handleLatencyChange, handleLabelChange, handleSyncOutputsChange, handleSyncInputChange, showOriginTimestamps, showRealGrainIndex, domainSizeMs, focusedNodeId, handleOutputModeChange, ringsByWriter, pipeByNodeId, getNow, replaySteps, labelByNodeId, readerTagsByNode, onFocusNode, showNow],
   );
 
   // Item #9 follow-up: briefly highlight an edge's drawn path the moment a

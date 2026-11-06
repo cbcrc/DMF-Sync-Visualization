@@ -55,7 +55,14 @@ and "live" a reader outside it (checked against `6e654e2`).
   frozen/single-stepped (Manual) for teaching. Real MXL indices come from true
   elapsed time and are never slowed or paused.
 - A **Profanity Delay** re-writes its media as a new source: the only place a
-  grain index is not preserved.
+  grain index is not preserved. The end-to-end timeline still counts its delay
+  and marks where the new timestamps start (`stampedAtMs`).
+- **Processing pipe.** A function is drawn as pipelined: it starts a grain every
+  grain period and writes each one, with the index it read, after its latency,
+  so latencies over one grain have several grains in flight. MXL defines only
+  the reads and writes, not a function's internals; the pipe is derived from the
+  same read index and output head as the rings (`processingPipe.ts`). Its
+  Manual-mode Step replay is display only; the clock still jumps.
 - A mixer input set to **live** reads one grain behind the head with no wait. MXL
   allows any index up to `runtime.headIndex` (`PosixDiscreteFlowReader::getGrainImpl`);
   one grain behind is conservative for whole-grain writes.

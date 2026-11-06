@@ -425,3 +425,72 @@
   border-radius: 3px;
   pointer-events: none;
 }
+
+/* Processing pipe: the grains in flight, read on the left, written on the right
+   with the same index after the function's latency (`processingPipe.ts`). */
+.mf-pipe {
+  --mf-pipe-chip-w: 28px;
+  width: 100%;
+  margin-top: 4px;
+  font-family: monospace;
+  font-size: 0.55rem;
+}
+
+.mf-pipe__ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ui-text-dim);
+  line-height: 1.2;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.mf-pipe__track {
+  position: relative;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--ui-tint-1);
+  border: 1px dashed var(--ui-border-strong);
+  box-sizing: border-box;
+}
+
+.mf-pipe__chip {
+  position: absolute;
+  top: 1px;
+  width: var(--mf-pipe-chip-w);
+  height: 10px;
+  line-height: 10px;
+  border-radius: 5px;
+  text-align: center;
+  color: #ffffff;
+  background: #2b7bbf;
+}
+
+.mf-pipe__chip--lane1 {
+  top: 12px;
+}
+
+.mf-pipe__track--audio .mf-pipe__chip {
+  background: #c27a12;
+}
+
+.mf-pipe__more {
+  color: var(--ui-text-faint);
+}
+
+.mf-pipe__idle {
+  position: absolute;
+  top: 0;
+  line-height: 22px;
+  color: var(--ui-text-faint);
+}
+
+.mf-pipe__idle {
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.mf-node--zone-red .mf-pipe__chip {
+  background: #ee0000;
+}

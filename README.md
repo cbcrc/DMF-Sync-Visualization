@@ -12,8 +12,6 @@ domain it follows the Media eXchange Layer
 ([dmf-mxl/mxl](https://github.com/dmf-mxl/mxl)); where this repo disagrees, MXL is
 correct.
 
-![Unofficial DMF definitions](assets/images/Definition_Block_Diagram.png)
-
 ## Run it
 
 Requires Node 18.
@@ -38,7 +36,8 @@ part of the build.
 3. Press **Step ▶** in **Playback** to advance one grain, or switch to Stepping or
    Normal.
 4. Change a function's latency and watch readers turn orange (too early, waiting)
-   or dark red (too late ✕).
+   or dark red (too late ✕). The pipe inside each function shows the grains it is
+   processing: each one leaves with the index it was read with.
 5. Set domain size, frame rate and audio sample rate in the **Workload Config** pane (turn it on in Pane View).
 
 Panes can be dragged, docked left/bottom/right, minimized or collapsed; your

@@ -20,6 +20,12 @@ export function InfoPanel({ onMinimize }: { onMinimize: () => void }) {
         is published. A Profanity Delay is the exception: it re-writes media as a new source.
       </div>
 
+      <div className="info-panel__text">
+        Inside each function, the <strong>pipe</strong> shows the grains in flight: read on the left,
+        written on the right with the same number after its latency. Reading #120 while writing #118
+        just means 119 and 120 are still being processed. In Manual mode each Step replays slowly.
+      </div>
+
       <div className="info-panel__row">
         <span className="info-panel__dot info-panel__dot--green" />
         <div>

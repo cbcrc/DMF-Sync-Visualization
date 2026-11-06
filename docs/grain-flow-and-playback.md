@@ -66,7 +66,35 @@ Each grain carries `originTs`, set once when a producer spawns it and preserved
 through every hold and fan-out, mirroring MXL's Origin Timestamp
 (`docs/Timing.md`). Tags show `#<grainIndex> · -<ageMs>ms`; a "writing #idx" flash
 marks the instant a node publishes into its ring; a `ref #<idx> kept` tag on a
-processing node shows the index is not re-stamped. Readability measures in
+processing node shows the index is not re-stamped (only on nodes without a
+processing pipe; a Profanity Delay never shows it, since it re-stamps).
+
+## Processing pipe (every function that reads and writes)
+
+Nodes have a fixed size (`nodeSizing.ts`). A function's latency shows as the
+grains in flight inside it (`processingPipe.ts`, `ProcessingPipe.tsx`): it
+reads grain k, processes it for its latency, and writes it as k. It starts a
+new grain every grain period, so while it reads r it is still working on the
+grains before it, and its output head shows the last one it finished, w. The
+pipe shows `reads #r`, `writes #w` and a chip for each grain w+1 … r, moving
+from left (just read) to right (being written) over the latency.
+
+- `r` is the reader marker's index (the lowest synced reader on the output's
+  track) and `w` the output head, from the same snapshot as the ring strips, so
+  the pipe always matches them at each tick. Between ticks the pipe moves on
+  with the simulated clock every frame (`extrapolatePipe`), so chips glide.
+- Manual mode: each Step is replayed over about 600 ms per grain
+  (`advanceDisplayClock`), so grains are seen entering, crossing and being
+  written, even in a 6 ms Colour Corrector. A Step lands on a read, so between
+  Steps the newly read grain waits at the pipe's entrance. The ring strips still
+  jump on the Step.
+- An empty pipe means no grain is in flight at that instant (a short latency
+  inside a 20 ms grain); "written as read" appears only at 0 ms.
+- Alternate grains use alternate lanes so neighbours don't overlap. Past
+  `PIPE_MAX_CHIPS` (6) the newest five and the oldest are drawn and the rest
+  counted (`+N`).
+- No pipe on a Grain Repeater (writes the oldest grain at once) or a Profanity
+  Delay (re-stamps; it keeps its delay bar). Readability measures in
 `GrainOverlay.tsx`:
 
 - Grain index modes (Playback pane): **Simplified** (sequential from 100, wrapping

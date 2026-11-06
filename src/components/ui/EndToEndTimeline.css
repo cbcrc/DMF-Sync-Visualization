@@ -180,3 +180,32 @@
   right: 0;
   top: 0;
 }
+
+.e2e__stamp-age {
+  color: var(--ui-text-dim);
+  font-weight: 400;
+}
+
+/* Where a Profanity Delay's new timestamps start (synthetic source). */
+.e2e__restamp {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 0;
+  border-left: 2px dashed #e08a6f;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.e2e__restamp-label {
+  position: absolute;
+  bottom: 4px;
+  right: 3px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: var(--ui-panel);
+  font-size: 0.55rem;
+  line-height: 1;
+  color: #e08a6f;
+  white-space: nowrap;
+}

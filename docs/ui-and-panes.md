@@ -23,6 +23,14 @@ under the canvas. Docked panes never overlap.
   strip width = one MXL domain of delay) and printed on the tag ("Now −160ms").
   The strip grows to fit; past 3 domains the delay line is broken (//) so long
   delays such as a Profanity Delay chain stay compact (`ringStripLayout.ts`).
+- **Timeline** pane (`EndToEndTimeline.tsx`, minimized by default): one lane per
+  Output or Recording, from the input's MXL write to the output, with each
+  function's added latency and sync waits. After a Profanity Delay a dashed
+  "new ts" marker shows where its new timestamps start; the total keeps counting
+  the delay, and "ts" next to it is how old those new timestamps are at the
+  output.
+- **Function nodes** have a fixed size. Latency shows in the processing pipe
+  (see `docs/grain-flow-and-playback.md`), set with the slider under it.
 - **Workload Config** pane (`WorkloadPane.tsx`, `game/mediaConfig.ts`; minimized by
   default, toggled from Pane View): domain size, frame rate, resolution,
   audio sample rate. Default 1080p50, 48 kHz.

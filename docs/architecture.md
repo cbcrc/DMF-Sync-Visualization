@@ -13,14 +13,16 @@ original game framing and are not renamed.
   ring index math, per-track grain rate, `continuousBufferSamples`).
 - `src/components/canvas/`: `FlowCanvas` (graph editing, undo, connection rules,
   palette), `MediaFunctionNode` (function body plus ring column),
-  `RingBufferStrip` / `ringStripLayout`, `nodeDefaults` (palette presets, latency
-  ranges), `GrainOverlay`, `LinearBoundaryOverlay`.
+  `RingBufferStrip` / `ringStripLayout`, `ProcessingPipe` (grains in flight
+  inside a function), `nodeSizing` (fixed node sizes), `nodeDefaults` (palette
+  presets, latency ranges), `GrainOverlay`, `LinearBoundaryOverlay`.
 - `src/components/ui/`: panes (`RingBufferPanel`, `WriterRing`, `ClockStrip`,
   `EndToEndTimeline`, `GameHud`, `InfoPanel`, `PlaybackPane`), `DockItem`,
   `ToolbarMenus`, `ScenariosPage`.
 - `src/game/`: `graphLatency` (per-input evaluation, `writerFlows`),
   `writerRings`, `connectionRules`, `scenarios`, `scenarioStorage`,
-  `endToEndTimeline`, `syncInputs`, `docks`, `mediaConfig`, `useGameLoop` (the
+  `endToEndTimeline`, `processingPipe` (pipe model, between-tick extrapolation,
+  Manual step replay), `syncInputs`, `docks`, `mediaConfig`, `useGameLoop` (the
   only tick runner), `grainFlow` / `useGrainFlow` (steps grains on the game
   loop's tick, passed down as `clockTickMs`, so nothing re-renders while the
   clock is frozen), `useSimClock`, `useHashRoute`.
@@ -105,6 +107,12 @@ the largest end-to-end latency. Each step has `startMs`/`endMs` (latency added),
 the MXL write at the input. The linear-side Origin Time Stamp is not implemented;
 rows have a `leadInMs` (always 0) so OTS can later be supplied through
 `TimelineOptions.leadInMsBySourceId`.
+
+A Profanity Delay writes its output as a synthetic source (new timestamps, head
+lag back to 0), but the axis keeps counting its delay. Its step has
+`restamps: true`; each row has `stampedAtMs` (where the timestamps reaching the
+output were written) and `stampAgeMs` (`totalMs - stampedAtMs`). The pane draws
+a "new ts" marker at `stampedAtMs` and shows the stamp age next to the total.
 
 ## Undo
 

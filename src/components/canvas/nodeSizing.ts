@@ -1,16 +1,16 @@
 // Node visual sizing helper for the canvas.
-// See SPEC.md §2.B: "Visual node size scales proportionally to its
-// processing latency."
+// Nodes no longer grow with latency: a function shows its latency inside, as
+// the grains in flight in its processing pipe (`processingPipe.ts`).
 
-/** Smallest a node can render, regardless of latency (e.g. 0ms Input/Output passthroughs). */
-export const NODE_MIN_SIZE_PX = 90;
-/** Largest a node can render, so high-latency Editorial nodes don't dominate the canvas. */
-export const NODE_MAX_SIZE_PX = 220;
-/** How many extra pixels of size per ms of processing latency. */
-const LATENCY_PX_PER_MS = 3;
+import { showsProcessingPipe } from '../../game/processingPipe';
 
-/** Map a node's processing latency (ms) to a square size (px) for canvas rendering. */
-export function nodeSizeForLatency(latencyMs: number): number {
-  const size = NODE_MIN_SIZE_PX + Math.max(0, latencyMs) * LATENCY_PX_PER_MS;
-  return Math.min(NODE_MAX_SIZE_PX, Math.max(NODE_MIN_SIZE_PX, size));
+/** Sources, sinks, Grain Repeaters and Profanity Delays. */
+export const NODE_SIZE_PX = 110;
+/** Functions that draw a processing pipe need room for a few grain chips. */
+export const PIPE_NODE_SIZE_PX = 150;
+
+/** A node's square size (px) on the canvas, fixed per kind of function. */
+export function nodeSizeFor(data: { kind: string; inputCount: number; outputCount: number }): number {
+  return showsProcessingPipe(data.kind, data.inputCount, data.outputCount) ? PIPE_NODE_SIZE_PX : NODE_SIZE_PX;
 }
+

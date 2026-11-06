@@ -13,7 +13,7 @@
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import { freeRunningInputs, inputGroupsFor, rewritesAsNewSource } from './syncInputs';
-import { nodeSizeForLatency } from '../components/canvas/nodeSizing';
+import { nodeSizeFor } from '../components/canvas/nodeSizing';
 import type { RingBufferStatus } from '../types';
 import { DEFAULT_GRAIN_RATE, grainDurationMs } from '../engine/mxlGrainIndex';
 
@@ -140,7 +140,7 @@ export function buildNodeGeometry(nodes: Node<MediaFunctionNodeData>[]): Map<str
       id: n.id,
       x: n.position.x,
       y: n.position.y,
-      size: nodeSizeForLatency(n.data.latencyMs),
+      size: nodeSizeFor(n.data),
       latencyMs: n.data.latencyMs,
       inputCount: n.data.inputCount,
       outputCount: n.data.outputCount,

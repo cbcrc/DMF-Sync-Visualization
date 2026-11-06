@@ -15,11 +15,16 @@
 // (see `TimelineOptions.leadInMsBySourceId`) and the axis, ticks and totals
 // follow with no further change; the step list can also gain a leading
 // "linear → MXL" step in the same way.
+//
+// A Profanity Delay writes its output as a synthetic source: new timestamps,
+// head lag back to 0. The axis keeps counting through it (the show is still
+// delayed), and the row records where the timestamps were re-written
+// (`stampedAtMs`) so the delay stays visible end to end.
 
 import type { Edge, Node } from 'reactflow';
 import type { MediaFunctionNodeData } from '../components/canvas/MediaFunctionNode';
 import type { GraphBufferState } from './graphLatency';
-import { freeRunningInputs } from './syncInputs';
+import { freeRunningInputs, rewritesAsNewSource } from './syncInputs';
 
 export interface TimelineStep {
   nodeId: string;
@@ -35,6 +40,12 @@ export interface TimelineStep {
   syncWaitMs: number;
   /** How far behind "now" it reads in its input ring buffer (ms); 0 for sources. */
   readAtMs: number;
+  /**
+   * True for a function that writes its output as a synthetic source (a
+   * Profanity Delay): its grains get new timestamps at `endMs`. The delay it
+   * added still counts on this axis.
+   */
+  restamps: boolean;
 }
 
 export interface TimelineRow {
@@ -45,6 +56,13 @@ export interface TimelineRow {
   steps: TimelineStep[];
   /** End-to-end time from source to this output (ms, includes `leadInMs`). */
   totalMs: number;
+  /**
+   * Where the timestamps reaching this output were written (ms on this axis):
+   * the end of the last re-stamping step, or `leadInMs` when nothing re-stamps.
+   */
+  stampedAtMs: number;
+  /** Age of the output's timestamps when they reach it: `totalMs - stampedAtMs`. */
+  stampAgeMs: number;
 }
 
 export interface TimelineOptions {
@@ -110,17 +128,23 @@ export function buildEndToEndTimeline(
         latencyMs: ownMs,
         syncWaitMs: Math.max(0, startMs - previousEndMs),
         readAtMs: info?.inputLatencyMs ?? 0,
+        restamps: rewritesAsNewSource(n.data.kind),
       };
       previousEndMs = endMs;
       return step;
     });
 
+    const totalMs = steps[steps.length - 1].endMs;
+    const lastRestamp = steps.filter((s) => s.restamps).pop();
+    const stampedAtMs = lastRestamp ? lastRestamp.endMs : leadInMs;
     rows.push({
       outputId: sink.id,
       outputLabel: sink.data.label,
       leadInMs,
       steps,
-      totalMs: steps[steps.length - 1].endMs,
+      totalMs,
+      stampedAtMs,
+      stampAgeMs: totalMs - stampedAtMs,
     });
   }
   return rows.sort((a, b) => b.totalMs - a.totalMs);
